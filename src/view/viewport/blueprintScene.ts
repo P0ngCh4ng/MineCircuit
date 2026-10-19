@@ -11,8 +11,8 @@ import { equalsVec3, type Vec3 } from '../../domain/vec3'
 import { layerVisibility, SHOW_ALL_LAYERS, type LayerDisplay } from '../layers/layerDisplay'
 import { pick3D, type PickRay } from '../tools/picker'
 import type { PickTarget } from '../tools/tool'
-import { collectBlockInstances, countInstances } from './blockInstances'
-import { BlueprintMeshBuilder } from './blueprintMeshBuilder'
+import { collectBlockInstances, countInstances, type BlockInstanceGroup } from './blockInstances'
+import { BlueprintMeshBuilder, layerClipFor, type BlockMeshPair } from './blueprintMeshBuilder'
 import { LIGHT_THEME, type ViewportTheme } from './viewportTheme'
 
 function lineMaterial(color: number, opacity = 1): THREE.LineBasicMaterial {
@@ -57,6 +57,10 @@ export class BlueprintScene {
   private blueprint: Blueprint | null = null
   private display: LayerDisplay = SHOW_ALL_LAYERS
   private blocks: THREE.Group | null = null
+  private groups: readonly BlockInstanceGroup[] = []
+  private pairs: readonly BlockMeshPair[] = []
+  /** 置き場所に書き込んである、隠す段 */
+  private writtenHidden: ReadonlySet<number> = new Set()
   private grid: THREE.LineSegments | null = null
   private axes: THREE.AxesHelper | null = null
   private layerFrame: THREE.LineLoop | null = null
@@ -112,10 +116,13 @@ export class BlueprintScene {
     this.updateMarkers()
   }
 
-  /** 段の表示方法を変える。#10 の段の選択と表示方法から呼ぶ */
+  /**
+   * 段の表示方法を変える（#10 の段の選択と表示方法）。メッシュは作り直さない。
+   * 表示方法と今の段はクリッピング面で、段ごとの非表示はブロックの大きさを 0 にして切り替える
+   */
   setLayerDisplay(display: LayerDisplay): void {
     this.display = display
-    this.rebuildBlocks()
+    this.applyLayerDisplay()
     this.updateLayerFrame()
     this.updateMarkers()
   }
@@ -220,17 +227,39 @@ export class BlueprintScene {
       this.blocks.removeFromParent()
       this.blocks = null
     }
-    this.stats = { solid: 0, ghost: 0, meshes: 0 }
+    this.groups = []
+    this.pairs = []
+    this.writtenHidden = new Set()
     const bp = this.blueprint
-    if (!bp) return
+    if (bp) {
+      const highlight = this.highlight
+      const size = bp.size
+      const dimmed = highlight ? (x: number, y: number, z: number) => !highlight.has(cellIndex(size, x, y, z)) : null
+      this.groups = collectBlockInstances(bp, dimmed)
+      const built = this.builder.build(this.groups)
+      this.blocks = built.root
+      this.pairs = built.pairs
+      this.scene.add(this.blocks)
+    }
+    this.applyLayerDisplay()
+  }
+
+  /** 今の段の表示方法を、作ってあるメッシュに当てはめる */
+  private applyLayerDisplay(): void {
     const display = this.display
-    const highlight = this.highlight
-    const size = bp.size
-    const dimmed = highlight ? (x: number, y: number, z: number) => !highlight.has(cellIndex(size, x, y, z)) : null
-    const groups = collectBlockInstances(bp, (y) => layerVisibility(display, y), dimmed)
-    this.blocks = this.builder.build(groups)
-    this.scene.add(this.blocks)
-    this.stats = { ...countInstances(groups), meshes: this.blocks.children.length }
+    this.builder.setClip(layerClipFor(display.mode, display.layer))
+    if (!sameSet(this.writtenHidden, display.hidden)) {
+      const hidden = display.hidden
+      for (const pair of this.pairs) {
+        // 隠す段を持たない種類は、前も今も隠すブロックがなければ書き直さない
+        const touched = [...pair.group.layerCounts.keys()].some((y) => hidden.has(y) !== this.writtenHidden.has(y))
+        if (touched) this.builder.writeMatrices(pair, (y) => hidden.has(y))
+      }
+      this.writtenHidden = hidden
+    }
+    const visibilityOf = (y: number) => layerVisibility(display, y)
+    const meshes = this.builder.updateVisibility(this.pairs, visibilityOf)
+    this.stats = { ...countInstances(this.groups, visibilityOf), meshes }
   }
 
   /** 強調する位置を、設計図の大きさでの cellIndex の番号の集まりにする */
@@ -303,6 +332,13 @@ export class BlueprintScene {
 function placeBox(box: THREE.Object3D, pos: Vec3 | null): void {
   box.visible = pos !== null
   if (pos) box.position.set(pos[0] + 0.5, pos[1] + 0.5, pos[2] + 0.5)
+}
+
+function sameSet(a: ReadonlySet<number>, b: ReadonlySet<number>): boolean {
+  if (a === b) return true
+  if (a.size !== b.size) return false
+  for (const v of a) if (!b.has(v)) return false
+  return true
 }
 
 function sameVec3(a: Vec3 | null, b: Vec3 | null): boolean {

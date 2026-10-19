@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import * as THREE from 'three'
 import { blueprintFixture } from '../../../tests/fixtures/blueprintFixture'
 import { SHOW_ALL_LAYERS, layerVisibility } from '../layers/layerDisplay'
 import type { Vec3 } from '../../domain/vec3'
 import { blockColorCss } from './blockColor'
-import { collectBlockInstances } from './blockInstances'
+import { collectBlockInstances, countInstances } from './blockInstances'
 import { BlueprintScene } from './blueprintScene'
 import { layoutGrid2D } from './layerGrid2D'
 import { drawLayer2D, HIGHLIGHT_DIM_ALPHA, LIGHT_THEME_2D, type Canvas2DLike } from './layerRenderer2D'
@@ -18,11 +19,13 @@ function sample() {
 }
 
 describe('collectBlockInstances の薄くするブロック', () => {
-  it('dimmed が true のブロックを半透明にする', () => {
-    const groups = collectBlockInstances(sample(), (y) => layerVisibility(SHOW_ALL_LAYERS, y), (x) => x < 2)
-    const byId = new Map(groups.map((g) => [g.id, g]))
-    expect(byId.get('minecraft:stone')).toMatchObject({ solid: [], ghost: [0, 0, 0, 1, 0, 0] })
-    expect(byId.get('create:shaft')).toMatchObject({ solid: [2, 0, 0, 2, 1, 0], ghost: [] })
+  it('dimmed が true のブロックを別のまとまりに分け、半透明として数える', () => {
+    const groups = collectBlockInstances(sample(), (x) => x < 2)
+    expect(groups.map((g) => [g.id, g.dimmed, g.positions])).toEqual([
+      ['create:shaft', false, [2, 0, 0, 2, 1, 0]],
+      ['minecraft:stone', true, [0, 0, 0, 1, 0, 0]],
+    ])
+    expect(countInstances(groups, (y) => layerVisibility(SHOW_ALL_LAYERS, y))).toEqual({ solid: 2, ghost: 2 })
   })
 })
 
@@ -39,6 +42,20 @@ describe('BlueprintScene.setHighlight', () => {
     scene.setHighlight(null)
     expect(scene.renderStats).toMatchObject({ solid: 4, ghost: 0 })
     expect(scene.highlighted).toBeNull()
+  })
+
+  it('強調したまま段を動かしても、メッシュを作り直さない', () => {
+    const scene = new BlueprintScene()
+    scene.setBlueprint(sample())
+    scene.setHighlight([[2, 0, 0]])
+    const group = scene.blockGroup!
+    const dim = group.children.find((o) => o.name === 'minecraft:stone (薄く)')!
+    expect((dim as THREE.InstancedMesh).material).toMatchObject({ transparent: true })
+    scene.setLayerDisplay({ layer: 0, mode: 'only', hidden: new Set() })
+    expect(scene.blockGroup).toBe(group)
+    expect(scene.renderStats).toMatchObject({ solid: 1, ghost: 2 })
+    scene.setLayerDisplay({ layer: 0, mode: 'ghostAbove', hidden: new Set() })
+    expect(scene.renderStats).toMatchObject({ solid: 1, ghost: 3 })
   })
 
   it('空の配列ならすべて半透明。範囲外の位置は無視する', () => {

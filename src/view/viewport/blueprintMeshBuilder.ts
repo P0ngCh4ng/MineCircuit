@@ -1,8 +1,15 @@
-// BlueprintMeshBuilder：ブロックの種類ごとに InstancedMesh を1つ作る。docs/design.md「view」。
+// BlueprintMeshBuilder：ブロックの種類ごとに InstancedMesh を作る。docs/design.md「view」。
 // 同じ種類のブロックを1回の描画でまとめて描くので、ブロック数が多くても軽い。
+//
+// 段の表示方法はメッシュを作り直さずに切り替える（#10）。
+// - 種類ごとに、普通のメッシュと半透明のメッシュを1つずつ作る。2つは置き場所（instanceMatrix）を共有する
+// - どの段を描くかは、材質のクリッピング面（clippingPlanes）で決める。面の位置を変えるだけなので、段を動かしても軽い
+// - 段ごとの非表示は、その段のブロックの大きさを 0 にして隠す（置き場所を書き直すだけ）
+// - 検索の強調（#15）で薄くするブロックは別のまとまりにし、普通に描く段でも半透明の材質で描く
 
 import * as THREE from 'three'
-import type { BlockInstanceGroup } from './blockInstances'
+import type { LayerMode } from '../layers/layerDisplay'
+import type { BlockInstanceGroup, LayerVisibilityOf } from './blockInstances'
 
 /** ブロックの立方体の1辺。隣のブロックとの境目が見えるよう、1 より少し小さくする */
 export const BLOCK_SIZE = 0.94
@@ -10,10 +17,37 @@ export const BLOCK_SIZE = 0.94
 /** 半透明のブロックの不透明度 */
 export const GHOST_OPACITY = 0.14
 
+/** クリッピング面で「切らない」ときの位置。設計図より十分に遠い */
+const FAR = 1e7
+
 /** 作ったメッシュ1つ分の情報（テストや強調表示で使う） */
 export interface BlockMeshInfo {
   readonly id: string
   readonly ghost: boolean
+}
+
+/** 1種類のブロックの、普通のメッシュと半透明のメッシュ */
+export interface BlockMeshPair {
+  readonly group: BlockInstanceGroup
+  readonly solid: THREE.InstancedMesh
+  readonly ghost: THREE.InstancedMesh
+}
+
+/** build の結果 */
+export interface BuiltBlocks {
+  readonly root: THREE.Group
+  readonly pairs: readonly BlockMeshPair[]
+}
+
+/**
+ * 描く段の範囲（y、ブロックの下の面の高さ）。
+ * 普通のメッシュは solidMin 〜 solidMax、半透明のメッシュは ghostMin より上を描く。
+ * null は「その向きには切らない」。
+ */
+export interface LayerClip {
+  readonly solidMin: number | null
+  readonly solidMax: number | null
+  readonly ghostMin: number | null
 }
 
 /**
@@ -24,16 +58,83 @@ export class BlueprintMeshBuilder {
   private readonly geometry = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
   private readonly solidMaterials = new Map<string, THREE.MeshLambertMaterial>()
   private readonly ghostMaterials = new Map<string, THREE.MeshLambertMaterial>()
+  /** 薄くするブロックを、普通に描く段で描く材質（半透明で、クリッピングは普通と同じ） */
+  private readonly dimMaterials = new Map<string, THREE.MeshLambertMaterial>()
+  // クリッピング面はすべての材質で共有する。面の数を変えるとシェーダーを作り直すので、数は変えない
+  // Plane は「法線との内積 + constant が負の側」を描かない
+  private readonly solidBottom = new THREE.Plane(new THREE.Vector3(0, 1, 0), FAR)
+  private readonly solidTop = new THREE.Plane(new THREE.Vector3(0, -1, 0), FAR)
+  private readonly ghostBottom = new THREE.Plane(new THREE.Vector3(0, 1, 0), FAR)
+  private readonly solidPlanes = [this.solidBottom, this.solidTop]
+  private readonly ghostPlanes = [this.ghostBottom]
+  private currentClip: LayerClip = { solidMin: null, solidMax: null, ghostMin: null }
 
-  /** 種類ごとのまとまりから、InstancedMesh を並べた Group を作る */
-  build(groups: readonly BlockInstanceGroup[]): THREE.Group {
+  /** 種類ごとのまとまりから、InstancedMesh を並べた Group を作る。最初はすべての段を見せる */
+  build(groups: readonly BlockInstanceGroup[]): BuiltBlocks {
     const root = new THREE.Group()
     root.name = 'blocks'
+    const pairs: BlockMeshPair[] = []
     for (const g of groups) {
-      if (g.solid.length > 0) root.add(this.mesh(g, g.solid, false))
-      if (g.ghost.length > 0) root.add(this.mesh(g, g.ghost, true))
+      if (g.positions.length === 0) continue
+      const solid = this.solidMesh(g)
+      const ghost = new THREE.InstancedMesh(this.geometry, this.material(g.id, g.color, 'ghost'), solid.count)
+      // 置き場所は普通のメッシュと共有する（GPU へ送るのも1回で済む）
+      ghost.instanceMatrix = solid.instanceMatrix
+      ghost.userData = { id: g.id, ghost: true } satisfies BlockMeshInfo
+      ghost.name = `${g.id} (半透明)`
+      ghost.boundingSphere = solid.boundingSphere
+      ghost.boundingBox = solid.boundingBox
+      // 半透明は不透明のあとに描く
+      ghost.renderOrder = 1
+      ghost.visible = false
+      root.add(solid, ghost)
+      pairs.push({ group: g, solid, ghost })
     }
-    return root
+    return { root, pairs }
+  }
+
+  /** 描く段の範囲を変える。すべての材質に効く */
+  setClip(clip: LayerClip): void {
+    this.currentClip = clip
+    // 普通：y >= solidMin（y - solidMin >= 0）、y <= solidMax（solidMax - y >= 0）
+    this.solidBottom.constant = clip.solidMin === null ? FAR : -clip.solidMin
+    this.solidTop.constant = clip.solidMax === null ? FAR : clip.solidMax
+    this.ghostBottom.constant = clip.ghostMin === null ? FAR : -clip.ghostMin
+  }
+
+  get clip(): LayerClip {
+    return this.currentClip
+  }
+
+  /**
+   * 隠す段のブロックの大きさを 0 にし、ほかは元の大きさに戻す。
+   * hiddenOf(y) が true の段を隠す。置き場所を書き直すだけで、メッシュは作り直さない。
+   */
+  writeMatrices(pair: BlockMeshPair, hiddenOf: (y: number) => boolean): void {
+    writeInstanceMatrices(pair.solid.instanceMatrix.array, pair.group.positions, hiddenOf)
+    pair.solid.instanceMatrix.needsUpdate = true
+  }
+
+  /**
+   * 段ごとの見え方に合わせて、メッシュの表示を切り替える（描くブロックが1つもないメッシュは描かない）。
+   * 描いているメッシュの数を返す。
+   */
+  updateVisibility(pairs: readonly BlockMeshPair[], visibilityOf: LayerVisibilityOf): number {
+    let meshes = 0
+    for (const pair of pairs) {
+      let solid = false
+      let ghost = false
+      for (const y of pair.group.layerCounts.keys()) {
+        const v = visibilityOf(y)
+        if (v === 'solid') solid = true
+        else if (v === 'ghost') ghost = true
+        if (solid && ghost) break
+      }
+      pair.solid.visible = solid
+      pair.ghost.visible = ghost
+      meshes += Number(solid) + Number(ghost)
+    }
+    return meshes
   }
 
   /** build で作った Group のメッシュを捨てる（形と材質は使い回すので残す） */
@@ -49,46 +150,74 @@ export class BlueprintMeshBuilder {
     this.geometry.dispose()
     for (const m of this.solidMaterials.values()) m.dispose()
     for (const m of this.ghostMaterials.values()) m.dispose()
+    for (const m of this.dimMaterials.values()) m.dispose()
     this.solidMaterials.clear()
     this.ghostMaterials.clear()
+    this.dimMaterials.clear()
   }
 
-  private material(g: BlockInstanceGroup, ghost: boolean): THREE.MeshLambertMaterial {
-    const cache = ghost ? this.ghostMaterials : this.solidMaterials
-    let m = cache.get(g.id)
+  private material(id: string, color: number, kind: 'solid' | 'ghost' | 'dim'): THREE.MeshLambertMaterial {
+    const cache = kind === 'solid' ? this.solidMaterials : kind === 'ghost' ? this.ghostMaterials : this.dimMaterials
+    let m = cache.get(id)
     if (!m) {
-      m = ghost
-        ? new THREE.MeshLambertMaterial({ color: g.color, transparent: true, opacity: GHOST_OPACITY, depthWrite: false })
-        : new THREE.MeshLambertMaterial({ color: g.color })
-      cache.set(g.id, m)
+      m =
+        kind === 'solid'
+          ? new THREE.MeshLambertMaterial({ color, clippingPlanes: this.solidPlanes })
+          : new THREE.MeshLambertMaterial({
+              color,
+              transparent: true,
+              opacity: GHOST_OPACITY,
+              depthWrite: false,
+              clippingPlanes: kind === 'ghost' ? this.ghostPlanes : this.solidPlanes,
+            })
+      cache.set(id, m)
     }
     return m
   }
 
-  private mesh(g: BlockInstanceGroup, positions: readonly number[], ghost: boolean): THREE.InstancedMesh {
-    const count = positions.length / 3
-    const mesh = new THREE.InstancedMesh(this.geometry, this.material(g, ghost), count)
-    const info: BlockMeshInfo = { id: g.id, ghost }
-    mesh.userData = info
-    mesh.name = ghost ? `${g.id} (半透明)` : g.id
-    // 行列は平行移動だけなので、配列に直接書く（Matrix4 を作るより速い）
-    const m = mesh.instanceMatrix.array
-    for (let i = 0; i < count; i++) {
-      const o = i * 16
-      m[o] = 1
-      m[o + 5] = 1
-      m[o + 10] = 1
-      m[o + 15] = 1
-      // ブロック p は [p, p+1) の立方体なので、中心は p + 0.5
-      m[o + 12] = positions[i * 3] + 0.5
-      m[o + 13] = positions[i * 3 + 1] + 0.5
-      m[o + 14] = positions[i * 3 + 2] + 0.5
-    }
+  private solidMesh(g: BlockInstanceGroup): THREE.InstancedMesh {
+    const count = g.positions.length / 3
+    const mesh = new THREE.InstancedMesh(this.geometry, this.material(g.id, g.color, g.dimmed ? 'dim' : 'solid'), count)
+    mesh.userData = { id: g.id, ghost: g.dimmed } satisfies BlockMeshInfo
+    mesh.name = g.dimmed ? `${g.id} (薄く)` : g.id
+    // 薄くするブロックは半透明なので、不透明のあとに描く
+    if (g.dimmed) mesh.renderOrder = 1
+    writeInstanceMatrices(mesh.instanceMatrix.array, g.positions, () => false)
     mesh.instanceMatrix.needsUpdate = true
     mesh.computeBoundingSphere()
     mesh.computeBoundingBox()
-    // 半透明は不透明のあとに描く
-    if (ghost) mesh.renderOrder = 1
     return mesh
+  }
+}
+
+/** 置き場所の行列を書く。行列は平行移動と大きさだけなので、配列に直接書く（Matrix4 を作るより速い） */
+function writeInstanceMatrices(m: THREE.TypedArray, positions: readonly number[], hiddenOf: (y: number) => boolean): void {
+  const count = positions.length / 3
+  for (let i = 0; i < count; i++) {
+    const o = i * 16
+    const y = positions[i * 3 + 1]
+    const s = hiddenOf(y) ? 0 : 1
+    m[o] = s
+    m[o + 5] = s
+    m[o + 10] = s
+    m[o + 15] = 1
+    // ブロック p は [p, p+1) の立方体なので、中心は p + 0.5
+    m[o + 12] = positions[i * 3] + 0.5
+    m[o + 13] = y + 0.5
+    m[o + 14] = positions[i * 3 + 2] + 0.5
+  }
+}
+
+/** 段の表示方法から、描く段の範囲を決める。境目はブロックとブロックの隙間に置く */
+export function layerClipFor(mode: LayerMode, layer: number): LayerClip {
+  switch (mode) {
+    case 'all':
+      return { solidMin: null, solidMax: null, ghostMin: null }
+    case 'hideAbove':
+      return { solidMin: null, solidMax: layer + 1, ghostMin: null }
+    case 'ghostAbove':
+      return { solidMin: null, solidMax: layer + 1, ghostMin: layer + 1 }
+    case 'only':
+      return { solidMin: layer, solidMax: layer + 1, ghostMin: null }
   }
 }

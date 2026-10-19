@@ -17,7 +17,7 @@ export interface CameraRequest {
  * 表示の状態。docs/design.md の ViewState のうち、表示に関わる部分（ツールは toolStore）。
  * - 3D/2D の切り替え、2D表示の略称（#14）
  * - 視点、グリッド・座標軸の表示（#9）
- * - 段の表示方法、段ごとの非表示（画面は #10。3D表示は layerDisplay を見て描き直す）
+ * - 段の表示方法、段ごとの非表示（#10。3D表示は layerDisplay を見て、メッシュを作り直さずに切り替える）
  * 今の段は layerStore（useLayerStore().current）が持つ。layerDisplay はそれと合わせた値
  */
 export const useViewStore = defineStore('view', () => {
@@ -99,6 +99,18 @@ export const useViewStore = defineStore('view', () => {
     hiddenLayers.value = next
   }
 
+  /** 非表示の段をまとめて入れ替える（設計図を開き直したときなど） */
+  function setHiddenLayers(hidden: ReadonlySet<number>): void {
+    hiddenLayers.value = new Set(hidden)
+  }
+
+  /** 段 y だけを表示し、高さ height の設計図のほかの段を非表示にする（段の一覧の「この段だけ表示」） */
+  function soloLayer(y: number, height: number): void {
+    const next = new Set<number>()
+    for (let i = 0; i < height; i++) if (i !== y) next.add(i)
+    hiddenLayers.value = next
+  }
+
   /** すべての段を表示する（非表示を解除し、表示方法を「すべて」にする） */
   function showAllLayers(): void {
     hiddenLayers.value = new Set()
@@ -125,6 +137,8 @@ export const useViewStore = defineStore('view', () => {
     setAxes,
     setLayerMode,
     setLayerHidden,
+    setHiddenLayers,
+    soloLayer,
     showAllLayers,
   }
 })

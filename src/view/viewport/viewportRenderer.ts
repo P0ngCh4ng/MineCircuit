@@ -51,6 +51,8 @@ export class ViewportRenderer implements SceneRenderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     // 背景は透明にして、表示部分の CSS の背景を見せる（テーマに合わせて変わる）
     this.renderer.setClearColor(0x000000, 0)
+    // 段の表示方法は、ブロックの材質のクリッピング面で切り替える（blueprintMeshBuilder.ts）
+    this.renderer.localClippingEnabled = true
 
     this.controls = new OrbitControls(this.camera, canvas)
     // 左ドラッグで回す、右ドラッグで動かす、ホイールで拡大・縮小
