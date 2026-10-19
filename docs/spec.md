@@ -214,7 +214,7 @@ flowchart TB
 
 ## 未確認事項
 
-- [ ] Createの応力の数値が、ワールドごとの `serverconfig/create-server.toml` に入っているか。入っていない場合、初期値はJavaのコードの中にしかない可能性がある
+- [x] Createの応力の数値が、ワールドごとの `serverconfig/create-server.toml` に入っているか → 入っている。ファイルがなければ初期値はコードの中にしかない（[create-stress.md](create-stress.md)）
 - [ ] Createのjarに、歯車やシャフトの形を記述したJSONモデルがあるか
 - [ ] 1.18.2と1.21.1で、.nbtのブロック状態の書き方にどんな差があるか
 - [ ] deepslateがModのモデルとテクスチャを読めるか

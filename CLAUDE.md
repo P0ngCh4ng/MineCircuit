@@ -9,6 +9,7 @@
 | [docs/spec.md](docs/spec.md) | 仕様。目的、想定ユーザー、機能と優先度、最初の版の範囲 |
 | [docs/design.md](docs/design.md) | クラス設計。層、各クラス、値の出どころ、編集、書き出し |
 | [docs/ui.md](docs/ui.md) | 画面構成。配置、ツール、キー操作 |
+| [docs/create-stress.md](docs/create-stress.md) | Createの応力計算の規則と数値。回転のつながり、速度比、初期値、計算の手順 |
 | [prototype/index.html](prototype/index.html) | UIプロトタイプ。1ファイルの参考実装 |
 
 作業は GitHub の Issue 単位で進める。マイルストーン M0〜M5 が仕様書の「開発の順番」に対応する。
