@@ -299,8 +299,8 @@ class EditHistory {
 ```ts
 class BlockBrush {
   state: BlockState
-  rotate(vertical: boolean): void   // R / Shift+R
-  static fromBlock(state: BlockState): BlockBrush   // スポイト
+  rotate(vertical: boolean): boolean   // R / Shift+R。回せる向きがなければ false
+  static fromBlock(state: BlockState, modpack: Modpack | null): BlockBrush   // スポイト
 }
 ```
 
@@ -312,7 +312,11 @@ class BlockBrush {
 | `facing` | north → east → south → west | up → down → north |
 | `horizontal_facing` | north → east → south → west | 変えない |
 
-Modpackがないと、そのブロックが取りうる値が分からない。Modpackがあれば、jar のブロック状態の定義（`assets/<namespace>/blockstates/<path>.json`）から取りうる値を読み、その範囲で回す。
+Modpackがないと、そのブロックが取りうる値が分からない。Modpackがあれば、jar のブロック状態の定義（`assets/<namespace>/blockstates/<path>.json`）から取りうる値を読み、その範囲で回す（`edit/orientationOptions.ts`）。
+
+- variants 形式：キー（`facing=north,powered=false`）に出てくる値を集める
+- multipart 形式：`when` の条件（`OR` / `AND` の中、`a|b` の区切りを含む）に出てくる値を集める
+- 定義に出てこない property は制限しない。multipart で否定の条件（`!north`）がある property も、値が足りないかもしれないので制限しない
 
 ## 値の出どころ
 
@@ -494,5 +498,5 @@ Create Astral（1.18.2）の設計図 `_.nbt`（8×1×4、23ブロック）と `
 - [x] Createの応力の数値が、ワールドごとの `serverconfig/create-server.toml` に入っているか → 入っている（[create-stress.md](create-stress.md)）
 - [x] Createのバージョンで、nbt の項目名が変わっていないか → 名前は同じ。位置の書き方だけ違う（[create-stress.md](create-stress.md)）
 - [ ] 書き出した .nbt をCreateで読み込めるか。生データのないブロックがどう置かれるか
-- [ ] ブロック状態の定義（blockstates の JSON）から、取りうる値の一覧を確実に作れるか。multipart 形式のブロックの扱い
+- [ ] ブロック状態の定義（blockstates の JSON）から、取りうる値の一覧を確実に作れるか。multipart 形式のブロックの扱い → 上の「置くブロック」の規則で作った。multipart は条件に出てくる値しか分からないため、本物の Create の jar で確かめる
 - [ ] 新規作成の設計図の `DataVersion` をどう決めるか

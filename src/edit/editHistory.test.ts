@@ -265,8 +265,13 @@ describe('操作を作る関数', () => {
   it('rotateBlock：取りうる値の一覧に従う', () => {
     const bp = makeBlueprint()
     // facing が水平の向きしか取れないので、縦の回転では変わらない
-    const options = { facing: ['north', 'east', 'south', 'west'] }
-    expect(rotateBlock(bp, [2, 1, 2], true, options)).toBeNull()
+    const modpack = {
+      blockStateDefinition: () => ({
+        variants: { 'facing=north': {}, 'facing=east': {}, 'facing=south': {}, 'facing=west': {} },
+      }),
+    }
+    expect(rotateBlock(bp, [2, 1, 2], true, modpack)).toBeNull()
+    expect(rotateBlock(bp, [2, 1, 2], false, modpack)).not.toBeNull()
   })
 
   it('rotateBlock：空き・範囲の外・回せる向きがないときは null', () => {

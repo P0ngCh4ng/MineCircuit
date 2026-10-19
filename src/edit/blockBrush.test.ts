@@ -38,7 +38,7 @@ describe('BlockBrush', () => {
   })
 
   it('取りうる値の一覧があれば、その範囲で回す', () => {
-    const brush = BlockBrush.fromBlock(state('create:test', { facing: 'north' }), {
+    const brush = new BlockBrush(state('create:test', { facing: 'north' }), {
       facing: ['north', 'east', 'south', 'west'],
     })
     expect(brush.rotate(true)).toBe(false)
