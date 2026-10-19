@@ -15,6 +15,20 @@ export interface FileSource {
   list(dir: string): Promise<string[]>
   /** ファイルの中身を返す。ファイルがなければ FileNotFoundError を投げる */
   read(path: string): Promise<ArrayBuffer>
+  /**
+   * ファイルの大きさと更新時刻を、中身を読まずに返す。分からなければ null。
+   * 変わったファイルだけ読み直すために使う。この関数がない FileSource もある。
+   * ファイルがなければ FileNotFoundError を投げる。
+   */
+  stat?(path: string): Promise<FileStat | null>
+}
+
+/** ファイルの大きさと更新時刻 */
+export interface FileStat {
+  /** バイト数 */
+  readonly size: number
+  /** 更新時刻（ミリ秒） */
+  readonly lastModified: number
 }
 
 /** 指定したファイルやフォルダがないときのエラー */

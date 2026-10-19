@@ -1,0 +1,192 @@
+import { describe, expect, it } from 'vitest'
+import { strToU8 } from 'fflate'
+import { fakeJar } from '../../../tests/fixtures/fakeJar'
+import { ResourceLocation } from '../../domain/resourceLocation'
+import { FileNotFoundError } from '../fileSource'
+import { MemoryFileSource } from '../memoryFileSource'
+import { scanJar } from './jarScanner'
+import {
+  jarCacheKey,
+  MemoryJarCache,
+  ModpackLoadAbortedError,
+  ModpackLoader,
+  type JarScanner,
+  type ModpackLoadProgress,
+} from './modpackLoader'
+
+const rl = (s: string) => ResourceLocation.parse(s)
+
+function gearJar(name = 'テスト歯車'): Uint8Array {
+  return fakeJar({
+    forgeMods: [{ modId: 'gears', displayName: 'Gears', version: '1.0' }],
+    lang: { gears: { ja_jp: { 'block.gears.gear': name }, en_us: { 'block.gears.gear': 'Gear', 'block.gears.big': 'Big' } } },
+    blockStates: { 'gears:gear': { variants: { 'facing=north': { model: 'gears:block/gear' } } } },
+  })
+}
+
+function pipesJar(): Uint8Array {
+  return fakeJar({
+    fabricMod: { modId: 'pipes', displayName: 'Pipes', version: '2.0' },
+    lang: { pipes: { en_us: { 'block.pipes.pipe': 'Pipe' } } },
+  })
+}
+
+/** 何回 jar を開いたかを数える */
+function countingScanner(): { scan: JarScanner; scanned: string[] } {
+  const scanned: string[] = []
+  return {
+    scanned,
+    scan: async (jar, bytes) => {
+      scanned.push(jar)
+      return scanJar(jar, bytes)
+    },
+  }
+}
+
+describe('ModpackLoader', () => {
+  it('mods/*.jar を読み、Mod の一覧・namespace・表示名をまとめる', async () => {
+    const source = new MemoryFileSource([
+      ['mods/b-pipes.jar', pipesJar()],
+      ['mods/a-gears.jar', gearJar()],
+      ['mods/readme.txt', strToU8('jar ではない')],
+      ['config/gears-common.toml', strToU8('﻿speed = 16\n')],
+    ])
+    const pack = await new ModpackLoader(source).load()
+    expect(pack.mods.map((m) => [m.modId, m.name, m.version, m.jar])).toEqual([
+      ['gears', 'Gears', '1.0', 'a-gears.jar'],
+      ['pipes', 'Pipes', '2.0', 'b-pipes.jar'],
+    ])
+    expect(pack.jarCount).toBe(2)
+    expect(pack.namespaces).toEqual(['gears', 'pipes'])
+    expect(pack.hasNamespace('gears')).toBe(true)
+    expect(pack.hasNamespace('minecraft')).toBe(true)
+    expect(pack.hasNamespace('missing')).toBe(false)
+    expect(pack.displayName(rl('gears:gear'), 'ja_jp')).toBe('テスト歯車')
+    expect(pack.displayName(rl('gears:big'), 'ja_jp')).toBeNull()
+    expect(pack.displayName(rl('gears:big'), 'en_us')).toBe('Big')
+    expect(pack.displayName(rl('minecraft:stone'), 'en_us')).toBeNull()
+    expect(pack.displayNameCount('en_us')).toBe(3)
+    expect(pack.blockStateDefinition(rl('gears:gear'))).toEqual({
+      variants: { 'facing=north': { model: 'gears:block/gear' } },
+    })
+    expect(pack.blockStateDefinition(rl('pipes:pipe'))).toBeNull()
+    expect(await pack.config('config/gears-common.toml')).toBe('speed = 16\n')
+    expect(await pack.config('config/none.toml')).toBeNull()
+    expect(pack.problems).toEqual([])
+  })
+
+  it('読めない jar は problems に入れて、ほかの jar は読む', async () => {
+    const source = new MemoryFileSource([
+      ['mods/a.jar', gearJar()],
+      ['mods/broken.jar', strToU8('not a zip')],
+    ])
+    const pack = await new ModpackLoader(source).load()
+    expect(pack.mods.map((m) => m.modId)).toEqual(['gears'])
+    expect(pack.problems).toHaveLength(1)
+    expect(pack.problems[0].jar).toBe('broken.jar')
+  })
+
+  it('mods/ がなければ FileNotFoundError', async () => {
+    await expect(new ModpackLoader(new MemoryFileSource([['config/x.toml', strToU8('')]])).load()).rejects.toThrow(
+      FileNotFoundError,
+    )
+  })
+
+  it('進み具合を知らせる', async () => {
+    const source = new MemoryFileSource([
+      ['mods/a.jar', gearJar()],
+      ['mods/b.jar', pipesJar()],
+    ])
+    const seen: ModpackLoadProgress[] = []
+    await new ModpackLoader(source, { onProgress: (p) => seen.push(p) }).load()
+    expect(seen).toEqual([
+      { done: 0, total: 2, fromCache: 0, current: 'a.jar' },
+      { done: 1, total: 2, fromCache: 0, current: 'b.jar' },
+      { done: 2, total: 2, fromCache: 0, current: null },
+    ])
+  })
+
+  it('大きさと更新時刻が同じ jar は、中身を読まずに保存した結果を使う', async () => {
+    const cache = new MemoryJarCache()
+    const reads: string[] = []
+    const make = (gearStat: { size: number; lastModified: number }, gearName: string) => {
+      const source = new MemoryFileSource()
+      const gearBytes = gearJar(gearName)
+      source.add('mods/a.jar', async () => {
+        reads.push('a.jar')
+        return gearBytes.slice().buffer
+      }, gearStat)
+      const pipeBytes = pipesJar()
+      source.add('mods/b.jar', async () => {
+        reads.push('b.jar')
+        return pipeBytes.slice().buffer
+      }, { size: 50, lastModified: 1 })
+      return source
+    }
+
+    const first = countingScanner()
+    await new ModpackLoader(make({ size: 100, lastModified: 1 }, '歯車1'), { cache, scan: first.scan }).load()
+    expect(first.scanned).toEqual(['a.jar', 'b.jar'])
+
+    // 何も変わっていない
+    reads.length = 0
+    const second = countingScanner()
+    const progress: ModpackLoadProgress[] = []
+    const pack2 = await new ModpackLoader(make({ size: 100, lastModified: 1 }, '歯車1'), {
+      cache,
+      scan: second.scan,
+      onProgress: (p) => progress.push(p),
+    }).load()
+    expect(second.scanned).toEqual([])
+    expect(reads).toEqual([])
+    expect(progress.at(-1)).toEqual({ done: 2, total: 2, fromCache: 2, current: null })
+    expect(pack2.displayName(rl('gears:gear'), 'ja_jp')).toBe('歯車1')
+
+    // a.jar だけ更新した
+    const third = countingScanner()
+    const pack3 = await new ModpackLoader(make({ size: 120, lastModified: 2 }, '歯車2'), { cache, scan: third.scan }).load()
+    expect(third.scanned).toEqual(['a.jar'])
+    expect(pack3.displayName(rl('gears:gear'), 'ja_jp')).toBe('歯車2')
+  })
+
+  it('大きさと更新時刻が分からなければ、中身から鍵を作って保存した結果を使う', async () => {
+    const cache = new MemoryJarCache()
+    const bytes = gearJar()
+    const first = countingScanner()
+    await new ModpackLoader(new MemoryFileSource([['mods/a.jar', bytes]]), { cache, scan: first.scan }).load()
+    const second = countingScanner()
+    await new ModpackLoader(new MemoryFileSource([['mods/a.jar', bytes]]), { cache, scan: second.scan }).load()
+    expect(first.scanned).toEqual(['a.jar'])
+    expect(second.scanned).toEqual([])
+
+    const third = countingScanner()
+    await new ModpackLoader(new MemoryFileSource([['mods/a.jar', gearJar('別の名前')]]), { cache, scan: third.scan }).load()
+    expect(third.scanned).toEqual(['a.jar'])
+  })
+
+  it('やめる合図で ModpackLoadAbortedError を投げる', async () => {
+    const controller = new AbortController()
+    const source = new MemoryFileSource([
+      ['mods/a.jar', gearJar()],
+      ['mods/b.jar', pipesJar()],
+    ])
+    const loader = new ModpackLoader(source, {
+      signal: controller.signal,
+      scan: async (jar, bytes) => {
+        controller.abort()
+        return scanJar(jar, bytes)
+      },
+    })
+    await expect(loader.load()).rejects.toThrow(ModpackLoadAbortedError)
+  })
+})
+
+describe('jarCacheKey', () => {
+  it('大きさと更新時刻、または中身から作る', () => {
+    expect(jarCacheKey('a.jar', { size: 10, lastModified: 5 }, null)).toBe('v1|a.jar|10|5')
+    const k1 = jarCacheKey('a.jar', null, new Uint8Array([1, 2, 3]))
+    const k2 = jarCacheKey('a.jar', null, new Uint8Array([1, 2, 4]))
+    expect(k1).not.toBe(k2)
+    expect(k1.startsWith('v1|a.jar|3|h')).toBe(true)
+  })
+})
