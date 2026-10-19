@@ -11,11 +11,13 @@ import StatusBar from './shell/StatusBar.vue'
 import TopBar from './shell/TopBar.vue'
 import { useCalcStore } from './stores/calcStore'
 import { useToolStore } from './stores/toolStore'
+import { useViewStore } from './stores/viewStore'
 import { useKeyboardShortcuts } from './tools/useKeyboardShortcuts'
 import ViewportArea from './viewport/ViewportArea.vue'
 
 const tools = useToolStore()
 const calc = useCalcStore()
+const view = useViewStore()
 const session = useDocumentSession()
 const rotate = useRotateAction()
 
@@ -32,6 +34,7 @@ useKeyboardShortcuts({
   undo: () => session.undo(),
   redo: () => session.redo(),
   rotateBrush: (a) => rotate(a.vertical),
+  toggleGrid: () => view.toggleGrid(),
 })
 </script>
 
