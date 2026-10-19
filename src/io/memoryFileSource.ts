@@ -1,4 +1,4 @@
-import { FileNotFoundError, normalizePath, splitPath, type FileSource } from './fileSource'
+import { FileNotFoundError, normalizePath, splitPath, type FileSource, type FileStat } from './fileSource'
 
 /** ファイルの中身。バイト列そのものか、呼ばれたときに読む関数 */
 export type FileContent = Uint8Array | (() => Promise<ArrayBuffer>)
@@ -10,6 +10,7 @@ export type FileContent = Uint8Array | (() => Promise<ArrayBuffer>)
  */
 export class MemoryFileSource implements FileSource {
   private readonly files = new Map<string, FileContent>()
+  private readonly stats = new Map<string, FileStat>()
   /** フォルダのパス → 中にある項目の名前（フォルダは末尾 `/`） */
   private readonly dirs = new Map<string, Set<string>>([['', new Set()]])
 
@@ -19,8 +20,8 @@ export class MemoryFileSource implements FileSource {
     }
   }
 
-  /** ファイルを足す。途中のフォルダも作る */
-  add(path: string, content: FileContent): void {
+  /** ファイルを足す。途中のフォルダも作る。stat を渡すと、stat() がそれを返す */
+  add(path: string, content: FileContent, stat?: FileStat): void {
     const parts = splitPath(path)
     if (parts.length === 0) throw new Error('ファイルのパスが空です')
     let dir = ''
@@ -33,6 +34,8 @@ export class MemoryFileSource implements FileSource {
       if (!isFile && !this.dirs.has(dir)) this.dirs.set(dir, new Set())
     }
     this.files.set(dir, content)
+    if (stat) this.stats.set(dir, stat)
+    else this.stats.delete(dir)
   }
 
   async list(dir: string): Promise<string[]> {
@@ -50,11 +53,20 @@ export class MemoryFileSource implements FileSource {
     // 呼び出し元が書き換えても元に影響しないよう、コピーを返す
     return content.slice().buffer
   }
+
+  /** add で stat を渡したファイルだけ、大きさと更新時刻を返す。渡していなければ null */
+  async stat(path: string): Promise<FileStat | null> {
+    const key = normalizePath(path)
+    if (!this.files.has(key)) throw new FileNotFoundError(key)
+    return this.stats.get(key) ?? null
+  }
 }
 
 /** `<input webkitdirectory>` で選んだファイルの1つ分。File のうち使う部分だけ */
 export interface PickedFile {
   readonly webkitRelativePath: string
+  readonly size?: number
+  readonly lastModified?: number
   arrayBuffer(): Promise<ArrayBuffer>
 }
 
@@ -71,7 +83,11 @@ export function fileSourceFromPickedFiles(files: ArrayLike<PickedFile>): { name:
     const parts = splitPath(file.webkitRelativePath)
     if (parts.length < 2) continue
     name ??= parts[0]
-    source.add(parts.slice(1).join('/'), () => file.arrayBuffer())
+    const stat =
+      file.size !== undefined && file.lastModified !== undefined
+        ? { size: file.size, lastModified: file.lastModified }
+        : undefined
+    source.add(parts.slice(1).join('/'), () => file.arrayBuffer(), stat)
   }
   return name === null ? null : { name, source }
 }

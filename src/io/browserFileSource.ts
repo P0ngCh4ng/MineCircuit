@@ -3,7 +3,7 @@
 // Firefox / Safari にはフォルダを選ぶ画面（showDirectoryPicker）がないので、
 // <input webkitdirectory> と MemoryFileSource で読む（memoryFileSource.ts）。
 
-import { FileNotFoundError, normalizePath, splitPath, type FileSource } from './fileSource'
+import { FileNotFoundError, normalizePath, splitPath, type FileSource, type FileStat } from './fileSource'
 
 // showDirectoryPicker と権限の確認は Chromium だけにあり、TypeScript の lib.dom にない。使う部分だけ型を書く
 type PermissionMode = 'read' | 'readwrite'
@@ -83,13 +83,27 @@ export class BrowserFileSource implements FileSource {
   }
 
   async read(path: string): Promise<ArrayBuffer> {
+    const file = await this.file(path)
+    try {
+      return await file.arrayBuffer()
+    } catch (e) {
+      if (isNotFound(e)) throw new FileNotFoundError(normalizePath(path))
+      throw e
+    }
+  }
+
+  async stat(path: string): Promise<FileStat> {
+    const file = await this.file(path)
+    return { size: file.size, lastModified: file.lastModified }
+  }
+
+  private async file(path: string): Promise<File> {
     const parts = splitPath(path)
     const fileName = parts.pop()
     if (fileName === undefined) throw new FileNotFoundError('')
     const dir = await this.directory(parts, path)
     try {
-      const file = await (await dir.getFileHandle(fileName)).getFile()
-      return await file.arrayBuffer()
+      return await (await dir.getFileHandle(fileName)).getFile()
     } catch (e) {
       if (isNotFound(e)) throw new FileNotFoundError(normalizePath(path))
       throw e
