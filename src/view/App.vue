@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // 画面の部品は後の Issue で足す
+import CalcPanel from './CalcPanel.vue'
 import ModpackPicker from './ModpackPicker.vue'
 import { useToolStore } from './stores/toolStore'
 import ToolBar from './tools/ToolBar.vue'
@@ -21,6 +22,10 @@ useKeyboardShortcuts({
     <section class="viewport" aria-label="表示">
       <ToolBar class="viewport-tools" />
     </section>
+    <!-- 右パネル。選択中のブロックの情報は後の Issue で足す -->
+    <aside class="right-panel" aria-label="右パネル">
+      <CalcPanel />
+    </aside>
   </main>
 </template>
 
