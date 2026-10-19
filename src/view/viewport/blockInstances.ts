@@ -19,11 +19,19 @@ export interface BlockInstanceGroup {
 /** 段 y の見え方を返す関数。layerVisibility(display, y) を渡す */
 export type LayerVisibilityOf = (y: number) => LayerVisibility
 
+/** 強調表示で薄くするブロックなら true を返す関数（座標は設計図全体の座標） */
+export type DimmedOf = (x: number, y: number, z: number) => boolean
+
 /**
  * 設計図のブロックを ID ごとにまとめる。空きと、隠す段のブロックは入れない。
+ * dimmed を渡すと、普通に描くブロックのうち dimmed が true のものを半透明にする（検索の強調、#15）。
  * 並びは ID の文字列順（毎回同じ順にして、描き直しで色や順番が揺れないようにする）。
  */
-export function collectBlockInstances(blueprint: Blueprint, visibilityOf: LayerVisibilityOf): BlockInstanceGroup[] {
+export function collectBlockInstances(
+  blueprint: Blueprint,
+  visibilityOf: LayerVisibilityOf,
+  dimmed: DimmedOf | null = null,
+): BlockInstanceGroup[] {
   const groups = new Map<string, { solid: number[]; ghost: number[] }>()
   // 同じ段を何度も聞かないように覚えておく
   const visibilityCache = new Map<number, LayerVisibility>()
@@ -49,7 +57,8 @@ export function collectBlockInstances(blueprint: Blueprint, visibilityOf: LayerV
         group = { solid: [], ghost: [] }
         groups.set(id, group)
       }
-      ;(visibility === 'solid' ? group.solid : group.ghost).push(x, y, z)
+      const solid = visibility === 'solid' && !(dimmed && dimmed(x, y, z))
+      ;(solid ? group.solid : group.ghost).push(x, y, z)
     })
   })
 

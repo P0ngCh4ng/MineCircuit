@@ -4,12 +4,14 @@
 import { computed } from 'vue'
 import EditControls from '../edit/EditControls.vue'
 import { useDocumentSession } from '../document/documentSession'
+import { useSearchStore } from '../stores/searchStore'
 import { useViewStore } from '../stores/viewStore'
 import { CAMERA_VIEWS } from '../viewport/cameraViews'
 import ViewModeSwitch from './ViewModeSwitch.vue'
 
 const session = useDocumentSession()
 const view = useViewStore()
+const search = useSearchStore()
 const noBlueprint = computed(() => session.current.value === null)
 /** 視点は3D表示だけで使う */
 const noCamera = computed(() => noBlueprint.value || view.mode !== '3d')
@@ -61,7 +63,18 @@ const noCamera = computed(() => noBlueprint.value || view.mode !== '3d')
         略称
       </button>
     </div>
-    <!-- 選択の解除（#12）と強調の解除（#15） -->
+    <!-- 選択の解除（#12） -->
+    <div class="bar-group" role="group" aria-label="強調">
+      <button
+        type="button"
+        data-action="clear-highlight"
+        title="ブロック一覧で選んだブロックの強調をやめ、すべてを普通に表示する"
+        :disabled="search.highlightId === null"
+        @click="search.clearHighlight()"
+      >
+        強調を解除
+      </button>
+    </div>
     <EditControls />
     <!-- パネルの表示、全画面 -->
   </div>
