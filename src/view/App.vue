@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 画面の部品は後の Issue で足す
 import CalcPanel from './CalcPanel.vue'
+import ModpackLoadStatus from './ModpackLoadStatus.vue'
 import ModpackPicker from './ModpackPicker.vue'
 import { useToolStore } from './stores/toolStore'
 import ToolBar from './tools/ToolBar.vue'
@@ -18,6 +19,7 @@ useKeyboardShortcuts({
     <h1>MineCircuit</h1>
     <p class="notice">非公式ツールです。Mojang Studios および各 Mod の作者とは関係ありません。</p>
     <ModpackPicker />
+    <ModpackLoadStatus />
     <!-- 表示部分。3D/2D表示（#9, #14）はここに入れる -->
     <section class="viewport" aria-label="表示">
       <ToolBar class="viewport-tools" />

@@ -86,4 +86,14 @@ describe('fileSourceFromPickedFiles', () => {
   it('ファイルがなければ null', () => {
     expect(fileSourceFromPickedFiles([])).toBeNull()
   })
+
+  it('File の大きさと更新時刻を stat で返す', async () => {
+    const result = fileSourceFromPickedFiles([
+      { ...picked('P/mods/a.jar', 1), size: 10, lastModified: 20 },
+      picked('P/mods/b.jar', 2),
+    ])
+    expect(await result?.source.stat?.('mods/a.jar')).toEqual({ size: 10, lastModified: 20 })
+    expect(await result?.source.stat?.('mods/b.jar')).toBeNull()
+    await expect(result?.source.stat?.('mods/none.jar')).rejects.toThrow(FileNotFoundError)
+  })
 })

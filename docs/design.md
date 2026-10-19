@@ -135,6 +135,7 @@ interface CellValue {
 interface FileSource {
   list(dir: string): Promise<string[]>
   read(path: string): Promise<ArrayBuffer>
+  stat?(path: string): Promise<{ size: number; lastModified: number } | null>   // 変わった jar だけ読み直すため。なくてもよい
 }
 
 // 保存先。ブラウザでは保存先を選ぶ画面、Tauri版ではファイルに直接書く
@@ -200,12 +201,15 @@ class Modpack {
   hasNamespace(ns: string): boolean                         // jar の assets/ 以下のフォルダ名で判定
   displayName(id: ResourceLocation, lang: 'ja_jp' | 'en_us'): string | null
   config(path: string): Promise<string | null>              // 設定ファイルの中身。なければ null
+  blockStateDefinition(id: ResourceLocation): JsonValue | null   // blockstates/<path>.json。回転の候補に使う
 }
 ```
 
 - namespace と modId は一致しないModがあるため、`hasNamespace` は jar の `assets/<namespace>/` で判定する。
 - jar から読むのは翻訳ファイル・モデル・ブロック状態の定義・テクスチャだけ。Javaのコードは実行しない。
-- 読み込んだ表示名の一覧はブラウザ内に保存し、2回目以降を速くする。
+- 読み込んだ表示名の一覧はブラウザ内に保存し、2回目以降を速くする。jar ごとに、ファイル名・大きさ・更新時刻を鍵にして IndexedDB に保存し、変わった jar だけ読み直す。
+- jar を開く処理（zip の展開と JSON の解釈）は Web Worker で行う。`ModpackLoader` は開く関数を差し替えられるので、テストでは Worker なしで動く。
+- `minecraft` の namespace は jar になくても、常にあるとみなす。本体の翻訳は mods/ にないので、本体のブロックの表示名は出ない。
 
 ## analysis：集計と検索
 
