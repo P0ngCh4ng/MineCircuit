@@ -216,9 +216,10 @@ class Modpack {
 ```ts
 class BlueprintStats {
   constructor(private bp: Blueprint) {}
-  countAll(): Map<string, number>
+  countAll(): Map<string, number>              // ID ごとの数。properties は区別しない。多い順
   countLayer(y: number): Map<string, number>
-  bounds(): { min: Vec3; max: Vec3 }
+  bounds(): { min: Vec3; max: Vec3 } | null    // ブロックのある範囲。1つもなければ null
+  totals(): BlueprintTotals                    // ブロック数、種類、nbt 付き、エンティティ（上のバー）
 }
 
 class MissingModDetector {
