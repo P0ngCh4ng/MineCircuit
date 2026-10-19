@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 上のバー。docs/ui.md「全体の配置」の「上のバー1段目・2段目」
 import BlueprintFacts from '../document/BlueprintFacts.vue'
+import NewBlueprintButton from '../document/NewBlueprintButton.vue'
 import OpenFileButton from '../document/OpenFileButton.vue'
 import ModpackLoadStatus from '../ModpackLoadStatus.vue'
 import ModpackPicker from '../ModpackPicker.vue'
@@ -19,7 +20,7 @@ const content = useModpackContentStore()
       <span class="brand">MineCircuit</span>
       <div class="bar-group">
         <span class="bar-label">設計図</span>
-        <!-- 新規の設計図（#20）はここに足す -->
+        <NewBlueprintButton />
         <OpenFileButton />
       </div>
       <details class="modpack">
