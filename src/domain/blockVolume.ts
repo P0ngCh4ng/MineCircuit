@@ -35,6 +35,12 @@ export interface BlockVolumeInit {
   entities?: readonly RawEntity[]
   /** 解釈していない一番上の階層の項目 */
   extra?: RawNbt
+  /**
+   * `palettes` 形式（パレットのリスト）の .nbt で、先頭より後ろのパレット。
+   * 各パレットは palette と同じ並びの状態の生データ（Name・Properties の Compound）。
+   * 使うのは先頭（palette）だけで、これは書き出しで元に戻すためだけに持つ。
+   */
+  alternatePalettes?: readonly (readonly RawNbt[])[]
 }
 
 /**
@@ -61,6 +67,8 @@ export class BlockVolume {
   readonly size: Vec3
   readonly entities: readonly RawEntity[]
   readonly extra: RawNbt
+  /** `palettes` 形式の .nbt で、先頭より後ろのパレット（生データ）。ふつうは空 */
+  readonly alternatePalettes: readonly (readonly RawNbt[])[]
 
   private readonly paletteList: BlockState[]
   /** BlockState.key → パレット番号。同じ状態が2つあるときは先のもの */
@@ -81,6 +89,7 @@ export class BlockVolume {
     this.size = size
     this.entities = init.entities ?? []
     this.extra = init.extra ?? { type: 'compound', value: new Map() }
+    this.alternatePalettes = init.alternatePalettes ?? []
 
     this.paletteList = [...(init.palette ?? [])]
     this.paletteList.forEach((state, i) => {

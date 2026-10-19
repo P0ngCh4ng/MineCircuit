@@ -101,6 +101,7 @@ class BlockVolume {
   private readonly blockEntities: Map<number, RawNbt>  // セル番号 → ブロックエンティティの生データ
   readonly entities: RawEntity[]                 // 額縁、防具立てなど。生データのまま
   readonly extra: RawNbt                         // 解釈していない一番上の階層の項目
+  readonly alternatePalettes: RawNbt[][]         // palettes 形式の .nbt で、先頭より後ろのパレット（生データ）
 
   get(x: number, y: number, z: number): BlockState | null
   blockEntityAt(x: number, y: number, z: number): RawNbt | null
@@ -121,7 +122,8 @@ interface CellValue {
 - `cells` を型付き配列にするのは、数万ブロックの設計図でもメモリと速度を抑えるため。
 - 編集でパレットに使われない状態が残っても、そのままにする。書き出し時に使っている状態だけでパレットを作り直す。
 - ブロックエンティティとエンティティは生データ（`RawNbt`）のまま持つ。中身の解釈は、必要になったModごとにプラグインで行う。
-- `extra` には `Railways_DataVersion` のような、Modが足した知らない項目をそのまま入れる。
+- `extra` には `Railways_DataVersion` のような、Modが足した知らない項目をそのまま入れる。形式で決まった項目（.nbt なら `size`・`palette`・`palettes`・`blocks`・`entities`・`DataVersion`）は入れない。
+- `palettes` 形式（パレットのリスト）の .nbt は先頭のパレットを使う。残りは `alternatePalettes` に生データのまま持ち、書き出しで戻す。並びは `palette` と同じ番号なので、編集で足した状態（末尾に足される）以外はそのまま対応する。
 
 ## io：読み込み
 
@@ -151,12 +153,18 @@ class BrowserFileSink implements FileSink { /* showSaveFilePicker */ }
 ```ts
 interface BlueprintReader {
   canRead(fileName: string): boolean
-  read(name: string, data: ArrayBuffer): Blueprint
+  read(name: string, data: ArrayBuffer | Uint8Array): Promise<Blueprint>   // gzip の展開が非同期のため
 }
 
 class NbtBlueprintReader implements BlueprintReader {}
 // 後で: SchemBlueprintReader, LitematicBlueprintReader
 ```
+
+.nbt の読み込みの規則:
+
+- 空気（`minecraft:air`・`cave_air`・`void_air`）は置かれていないもの（-1）にする。パレットには残すので、パレット番号はファイルと同じになる。Create の設計図は空気を保存しない（`blocks` に入らない）ので、これで失うものはない。バニラの構造ブロックの .nbt は空気を明示して保存するが、その区別（空気で上書きするか、そのままにするか）は残らない
+- `DataVersion` がないファイルは `dataVersion = 0`（`UNKNOWN_DATA_VERSION`）にする。書き出しでは 0 なら `DataVersion` を書かない
+- 形式が違うときは、何が足りないか・どこが違うかを書いた `BlueprintReadError` を出す
 
 ### BlueprintWriter
 
