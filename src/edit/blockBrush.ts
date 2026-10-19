@@ -1,11 +1,12 @@
 import type { BlockState } from '../domain/blockState'
+import { propertyValueOptionsFor, type BlockStateDefinitionSource } from './orientationOptions'
 import { rotateState, type PropertyValueOptions } from './rotation'
 
 /** 置くブロック。置くツールで使うブロック状態を持ち、R / Shift+R で回す */
 export class BlockBrush {
   constructor(
     public state: BlockState,
-    /** このブロックの properties が取りうる値。Modpack がなければ null（#27 で渡す） */
+    /** このブロックの properties が取りうる値。Modpack がなければ null（回転の規則のとおりに回す） */
     public options: PropertyValueOptions | null = null,
   ) {}
 
@@ -20,8 +21,11 @@ export class BlockBrush {
     return true
   }
 
-  /** スポイト：クリックしたブロックの状態をそのまま置くブロックにする */
-  static fromBlock(state: BlockState, options: PropertyValueOptions | null = null): BlockBrush {
-    return new BlockBrush(state, options)
+  /**
+   * スポイト・ブロックの選択：そのブロックの状態をそのまま置くブロックにする。
+   * modpack があれば、ブロック状態の定義から取りうる値を読み、その範囲で回す。null なら規則のとおりに回す。
+   */
+  static fromBlock(state: BlockState, modpack: BlockStateDefinitionSource | null = null): BlockBrush {
+    return new BlockBrush(state, propertyValueOptionsFor(modpack, state.id))
   }
 }

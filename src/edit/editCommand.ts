@@ -2,7 +2,8 @@ import type { BlockState } from '../domain/blockState'
 import type { Blueprint } from '../domain/blueprint'
 import type { CellValue } from '../domain/blockVolume'
 import type { Vec3 } from '../domain/vec3'
-import { rotateState, type PropertyValueOptions } from './rotation'
+import { propertyValueOptionsFor, type BlockStateDefinitionSource } from './orientationOptions'
+import { rotateState } from './rotation'
 
 /** 1マス分の変更。pos は設計図全体の座標 */
 export interface CellChange {
@@ -60,16 +61,17 @@ export function eraseBlock(bp: Blueprint, pos: Vec3): EditCommand | null {
 /**
  * pos のブロックを1回回す操作を作る。vertical が false なら R（水平）、true なら Shift+R（縦）。
  * 生データ（nbt）はそのまま引き継ぐ。空き・範囲の外・回せる向きがないときは null。
+ * modpack があれば、ブロック状態の定義から読んだ取りうる値の範囲で回す。null なら規則のとおりに回す。
  */
 export function rotateBlock(
   bp: Blueprint,
   pos: Vec3,
   vertical: boolean,
-  options: PropertyValueOptions | null = null,
+  modpack: BlockStateDefinitionSource | null = null,
 ): EditCommand | null {
   const before = currentCell(bp, pos)
   if (!before?.state) return null
-  const next = rotateState(before.state, vertical, options)
+  const next = rotateState(before.state, vertical, propertyValueOptionsFor(modpack, before.state.id))
   if (next.equals(before.state)) return null
   return {
     label: `${blockName(before.state)} を回す`,

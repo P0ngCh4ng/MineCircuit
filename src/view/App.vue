@@ -3,6 +3,7 @@
 // 各場所の中身はそれぞれの部品のファイルで作る（App.vue は並べるだけ）。
 import { watch } from 'vue'
 import { useDocumentSession } from './document/documentSession'
+import { useRotateAction } from './edit/rotateAction'
 import LayerPanel from './layers/LayerPanel.vue'
 import LeftPanel from './panels/LeftPanel.vue'
 import RightPanel from './panels/RightPanel.vue'
@@ -16,6 +17,7 @@ import ViewportArea from './viewport/ViewportArea.vue'
 const tools = useToolStore()
 const calc = useCalcStore()
 const session = useDocumentSession()
+const rotate = useRotateAction()
 
 // 設計図が入れ替わったら、前の設計図の選択を消し、計算の対象を変える
 watch(session.current, (doc) => {
@@ -29,6 +31,7 @@ useKeyboardShortcuts({
   clearSelection: () => tools.setSelected(null),
   undo: () => session.undo(),
   redo: () => session.redo(),
+  rotateBrush: (a) => rotate(a.vertical),
 })
 </script>
 
