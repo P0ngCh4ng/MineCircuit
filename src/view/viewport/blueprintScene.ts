@@ -49,6 +49,9 @@ export class BlueprintScene {
   private readonly hoverMaterial = lineMaterial(LIGHT_THEME.hover, 0.6)
   private readonly selectionBox = boxEdges(1.04, this.selectionMaterial)
   private readonly hoverBox = boxEdges(1.01, this.hoverMaterial)
+  // 置くツールの見本。半透明の立方体を1つだけ動かして使う
+  private readonly ghostMaterial = new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.5, depthWrite: false })
+  private readonly ghostBox = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.ghostMaterial)
 
   private blueprint: Blueprint | null = null
   private display: LayerDisplay = SHOW_ALL_LAYERS
@@ -60,12 +63,16 @@ export class BlueprintScene {
   private axesVisible = false
   private selected: Vec3 | null = null
   private hovered: Vec3 | null = null
+  private ghost: Vec3 | null = null
   private theme: ViewportTheme = LIGHT_THEME
   private stats = { solid: 0, ghost: 0, meshes: 0 }
 
   constructor() {
     this.sun.position.set(0.6, 1, 0.35)
-    this.scene.add(this.ambient, this.sun, this.selectionBox, this.hoverBox)
+    this.scene.add(this.ambient, this.sun, this.selectionBox, this.hoverBox, this.ghostBox)
+    this.ghostBox.name = 'ghost'
+    this.ghostBox.visible = false
+    this.ghostBox.renderOrder = 5
     // 枠はブロックに隠れても見えるように、最後に重ねて描く
     for (const box of [this.selectionBox, this.hoverBox]) {
       box.renderOrder = 10
@@ -134,6 +141,21 @@ export class BlueprintScene {
     this.updateMarkers()
   }
 
+  /**
+   * 置くブロックの見本（半透明の立方体）。置くツールのマウスの下に出す。
+   * color はブロックの色（0xRRGGBB）。pos か color が null なら出さない
+   */
+  setGhost(pos: Vec3 | null, color: number | null): void {
+    this.ghost = pos && color !== null ? pos : null
+    if (color !== null) this.ghostMaterial.color.set(color)
+    this.updateMarkers()
+  }
+
+  /** 見本を出しているマス（テストと状態の確認用） */
+  get ghostPos(): Vec3 | null {
+    return this.ghostBox.visible ? this.ghost : null
+  }
+
   setTheme(theme: ViewportTheme): void {
     this.theme = theme
     this.ambient.intensity = theme.ambient
@@ -167,8 +189,8 @@ export class BlueprintScene {
     if (this.blocks) this.builder.disposeMeshes(this.blocks)
     this.blocks = null
     this.builder.dispose()
-    for (const o of [this.grid, this.axes, this.layerFrame, this.selectionBox, this.hoverBox]) disposeObject(o)
-    for (const m of [this.gridMaterial, this.frameMaterial, this.selectionMaterial, this.hoverMaterial]) m.dispose()
+    for (const o of [this.grid, this.axes, this.layerFrame, this.selectionBox, this.hoverBox, this.ghostBox]) disposeObject(o)
+    for (const m of [this.gridMaterial, this.frameMaterial, this.selectionMaterial, this.hoverMaterial, this.ghostMaterial]) m.dispose()
     this.axes?.dispose()
   }
 
@@ -236,6 +258,7 @@ export class BlueprintScene {
     // 選択中と同じブロックなら、選択の枠だけにする
     const hover = this.hovered && !(this.selected && sameVec3(this.selected, this.hovered)) ? this.hovered : null
     placeBox(this.hoverBox, this.blueprint ? hover : null)
+    placeBox(this.ghostBox, this.blueprint ? this.ghost : null)
   }
 }
 
