@@ -406,7 +406,7 @@ class CreateStressPlugin implements CalcPlugin {
 }
 ```
 
-`KineticGraph` はCreate用に解釈したデータで、プラグインの中だけで使う。
+`KineticGraph` はCreate用に解釈したデータで、プラグインの中だけで使う。回転のつながり、数値、計算の手順は [create-stress.md](create-stress.md) に書く。
 
 ## ゲームとの行き来
 
@@ -477,10 +477,10 @@ Create Astral（1.18.2）の設計図 `_.nbt`（8×1×4、23ブロック）と `
 
 ## 未確認事項
 
-- [ ] ベルトのブロック状態だけで、つながりを組み立てられるか
-- [ ] クリエイティブモーターなど、個体の設定値の初期値（16 RPM は記憶で、未確認）
-- [ ] Createの応力の数値が、ワールドごとの `serverconfig/create-server.toml` に入っているか
-- [ ] Createのバージョンで、nbt の項目名が変わっていないか
+- [x] ベルトのブロック状態だけで、つながりを組み立てられるか → 組み立てられる（[create-stress.md](create-stress.md)）
+- [x] クリエイティブモーターなど、個体の設定値の初期値 → 16 RPM（[create-stress.md](create-stress.md)）
+- [x] Createの応力の数値が、ワールドごとの `serverconfig/create-server.toml` に入っているか → 入っている（[create-stress.md](create-stress.md)）
+- [x] Createのバージョンで、nbt の項目名が変わっていないか → 名前は同じ。位置の書き方だけ違う（[create-stress.md](create-stress.md)）
 - [ ] 書き出した .nbt をCreateで読み込めるか。生データのないブロックがどう置かれるか
 - [ ] ブロック状態の定義（blockstates の JSON）から、取りうる値の一覧を確実に作れるか。multipart 形式のブロックの扱い
 - [ ] 新規作成の設計図の `DataVersion` をどう決めるか
