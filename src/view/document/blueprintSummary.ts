@@ -3,6 +3,7 @@
 
 import { BlueprintStats } from '../../analysis/blueprintStats'
 import type { Blueprint } from '../../domain/blueprint'
+import { MINECRAFT_VERSIONS, minecraftVersionOf } from '../../domain/minecraftVersion'
 import type { Vec3 } from '../../domain/vec3'
 
 export interface BlueprintSummary {
@@ -24,29 +25,12 @@ export function summarizeBlueprint(bp: Blueprint, stats: BlueprintStats = new Bl
   return { size: bp.size, ...stats.totals(), dataVersion: bp.dataVersion }
 }
 
-// DataVersion と Minecraft のバージョンの対応（各バージョンの最初の値）。Minecraft Wiki の「Data version」による
-const MINECRAFT_VERSIONS: readonly (readonly [number, string])[] = [
-  [2586, '1.16.5'],
-  [2730, '1.17.1'],
-  [2975, '1.18.2'],
-  [3120, '1.19.2'],
-  [3218, '1.19.3'],
-  [3337, '1.19.4'],
-  [3465, '1.20.1'],
-  [3578, '1.20.2'],
-  [3700, '1.20.4'],
-  [3839, '1.20.6'],
-  [3955, '1.21.1'],
-  [4189, '1.21.4'],
-]
-
 /**
  * DataVersion を画面に出す文字にする。「約 1.18.2（2975）」。
  * DataVersion がないファイル（0）は「不明」。
  */
 export function minecraftVersionLabel(dataVersion: number): string {
   if (dataVersion <= 0) return '不明'
-  let name: string | null = null
-  for (const [min, version] of MINECRAFT_VERSIONS) if (dataVersion >= min) name = version
-  return `${name ? `約 ${name}` : '1.16.5 より前'}（${dataVersion}）`
+  const version = minecraftVersionOf(dataVersion)
+  return `${version ? `約 ${version.name}` : `${MINECRAFT_VERSIONS[0].name} より前`}（${dataVersion}）`
 }

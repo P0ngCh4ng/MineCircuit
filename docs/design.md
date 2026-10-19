@@ -187,6 +187,9 @@ class NbtBlueprintWriter implements BlueprintWriter {}
 - 既存ブロックの生データ（nbt）はそのまま書く。新しく置いたブロックには書かない
 - 書き出した直後に読み直し、ブロックの配置と状態が元と一致するか確かめる。一致しなければ保存しない
 - 新規作成の設計図は `DataVersion` を持たないので、対象のModpackのバージョンから決める。Modpackがなければ利用者に選んでもらう
+  - 新規作成の画面で Minecraft のバージョンを選び、その正式版の `DataVersion` を設計図に入れる（`domain/minecraftVersion.ts` の一覧）。書き出しではそれを書く
+  - Modpack があれば、jar の名前と Mod のバージョンに一番多く出てくる Minecraft のバージョンを最初に選んでおく（`io/modpack/minecraftVersionGuess.ts`）。jar にはバージョンを確実に書いた場所がないため推定にとどめ、利用者が選び直せる
+  - `DataVersion` のない .nbt はゲームが古い版のデータとして変換しようとするので、新規作成ではバージョンを選ぶまで作らない
 
 ### Modpack / ModpackLoader
 
@@ -500,4 +503,4 @@ Create Astral（1.18.2）の設計図 `_.nbt`（8×1×4、23ブロック）と `
 - [x] Createのバージョンで、nbt の項目名が変わっていないか → 名前は同じ。位置の書き方だけ違う（[create-stress.md](create-stress.md)）
 - [ ] 書き出した .nbt をCreateで読み込めるか。生データのないブロックがどう置かれるか
 - [ ] ブロック状態の定義（blockstates の JSON）から、取りうる値の一覧を確実に作れるか。multipart 形式のブロックの扱い → 上の「置くブロック」の規則で作った。multipart は条件に出てくる値しか分からないため、本物の Create の jar で確かめる
-- [ ] 新規作成の設計図の `DataVersion` をどう決めるか
+- [x] 新規作成の設計図の `DataVersion` をどう決めるか → 利用者が選ぶ。Modpack があれば推定した値を最初に選んでおく（上の「BlueprintWriter」）
