@@ -1,0 +1,53 @@
+// Create の Mod の定数（impact / capacity / 回転数の上限など）の出どころを決める
+// （docs/create-stress.md「値の出どころ」）。Modpack の create-server.toml → 内蔵の初期値の順。
+// 個体の設定値（nbt）は kineticGraph.ts で、設計図 → 内蔵の初期値の順に読む。
+
+import { candidate, resolveWith, resolved, type Resolved } from '../provenance'
+import type { CreateServerConfig } from './createConfig'
+import { DEFAULT_CAPACITY, DEFAULT_IMPACT, DEFAULT_KINETICS } from './createDefaults'
+
+export class CreateValueResolver {
+  /** config がなければ内蔵の初期値だけを使う */
+  constructor(readonly config: CreateServerConfig | null) {}
+
+  /** 1 RPM あたりの消費（SU/RPM）。name は `create:` を外したブロック名 */
+  impact(name: string): Resolved<number> {
+    return this.stressValue(this.config?.impact, DEFAULT_IMPACT, name)
+  }
+
+  /** 1 RPM あたりの供給（SU/RPM） */
+  capacity(name: string): Resolved<number> {
+    return this.stressValue(this.config?.capacity, DEFAULT_CAPACITY, name)
+  }
+
+  maxRotationSpeed(): Resolved<number> {
+    return this.setting((c) => c.maxRotationSpeed, DEFAULT_KINETICS.maxRotationSpeed)
+  }
+
+  disableStress(): Resolved<boolean> {
+    return this.setting((c) => c.disableStress, DEFAULT_KINETICS.disableStress)
+  }
+
+  /** 「中速」の下限。ミキサーなどの必要回転数 */
+  mediumSpeed(): Resolved<number> {
+    return this.setting((c) => c.mediumSpeed, DEFAULT_KINETICS.mediumSpeed)
+  }
+
+  private stressValue(
+    table: ReadonlyMap<string, number> | undefined,
+    defaults: Readonly<Record<string, number>>,
+    name: string,
+  ): Resolved<number> {
+    // 設定ファイルに表があれば、表にないブロックは 0（Create と同じ）。表がなければ内蔵の初期値
+    const fromConfig = this.config?.stressVersion !== null && table ? (table.get(name) ?? 0) : null
+    return resolveWith(
+      [candidate('modpack', () => fromConfig, this.config?.path)],
+      resolved(Object.hasOwn(defaults, name) ? defaults[name] : 0, 'builtin'),
+    )
+  }
+
+  private setting<T>(get: (c: CreateServerConfig) => T | null, fallback: T): Resolved<T> {
+    const c = this.config
+    return resolveWith([candidate('modpack', () => (c ? get(c) : null), c?.path)], resolved(fallback, 'builtin'))
+  }
+}
