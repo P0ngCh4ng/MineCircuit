@@ -38,8 +38,8 @@ npm run dev        # 開発サーバー（Vite）
 npm run typecheck  # 型チェック（vue-tsc -b）
 npm run build      # 本番ビルド（型チェックのあと vite build。出力は dist/）
 npm run preview    # ビルド結果の確認
-npm run test       # テスト（Vitest）。#2 で追加する
-npm run lint       # Lint（ESLint）。#2 で追加する
+npm run test       # テスト（Vitest）。src/**/*.test.ts と tests/**/*.test.ts
+npm run lint       # Lint（ESLint）。層と依存の向きも調べる（eslint-rules/layer-dependency.js）
 ```
 
 作業を終える前に `test`・`typecheck`・`lint` を通すこと。
@@ -62,6 +62,8 @@ tests/
 ```
 
 `view/` 以外は Vue と Three.js に依存させない。こうすると、読み込み・編集・計算を画面なしでテストできる。
+
+各層が import してよいのは、自分と、この一覧で自分より上にある層だけ（domain ← io ← edit ← analysis ← calc）。view と workers はその5つを使える。view は workers も使える。Vue・Three.js・Pinia は view の中だけ。破ると `npm run lint` が失敗する。
 
 ## 設計のルール
 
