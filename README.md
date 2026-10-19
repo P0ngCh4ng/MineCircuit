@@ -16,6 +16,7 @@
 - クラス設計: [docs/design.md](docs/design.md)
 - 画面構成: [docs/ui.md](docs/ui.md)
 - UIプロトタイプ: [prototype/index.html](prototype/index.html)（ChromeかEdgeで開く）
+- 開発ガイド（Claude Code 用）: [CLAUDE.md](CLAUDE.md)
 
 ## ライセンス
 
