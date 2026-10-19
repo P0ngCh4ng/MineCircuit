@@ -1,8 +1,42 @@
 :root {
   font-family: system-ui, sans-serif;
+  font-size: 13px;
   color-scheme: light dark;
+  /* 区切り線とパネルの色。部品はこれを使って色をそろえる */
+  --line: color-mix(in srgb, CanvasText 18%, transparent);
+  --panel: color-mix(in srgb, CanvasText 3%, Canvas);
+}
+
+html,
+body,
+#app {
+  height: 100%;
 }
 
 body {
   margin: 0;
+  background: Canvas;
+  color: CanvasText;
+}
+
+/* 上のバーの、見出し付きのボタンのまとまり（ViewControls などで使う） */
+.bar-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.bar-label {
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+/* 左右のパネルと段の一覧 */
+.panel {
+  min-height: 0;
+  overflow: auto;
+  background: var(--panel);
 }
