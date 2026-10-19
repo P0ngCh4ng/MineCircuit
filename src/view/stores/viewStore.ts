@@ -5,6 +5,9 @@ import type { CameraView } from '../viewport/cameraViews'
 import { useLayerStore } from './layerStore'
 
 /** 視点の操作。ボタンを押すたびに seq が増えるので、同じ視点をもう一度押しても動く */
+/** 表示部分に出す表示 */
+export type ViewMode = '3d' | '2d'
+
 export interface CameraRequest {
   readonly kind: CameraView | 'fit'
   readonly seq: number
@@ -12,11 +15,17 @@ export interface CameraRequest {
 
 /**
  * 表示の状態。docs/design.md の ViewState のうち、表示に関わる部分（ツールは toolStore）。
+ * - 3D/2D の切り替え、2D表示の略称（#14）
  * - 視点、グリッド・座標軸の表示（#9）
  * - 段の表示方法、段ごとの非表示（画面は #10。3D表示は layerDisplay を見て描き直す）
  * 今の段は layerStore（useLayerStore().current）が持つ。layerDisplay はそれと合わせた値
  */
 export const useViewStore = defineStore('view', () => {
+  /** 表示部分に出す表示。最初は 3D */
+  const mode = ref<ViewMode>('3d')
+  /** 2D表示で、マスが大きいときにブロックの略称を出す */
+  const showLabels = ref(true)
+
   /** 今の視点。マウスで動かしたら null（どのボタンも押されていない） */
   const cameraView = ref<CameraView | null>('iso')
   /** 3D表示に送る視点の操作。最初は null */
@@ -37,6 +46,14 @@ export const useViewStore = defineStore('view', () => {
     mode: layerMode.value,
     hidden: hiddenLayers.value,
   }))
+
+  function setMode(next: ViewMode): void {
+    mode.value = next
+  }
+
+  function setLabels(visible: boolean): void {
+    showLabels.value = visible
+  }
 
   function request(kind: CameraView | 'fit'): void {
     cameraRequest.value = { kind, seq: ++seq }
@@ -89,6 +106,10 @@ export const useViewStore = defineStore('view', () => {
   }
 
   return {
+    mode,
+    showLabels,
+    setMode,
+    setLabels,
     cameraView,
     cameraRequest,
     showGrid,

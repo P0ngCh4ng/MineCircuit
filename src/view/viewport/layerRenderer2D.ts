@@ -1,0 +1,195 @@
+// 2D表示の描画。今の段をマス目で canvas に描く。docs/ui.md「2D表示と計測」。
+// 1つ下の段を薄く出し、マスが大きいときはブロックの略称を出す。上が北（−Z）。
+
+import type { Blueprint } from '../../domain/blueprint'
+import type { Vec3 } from '../../domain/vec3'
+import type { GridLayout2D } from '../tools/picker'
+import { blockColor, blockColorCss } from './blockColor'
+import { axisLabelStep, blockAbbreviation, LABEL_MIN_CELL_SIZE, layerCells } from './layerGrid2D'
+
+/** 2D表示の色。画面のテーマ（明るい・暗い）に合わせる */
+export interface LayerTheme2D {
+  readonly name: 'light' | 'dark'
+  /** マス目の線 */
+  readonly grid: string
+  /** マス目の外枠 */
+  readonly frame: string
+  /** 目盛りの数字 */
+  readonly tick: string
+  /** 1つ下の段の濃さ（0〜1） */
+  readonly ghostAlpha: number
+  /** マウスの下のマスの枠 */
+  readonly hover: string
+  /** 選択中のブロックの枠 */
+  readonly selection: string
+  /** 枠の内側に引く細い線。ブロックの色と枠の色が近くても枠が見えるようにする */
+  readonly markInner: string
+}
+
+export const LIGHT_THEME_2D: LayerTheme2D = Object.freeze({
+  name: 'light',
+  grid: 'rgb(0 0 0 / 10%)',
+  frame: 'rgb(0 0 0 / 35%)',
+  tick: 'rgb(0 0 0 / 60%)',
+  ghostAlpha: 0.2,
+  hover: '#3a3936',
+  selection: '#a8741c',
+  markInner: '#ffffff',
+})
+
+export const DARK_THEME_2D: LayerTheme2D = Object.freeze({
+  name: 'dark',
+  grid: 'rgb(255 255 255 / 9%)',
+  frame: 'rgb(255 255 255 / 35%)',
+  tick: 'rgb(255 255 255 / 60%)',
+  ghostAlpha: 0.22,
+  hover: '#e6e4de',
+  selection: '#ffc857',
+  markInner: '#1b1b18',
+})
+
+/** 描くのに必要なもの */
+export interface LayerScene2D {
+  readonly blueprint: Blueprint
+  /** 今の段（y） */
+  readonly layer: number
+  readonly layout: GridLayout2D
+  readonly theme: LayerTheme2D
+  /** マス目の線を描く */
+  readonly showGrid: boolean
+  /** マスが大きいとき、ブロックの略称を出す */
+  readonly showLabels: boolean
+  /** マウスの下のマス（今の段にあるときだけ枠を描く） */
+  readonly hovered: Vec3 | null
+  /** 選択中のブロック（今の段にあるときだけ枠を描く） */
+  readonly selected: Vec3 | null
+  /** 文字のフォント（font-family） */
+  readonly fontFamily: string
+}
+
+/** canvas の 2D コンテキストのうち、ここで使う部分。テストでは偽物を渡せる */
+export type Canvas2DLike = Pick<
+  CanvasRenderingContext2D,
+  | 'clearRect'
+  | 'fillRect'
+  | 'strokeRect'
+  | 'beginPath'
+  | 'moveTo'
+  | 'lineTo'
+  | 'stroke'
+  | 'fillText'
+  | 'save'
+  | 'restore'
+  | 'fillStyle'
+  | 'strokeStyle'
+  | 'lineWidth'
+  | 'globalAlpha'
+  | 'font'
+  | 'textAlign'
+  | 'textBaseline'
+>
+
+/** 色（0xRRGGBB）の明るさ（0〜1）。略称の文字色を決めるのに使う */
+function luminance(color: number): number {
+  const r = (color >> 16) & 0xff
+  const g = (color >> 8) & 0xff
+  const b = color & 0xff
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255
+}
+
+/**
+ * 今の段を描く。width × height は CSS ピクセル（呼ぶ側で devicePixelRatio を掛けておく）。
+ */
+export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, scene: LayerScene2D): void {
+  const { blueprint, layer, layout, theme } = scene
+  const { originX: ox, originY: oy, cellSize: cs } = layout
+  const [w, , d] = blueprint.size
+
+  ctx.clearRect(0, 0, width, height)
+
+  // 1つ下の段を薄く出す。今の段にブロックがあるマスは、上から塗るので気にしない
+  if (layer > 0) {
+    ctx.save()
+    ctx.globalAlpha = theme.ghostAlpha
+    for (const c of layerCells(blueprint, layer - 1)) {
+      ctx.fillStyle = blockColorCss(c.id)
+      ctx.fillRect(ox + c.x * cs, oy + c.z * cs, cs, cs)
+    }
+    ctx.restore()
+  }
+
+  // 今の段
+  const cells = layerCells(blueprint, layer)
+  const gap = cs >= 8 ? 1 : 0
+  for (const c of cells) {
+    ctx.fillStyle = blockColorCss(c.id)
+    // 下の段の薄い色を消してから塗る
+    ctx.clearRect(ox + c.x * cs, oy + c.z * cs, cs, cs)
+    ctx.fillRect(ox + c.x * cs + gap, oy + c.z * cs + gap, cs - gap * 2, cs - gap * 2)
+  }
+
+  // マス目
+  if (scene.showGrid && cs >= 6) {
+    ctx.strokeStyle = theme.grid
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    for (let x = 1; x < w; x++) {
+      ctx.moveTo(ox + x * cs + 0.5, oy)
+      ctx.lineTo(ox + x * cs + 0.5, oy + d * cs)
+    }
+    for (let z = 1; z < d; z++) {
+      ctx.moveTo(ox, oy + z * cs + 0.5)
+      ctx.lineTo(ox + w * cs, oy + z * cs + 0.5)
+    }
+    ctx.stroke()
+  }
+  ctx.strokeStyle = theme.frame
+  ctx.lineWidth = 1
+  ctx.strokeRect(ox + 0.5, oy + 0.5, w * cs, d * cs)
+
+  // 略称
+  if (scene.showLabels && cs >= LABEL_MIN_CELL_SIZE) {
+    ctx.font = `600 ${Math.min(13, Math.round(cs * 0.34))}px ${scene.fontFamily}`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    for (const c of cells) {
+      ctx.fillStyle = luminance(blockColor(c.id)) > 0.55 ? '#1b1b18' : '#f4f2ec'
+      ctx.fillText(blockAbbreviation(c.id), ox + c.x * cs + cs / 2, oy + c.z * cs + cs / 2)
+    }
+  }
+
+  // 目盛り：上に x、左に z
+  const step = axisLabelStep(cs)
+  ctx.fillStyle = theme.tick
+  ctx.font = `11px ${scene.fontFamily}`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'bottom'
+  for (let x = 0; x < w; x += step) ctx.fillText(String(x), ox + x * cs + cs / 2, oy - 4)
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'middle'
+  for (let z = 0; z < d; z += step) ctx.fillText(String(z), ox - 6, oy + z * cs + cs / 2)
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'bottom'
+  ctx.fillText('x →', ox - 6, oy - 4)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  ctx.fillText('z', ox - 34, oy + 2)
+  ctx.fillText('↓', ox - 34, oy + 16)
+
+  // 枠：マウスの下と選択中
+  const mark = (pos: Vec3 | null, color: string, lineWidth: number): void => {
+    if (!pos || pos[1] !== layer) return
+    const px = ox + pos[0] * cs
+    const py = oy + pos[2] * cs
+    // マスの境目に太い枠、その内側に細い線
+    ctx.strokeStyle = color
+    ctx.lineWidth = lineWidth
+    ctx.strokeRect(px, py, cs, cs)
+    ctx.strokeStyle = theme.markInner
+    ctx.lineWidth = 1
+    const inset = lineWidth / 2 + 0.5
+    ctx.strokeRect(px + inset, py + inset, cs - inset * 2, cs - inset * 2)
+  }
+  mark(scene.hovered, theme.hover, 1.5)
+  mark(scene.selected, theme.selection, 2.5)
+}
