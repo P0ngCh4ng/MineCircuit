@@ -1,6 +1,6 @@
 # MineCircuit クラス設計
 
-作成日: 2026-10-19 / 仕様: [spec.md](spec.md)
+作成日: 2026-10-19 / 更新: 2026-10-19（編集と書き出しを追加） / 仕様: [spec.md](spec.md)
 
 TypeScriptで書く。コード例は設計を示すためのもので、細部は実装時に決める。
 
@@ -11,6 +11,7 @@ TypeScriptで書く。コード例は設計を示すためのもので、細部�
 3. **読み込みと解釈を分ける。** `Blueprint` / `BlockVolume` は「ファイルに何が入っているか」だけを表す。Modごとの意味づけ（回転のつながりなど）は計算プラグインの中で作る。
 4. **値には出どころを付ける。** 計算に使った値が、設計図・Modpack・内蔵の初期値・仮定・仮の入出力のどれから来たかを記録し、結果に表示する。
 5. **分からないものは「分からない」と扱う。** 推測で埋めた値は仮定として記録する。
+6. **設計図の変更は、編集の操作を通してだけ行う。** 画面や計算プラグインが `BlockVolume` を直接書き換えない。こうすると、すべての変更が元に戻せる。
 
 ## 層と依存の向き
 
@@ -19,13 +20,16 @@ TypeScriptで書く。コード例は設計を示すためのもので、細部�
 ```mermaid
 flowchart TB
     view["view<br/>Vue 3 + Three.js"]
-    analysis["analysis<br/>集計・検索"]
+    edit["edit<br/>編集の操作と履歴"]
+    analysis["analysis<br/>集計・検索・計測"]
     calc["calc<br/>計算プラグイン"]
-    io["io<br/>ファイルの読み込み"]
+    io["io<br/>ファイルの読み込み・書き出し"]
     domain["domain<br/>データの型"]
+    view --> edit
     view --> analysis
     view --> calc
     view --> io
+    edit --> domain
     analysis --> domain
     calc --> domain
     io --> domain
@@ -100,10 +104,22 @@ class BlockVolume {
 
   get(x: number, y: number, z: number): BlockState | null
   blockEntityAt(x: number, y: number, z: number): RawNbt | null
+
+  // 編集用。呼ぶのは edit 層の操作だけ
+  setCell(x: number, y: number, z: number, cell: CellValue): void
+  cellAt(x: number, y: number, z: number): CellValue
+  stateIndex(state: BlockState): number   // パレットになければ足す
+}
+
+// 1マス分の中身。空きは state = null
+interface CellValue {
+  state: BlockState | null
+  blockEntity: RawNbt | null
 }
 ```
 
 - `cells` を型付き配列にするのは、数万ブロックの設計図でもメモリと速度を抑えるため。
+- 編集でパレットに使われない状態が残っても、そのままにする。書き出し時に使っている状態だけでパレットを作り直す。
 - ブロックエンティティとエンティティは生データ（`RawNbt`）のまま持つ。中身の解釈は、必要になったModごとにプラグインで行う。
 - `extra` には `Railways_DataVersion` のような、Modが足した知らない項目をそのまま入れる。
 
@@ -119,7 +135,13 @@ interface FileSource {
   read(path: string): Promise<ArrayBuffer>
 }
 
+// 保存先。ブラウザでは保存先を選ぶ画面、Tauri版ではファイルに直接書く
+interface FileSink {
+  save(suggestedName: string, data: Uint8Array): Promise<'saved' | 'cancelled'>
+}
+
 class BrowserFileSource implements FileSource { /* File System Access API */ }
+class BrowserFileSink implements FileSink { /* showSaveFilePicker */ }
 ```
 
 ### BlueprintReader
@@ -135,6 +157,27 @@ interface BlueprintReader {
 class NbtBlueprintReader implements BlueprintReader {}
 // 後で: SchemBlueprintReader, LitematicBlueprintReader
 ```
+
+### BlueprintWriter
+
+読み込みの逆。形式ごとに1クラス。最初は `.nbt` だけ。
+
+```ts
+interface BlueprintWriter {
+  readonly format: 'nbt' | 'schem' | 'litematic'
+  write(bp: Blueprint): Promise<Uint8Array>   // gzip 済み
+}
+
+class NbtBlueprintWriter implements BlueprintWriter {}
+```
+
+書き出しの規則:
+
+- 一番上の階層は、読み込んだときの生データ（`extra`）を元にする。`size`・`palette`・`blocks` だけを作り直し、`entities`・`DataVersion`・Modが足した項目はそのまま残す
+- パレットは、使っている状態だけで作り直す
+- 既存ブロックの生データ（nbt）はそのまま書く。新しく置いたブロックには書かない
+- 書き出した直後に読み直し、ブロックの配置と状態が元と一致するか確かめる。一致しなければ保存しない
+- 新規作成の設計図は `DataVersion` を持たないので、対象のModpackのバージョンから決める。Modpackがなければ利用者に選んでもらう
 
 ### Modpack / ModpackLoader
 
@@ -174,6 +217,90 @@ class BlockSearch {
   find(bp: Blueprint, id: ResourceLocation): Vec3[]
 }
 ```
+
+## analysis：計測
+
+```ts
+interface Measurement {
+  a: Vec3
+  b: Vec3
+  delta: Vec3                 // b - a
+  euclidean: number           // 直線距離
+  manhattan: number           // 軸に沿った距離。シャフトやベルトを引く長さの目安
+  boundingSize: Vec3          // 2点を囲む範囲
+}
+
+function measure(a: Vec3, b: Vec3): Measurement
+function floodSameState(bp: Blueprint, start: Vec3): Vec3[]   // 隣り合う同じ種類のブロック
+```
+
+`floodSameState` は「つながり」ツールで使う。回転や配管のつながりではないので、画面にもそう書く。本当のつながりは計算プラグインが作る（`KineticGraph` など）。
+
+## edit：編集の操作と履歴
+
+### 操作
+
+すべての変更を操作（コマンド）として表す。操作は「どのマスが、何から何に変わったか」の一覧を持つので、元に戻すのもやり直すのも同じ形で扱える。
+
+```ts
+interface CellChange {
+  pos: Vec3
+  before: CellValue
+  after: CellValue
+}
+
+interface EditCommand {
+  readonly label: string              // 「shaft を置く」。元に戻すボタンのツールチップに出す
+  readonly changes: CellChange[]
+}
+
+// 操作を作る関数。Blueprint は変えず、変更の一覧だけを返す
+function placeBlock(bp: Blueprint, pos: Vec3, state: BlockState, replace: boolean): EditCommand | null
+function eraseBlock(bp: Blueprint, pos: Vec3): EditCommand | null
+function rotateBlock(bp: Blueprint, pos: Vec3, vertical: boolean): EditCommand | null
+// 後で: fillRegion, copyRegion, rotateRegion, resizeBlueprint
+```
+
+- 新しく置いたブロックは `blockEntity: null`。計算では値の出どころの仕組みで初期値を使う
+- 回転では生データ（nbt）をそのまま引き継ぐ
+- 範囲の外への配置は、範囲の拡張（`resizeBlueprint`）を作るまでは受け付けない
+
+### 履歴
+
+```ts
+class EditHistory {
+  constructor(private bp: Blueprint) {}
+  apply(cmd: EditCommand): void    // after を書き込み、undo に積む。redo は空にする
+  undo(): EditCommand | null       // before を書き戻す
+  redo(): EditCommand | null
+  get canUndo(): boolean
+  get canRedo(): boolean
+  get count(): number              // 画面の「編集 n 回」
+  readonly onChange: Signal<void>  // 画面・集計・計算の再実行の合図
+}
+```
+
+変更のたびに、集計（ブロック数）、3D表示、計算を更新する。計算は変更が続く間は待ち、止まってから Web Worker で走らせる。
+
+### 置くブロック（ブラシ）
+
+```ts
+class BlockBrush {
+  state: BlockState
+  rotate(vertical: boolean): void   // R / Shift+R
+  static fromBlock(state: BlockState): BlockBrush   // スポイト
+}
+```
+
+回転の規則:
+
+| プロパティ | R（水平） | Shift+R（縦） |
+| --- | --- | --- |
+| `axis` | x ↔ z | y にする（y なら x に戻す） |
+| `facing` | north → east → south → west | up → down → north |
+| `horizontal_facing` | north → east → south → west | 変えない |
+
+Modpackがないと、そのブロックが取りうる値が分からない。Modpackがあれば、jar のブロック状態の定義（`assets/<namespace>/blockstates/<path>.json`）から取りうる値を読み、その範囲で回す。
 
 ## 値の出どころ
 
@@ -281,6 +408,16 @@ class CreateStressPlugin implements CalcPlugin {
 
 `KineticGraph` はCreate用に解釈したデータで、プラグインの中だけで使う。
 
+## ゲームとの行き来
+
+書き出した `.nbt` は、Modpackの `schematics` フォルダに置けばCreateで読み込めるはず（未確認）。ゲームに持ち込むと、次のものが欠ける可能性がある。
+
+- アプリで置いたブロックの生データ（ゲーム側の初期値になる）
+- スキーマティキャノンが復元しない生データ
+- Modpackにない Mod のブロック
+
+書き出しの画面で、生データのないブロックの数と、足りないModを書き出し前に知らせる。
+
 ## アプリ独自のファイル
 
 仮の入出力やメモは `.nbt` に書き込めないので、設計図とは別のファイルに保存する。
@@ -304,9 +441,27 @@ interface ProjectFile {
 
 ## view：画面
 
-- `ViewState`（Piniaのストア）：今の段、段の表示方法（上を消す・半透明・この段だけ）、3D/2D の切り替え、強調するブロック
+- `ViewState`（Piniaのストア）：今の段、段の表示方法（上を消す・半透明・この段だけ）、段ごとの表示・非表示、3D/2D の切り替え、強調するブロック、今のツール
 - `BlueprintMeshBuilder`：パレットの種類ごとに Three.js の InstancedMesh を1つ作る。ブロック数が多くても描画が軽い
-- `LayerView2D`：選んだ段を canvas にマス目で描く
+- `LayerView2D`：選んだ段を canvas にマス目で描く。1つ下の段を薄く出す
+- `Picker`：マウス位置から対象を求める。3D は当たったブロックと面の向き、何もなければ今の段の床。2D はマス目
+- ツール：ツールごとにクラスを分け、同じ形でクリックと移動を受け取る
+
+```ts
+interface Tool {
+  readonly id: 'select' | 'measure' | 'connect' | 'probe' | 'place' | 'erase' | 'pick'
+  onHover(target: PickTarget | null): void
+  onClick(target: PickTarget, mods: { shift: boolean }): void
+}
+
+interface PickTarget {
+  pos: Vec3                 // 当たったブロック、または空きマス
+  face?: Direction          // 3D で当たった面
+  empty: boolean
+}
+```
+
+プロトタイプでは、段を切り替えるたびにメッシュを作り直している。約9千ブロックで問題なく動いた。本実装では段の切り替えを描画側のクリッピングにする予定は変えない。
 
 ## 実物の .nbt で確認したこと
 
@@ -326,3 +481,6 @@ Create Astral（1.18.2）の設計図 `_.nbt`（8×1×4、23ブロック）と `
 - [ ] クリエイティブモーターなど、個体の設定値の初期値（16 RPM は記憶で、未確認）
 - [ ] Createの応力の数値が、ワールドごとの `serverconfig/create-server.toml` に入っているか
 - [ ] Createのバージョンで、nbt の項目名が変わっていないか
+- [ ] 書き出した .nbt をCreateで読み込めるか。生データのないブロックがどう置かれるか
+- [ ] ブロック状態の定義（blockstates の JSON）から、取りうる値の一覧を確実に作れるか。multipart 形式のブロックの扱い
+- [ ] 新規作成の設計図の `DataVersion` をどう決めるか
