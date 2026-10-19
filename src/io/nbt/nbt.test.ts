@@ -164,7 +164,8 @@ describe('NBT の読み書き', () => {
       data: nbt.longArray(Array.from({ length: 5000 }, (_, i) => BigInt(i) * 0x123456789n)),
     })
     expectRoundTrip(doc(root))
-  })
+    // CI の遅い環境では 5 秒を超えることがあるので長めにする
+  }, 30_000)
 
   it('数値をビッグエンディアンで書く', () => {
     const bytes = writeNbt(doc(nbt.compound({ v: nbt.int(0x01020304) })))
