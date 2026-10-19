@@ -4,6 +4,7 @@
 import { useDocumentSession } from '../document/documentSession'
 import { useFileDrop } from '../document/useFileDrop'
 import ToolBar from '../tools/ToolBar.vue'
+import Viewport3D from './Viewport3D.vue'
 
 const session = useDocumentSession()
 const { current, opening, error } = session
@@ -20,7 +21,8 @@ const drop = useFileDrop((file) => void session.openFile(file))
     @dragleave="drop.onDragLeave"
     @drop="drop.onDrop"
   >
-    <!-- 3D表示（#9）と2D表示（#14）はここに置く。current が null の間は出さない -->
+    <!-- 3D表示（#9）と2D表示（#14）。current が null の間は出さない -->
+    <Viewport3D v-if="current" class="viewport-3d" />
 
     <div v-if="!current" class="empty">
       <p v-if="opening">設計図を読んでいます…</p>
@@ -50,6 +52,10 @@ const drop = useFileDrop((file) => void session.openFile(file))
   min-height: 0;
   overflow: hidden;
   background: color-mix(in srgb, CanvasText 6%, Canvas);
+}
+
+.viewport-3d {
+  z-index: 0;
 }
 
 .viewport-tools {
