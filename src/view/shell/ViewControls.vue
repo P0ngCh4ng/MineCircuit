@@ -6,15 +6,18 @@ import EditControls from '../edit/EditControls.vue'
 import { useDocumentSession } from '../document/documentSession'
 import { useViewStore } from '../stores/viewStore'
 import { CAMERA_VIEWS } from '../viewport/cameraViews'
+import ViewModeSwitch from './ViewModeSwitch.vue'
 
 const session = useDocumentSession()
 const view = useViewStore()
 const noBlueprint = computed(() => session.current.value === null)
+/** 視点は3D表示だけで使う */
+const noCamera = computed(() => noBlueprint.value || view.mode !== '3d')
 </script>
 
 <template>
   <div role="toolbar" aria-label="表示の操作">
-    <!-- 3D/2D の切り替え（#14） -->
+    <ViewModeSwitch />
     <div class="bar-group" role="group" aria-label="視点">
       <span class="bar-label">視点</span>
       <button
@@ -24,12 +27,12 @@ const noBlueprint = computed(() => session.current.value === null)
         :data-view="v.id"
         :title="v.title"
         :aria-pressed="view.cameraView === v.id"
-        :disabled="noBlueprint"
+        :disabled="noCamera"
         @click="view.setView(v.id)"
       >
         {{ v.label }}
       </button>
-      <button type="button" data-view="fit" title="今の向きのまま、設計図全体が入るようにする" :disabled="noBlueprint" @click="view.fitAll()">
+      <button type="button" data-view="fit" title="今の向きのまま、設計図全体が入るようにする" :disabled="noCamera" @click="view.fitAll()">
         全体を表示
       </button>
     </div>
@@ -48,7 +51,15 @@ const noBlueprint = computed(() => session.current.value === null)
       >
         座標軸
       </button>
-      <!-- 略称（#14） -->
+      <button
+        type="button"
+        data-toggle="labels"
+        title="2D表示のマスにブロックの略称を出す"
+        :aria-pressed="view.showLabels"
+        @click="view.setLabels(!view.showLabels)"
+      >
+        略称
+      </button>
     </div>
     <!-- 選択の解除（#12）と強調の解除（#15） -->
     <EditControls />

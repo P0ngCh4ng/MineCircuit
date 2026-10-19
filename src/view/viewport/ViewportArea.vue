@@ -3,11 +3,14 @@
 // 3D表示（#9）と2D表示（#14）はこの部品の中に置く。左上に縦のツールバー、左下に結果の表示。
 import { useDocumentSession } from '../document/documentSession'
 import { useFileDrop } from '../document/useFileDrop'
+import { useViewStore } from '../stores/viewStore'
 import ToolBar from '../tools/ToolBar.vue'
+import LayerView2D from './LayerView2D.vue'
 import Viewport3D from './Viewport3D.vue'
 
 const session = useDocumentSession()
 const { current, opening, error } = session
+const view = useViewStore()
 const drop = useFileDrop((file) => void session.openFile(file))
 </script>
 
@@ -22,7 +25,8 @@ const drop = useFileDrop((file) => void session.openFile(file))
     @drop="drop.onDrop"
   >
     <!-- 3D表示（#9）と2D表示（#14）。current が null の間は出さない -->
-    <Viewport3D v-if="current" class="viewport-3d" />
+    <Viewport3D v-if="current && view.mode === '3d'" class="viewport-3d" />
+    <LayerView2D v-if="current && view.mode === '2d'" :show-grid="view.showGrid" />
 
     <div v-if="!current" class="empty">
       <p v-if="opening">設計図を読んでいます…</p>
