@@ -1,6 +1,7 @@
 // 上のバーに出す設計図の情報（寸法、ブロック数、種類、nbt 付き、エンティティ、バージョン）。
-// ブロックごとの数の集計は #11 の BlueprintStats（analysis）で作る。ここは上のバー用の合計だけ。
+// 数は analysis の BlueprintStats で数える。ここは上のバー用にまとめるだけ。
 
+import { BlueprintStats } from '../../analysis/blueprintStats'
 import type { Blueprint } from '../../domain/blueprint'
 import type { Vec3 } from '../../domain/vec3'
 
@@ -18,25 +19,9 @@ export interface BlueprintSummary {
   readonly dataVersion: number
 }
 
-/** 設計図の合計を数える。リージョンが重なる位置は、先のリージョンだけを数える */
-export function summarizeBlueprint(bp: Blueprint): BlueprintSummary {
-  let blockCount = 0
-  let blockEntityCount = 0
-  let entityCount = 0
-  const kinds = new Set<string>()
-  bp.regions.forEach((region, ri) => {
-    entityCount += region.entities.length
-    region.forEachBlock((x, y, z, state, blockEntity) => {
-      if (ri > 0) {
-        const pos: Vec3 = [x + region.offset[0], y + region.offset[1], z + region.offset[2]]
-        if (bp.locate(pos)?.region !== region) return
-      }
-      blockCount++
-      if (blockEntity) blockEntityCount++
-      kinds.add(state.id.toString())
-    })
-  })
-  return { size: bp.size, blockCount, kindCount: kinds.size, blockEntityCount, entityCount, dataVersion: bp.dataVersion }
+/** 設計図の合計を数える。stats を渡すと、その集計を使う（同じ設計図のもの） */
+export function summarizeBlueprint(bp: Blueprint, stats: BlueprintStats = new BlueprintStats(bp)): BlueprintSummary {
+  return { size: bp.size, ...stats.totals(), dataVersion: bp.dataVersion }
 }
 
 // DataVersion と Minecraft のバージョンの対応（各バージョンの最初の値）。Minecraft Wiki の「Data version」による

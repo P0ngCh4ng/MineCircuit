@@ -1,15 +1,16 @@
 <script setup lang="ts">
 // 上のバーの、開いている設計図の情報
 import { computed } from 'vue'
+import { useBlueprintStats } from '../analysis/useBlueprintStats'
 import { minecraftVersionLabel, summarizeBlueprint } from './blueprintSummary'
 import { useDocumentSession } from './documentSession'
 
 const session = useDocumentSession()
+const stats = useBlueprintStats()
 
 const summary = computed(() => {
-  void session.version.value
   const doc = session.current.value
-  return doc ? summarizeBlueprint(doc.blueprint) : null
+  return doc && stats.value ? summarizeBlueprint(doc.blueprint, stats.value) : null
 })
 
 const fileName = computed(() => session.current.value?.fileName ?? null)
