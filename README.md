@@ -10,4 +10,9 @@
 
 ファイルはブラウザ内だけで処理し、外部に送信しない。
 
-仕様は [docs/spec.md](docs/spec.md) を参照。
+![MineCircuit の画面](docs/images/ui-edit-3d.png)
+
+- 仕様: [docs/spec.md](docs/spec.md)
+- クラス設計: [docs/design.md](docs/design.md)
+- 画面構成: [docs/ui.md](docs/ui.md)
+- UIプロトタイプ: [prototype/index.html](prototype/index.html)（ChromeかEdgeで開く）

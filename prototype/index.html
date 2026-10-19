@@ -1,0 +1,1148 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>[hidden]{display:none!important}body{margin:0}</style>
+<title>MineCircuit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=IBM+Plex+Sans+JP:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a workbench. Fixed tool rails around one viewport, like a CAD app; nothing scrolls but the side panels. */
+:root {
+  --bg: #e9e7e2;          /* andesite paper */
+  --panel: #f5f4f0;
+  --panel-2: #ecebe6;
+  --line: #d3d0c7;
+  --fg: #23251f;
+  --fg-2: #6b6a62;
+  --accent: #a8741c;      /* brass */
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(168, 116, 28, .14);
+  --warn: #b0541e;
+  --info: #2f6f8f;
+  --viewport: #d9d6ce;
+  --grid: #c3bfb4;
+  --font-brand: "DotGothic16", "IBM Plex Mono", ui-monospace, monospace;
+  --font-body: "IBM Plex Sans JP", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17191a; --panel: #1f2223; --panel-2: #26292a; --line: #34383a;
+    --fg: #e6e4de; --fg-2: #9a9890; --accent: #d9a441; --accent-ink: #1a1408; --accent-soft: rgba(217, 164, 65, .16);
+    --warn: #e08a52; --info: #6fb3d2; --viewport: #121415; --grid: #2c3031;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17191a; --panel: #1f2223; --panel-2: #26292a; --line: #34383a;
+  --fg: #e6e4de; --fg-2: #9a9890; --accent: #d9a441; --accent-ink: #1a1408; --accent-soft: rgba(217, 164, 65, .16);
+  --warn: #e08a52; --info: #6fb3d2; --viewport: #121415; --grid: #2c3031;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 13px;
+  padding-left: max(0px, env(safe-area-inset-left, 0px)); padding-right: max(0px, env(safe-area-inset-right, 0px));
+}
+* { box-sizing: border-box; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.app {
+  height: 100%; display: grid;
+  --lw: 248px; --rw: 300px;
+  grid-template-columns: var(--lw) minmax(0, 1fr) 104px var(--rw);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "top top top top" "left view layers right" "status status status status";
+}
+/* top bar */
+.app.no-left { --lw: 0px; } .app.no-left .left { display: none; }
+.app.no-right { --rw: 0px; } .app.no-right .right { display: none; }
+.top {
+  grid-area: top; display: flex; flex-direction: column; gap: 8px;
+  padding: 8px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.brand { font-family: var(--font-brand); font-size: 18px; letter-spacing: .02em; display: flex; align-items: center; gap: 8px; }
+.brand i { width: 14px; height: 14px; display: inline-block; background:
+  conic-gradient(from 45deg, var(--accent) 0 25%, transparent 0 50%, var(--accent) 0 75%, transparent 0); border: 1px solid var(--accent); }
+.group { display: flex; align-items: center; gap: 6px; }
+.label { color: var(--fg-2); font-size: 11px; letter-spacing: .06em; white-space: nowrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel-2); }
+.seg button { border: 0; background: transparent; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.btn { white-space: nowrap; border: 1px solid var(--line); background: var(--panel-2); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+select.btn { padding-right: 6px; }
+.spacer { flex: 1; }
+.top .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; }
+.top .row > * { min-width: 0; }
+.group { flex-wrap: wrap; min-width: 0; }
+select.btn { min-width: 0; width: min(260px, 100%); }
+@media (max-width: 600px) { .seg { max-width: 100%; overflow-x: auto; } }
+.top .tools { padding-top: 8px; border-top: 1px solid var(--line); }
+.facts { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; }
+.facts div { display: flex; gap: 6px; align-items: baseline; }
+.facts dt { color: var(--fg-2); font-size: 11px; letter-spacing: .06em; white-space: nowrap; }
+.facts dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.layerbox { font-family: var(--font-mono); font-variant-numeric: tabular-nums; min-width: 64px; text-align: center; white-space: nowrap; }
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* panels */
+.panel { background: var(--panel); min-height: 0; overflow: auto; }
+.left { grid-area: left; border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+.right { grid-area: right; border-left: 1px solid var(--line); }
+.section { padding: 12px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+.section h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--fg-2); display: flex; align-items: center; gap: 8px; }
+.section h2 .grow { flex: 1; }
+.search { width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.blist { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.blist li button {
+  width: 100%; display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 8px;
+  padding: 5px 6px; border: 0; border-radius: 4px; background: transparent; cursor: pointer; text-align: left;
+}
+.blist li button:hover { background: var(--panel-2); }
+.blist li button[aria-pressed="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.sw { width: 12px; height: 12px; border-radius: 2px; border: 1px solid rgba(0,0,0,.25); }
+.bname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bname small { display: block; color: var(--fg-2); font-family: var(--font-mono); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--fg-2); }
+.note { color: var(--fg-2); font-size: 12px; line-height: 1.55; margin: 0; }
+.nslist { display: grid; gap: 4px; }
+.nsrow { display: flex; justify-content: space-between; gap: 8px; font-family: var(--font-mono); font-size: 12px; }
+
+/* viewport */
+.view { grid-area: view; position: relative; background: var(--viewport); min-height: 0; overflow: hidden; }
+.view canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#c2d { position: absolute; inset: 0; }
+.drop { position: absolute; inset: 12px; border: 2px dashed var(--accent); border-radius: 10px; display: grid; place-items: center;
+  background: var(--accent-soft); font-size: 15px; pointer-events: none; }
+.hud { position: absolute; left: 60px; top: 10px; font-size: 12px; color: var(--fg-2); pointer-events: none; display: grid; gap: 2px; }
+.hud b { color: var(--fg); font-weight: 600; }
+.compass { position: absolute; right: 12px; top: 10px; font-family: var(--font-mono); font-size: 11px; color: var(--fg-2); pointer-events: none; }
+.err { position: absolute; left: 12px; right: 12px; bottom: 12px; background: var(--panel); border: 1px solid var(--warn); color: var(--fg);
+  border-radius: 8px; padding: 10px 12px; }
+
+/* layer manager: one row per 段, like a PCB layer list */
+.layers { grid-area: layers; border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+.layers .lhead { padding: 10px 8px 6px; display: grid; gap: 2px; border-bottom: 1px solid var(--line); }
+.layers .lhead .label { text-align: center; }
+.llist { list-style: none; margin: 0; padding: 4px; overflow-y: auto; flex: 1; display: grid; align-content: start; gap: 1px; }
+.llist li { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; border-radius: 4px; }
+.llist li.active { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.eye { width: 20px; height: 24px; border: 0; background: transparent; cursor: pointer; display: grid; place-items: center; padding: 0; }
+.eye::before { content: ""; width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--fg-2); }
+.eye[aria-pressed="true"]::before { background: var(--fg-2); }
+.lbtn { border: 0; background: transparent; cursor: pointer; display: flex; justify-content: space-between; align-items: baseline; gap: 4px; padding: 4px 6px 4px 2px; text-align: left; }
+.lbtn b { font-family: var(--font-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+.lbtn span { font-family: var(--font-mono); font-size: 10.5px; color: var(--fg-2); font-variant-numeric: tabular-nums; }
+.llist li.off .lbtn b { color: var(--fg-2); text-decoration: line-through; }
+.layers .lfoot { border-top: 1px solid var(--line); padding: 6px; display: grid; gap: 4px; }
+.layers .lfoot .btn { font-size: 11.5px; padding: 3px 4px; }
+
+/* tool rail and readout, floating on the viewport */
+.tools-rail { position: absolute; left: 12px; top: 74px; display: grid; gap: 2px; padding: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; z-index: 2; }
+.tools-rail button { width: 34px; height: 34px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; display: grid; place-items: center; color: var(--fg); position: relative; }
+.tools-rail button svg { width: 18px; height: 18px; }
+.tools-rail button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.tools-rail button kbd { position: absolute; right: 2px; bottom: 1px; font-family: var(--font-mono); font-size: 8.5px; opacity: .7; }
+.readout { position: absolute; left: 60px; bottom: 12px; max-width: min(420px, calc(100% - 72px)); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-size: 12px; display: grid; gap: 4px; z-index: 2; }
+.tools-rail hr { border: 0; border-top: 1px solid var(--line); margin: 3px 4px; }
+.brush { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; align-items: center; }
+.brush .big-sw { width: 28px; height: 28px; border-radius: 4px; border: 1px solid rgba(0,0,0,.25); }
+.brush .bid { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.brush .bprops { font-family: var(--font-mono); font-size: 11px; color: var(--fg-2); overflow-wrap: anywhere; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chips button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--panel-2); border-radius: 99px; padding: 2px 8px 2px 4px; cursor: pointer; font-size: 11.5px; max-width: 100%; }
+.chips button .sw { width: 10px; height: 10px; }
+.chips button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.addid { display: flex; gap: 4px; }
+.addid input { flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font-family: var(--font-mono); font-size: 12px; }
+.chip.ed { border-color: var(--accent); color: var(--accent); }
+.readout .rt { font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.readout .x { border: 0; background: transparent; cursor: pointer; font-size: 16px; line-height: 1; color: var(--fg-2); padding: 0 2px; }
+.readout .kv dd { font-size: 12px; }
+
+/* inspector */
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; }
+.kv dt { color: var(--fg-2); }
+.kv dd { margin: 0; font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.title { font-size: 16px; font-weight: 600; }
+.chip { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 99px; border: 1px solid var(--line); color: var(--fg-2); white-space: nowrap; }
+.chip.bp { border-color: var(--info); color: var(--info); }
+.chip.ex { border-color: var(--warn); color: var(--warn); }
+details.nbt { font-family: var(--font-mono); font-size: 11.5px; }
+details.nbt summary { cursor: pointer; color: var(--fg-2); font-family: var(--font-body); font-size: 12px; }
+.tree { margin: 6px 0 0; padding-left: 10px; border-left: 1px solid var(--line); display: grid; gap: 2px; overflow-x: auto; }
+.tree details > summary { cursor: pointer; font-family: var(--font-mono); color: var(--fg); }
+.tree .k { color: var(--accent); }
+.tree .t { color: var(--fg-2); }
+.result { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: baseline; }
+.result .big { font-family: var(--font-mono); font-size: 15px; font-variant-numeric: tabular-nums; text-align: right; }
+.list { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 12px; }
+
+/* status */
+.status { grid-area: status; display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: center; border-top: 1px solid var(--line); background: var(--panel);
+  padding: 5px max(16px, env(safe-area-inset-right, 0px)) 5px max(16px, env(safe-area-inset-left, 0px)); font-size: 12px; color: var(--fg-2); }
+.status b { color: var(--fg); font-family: var(--font-mono); font-weight: 500; }
+
+@media (max-width: 900px) {
+  .app { height: auto; min-height: 100%; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 60vh auto auto auto auto;
+    grid-template-areas: "top" "view" "layers" "left" "right" "status"; }
+  .left, .right { border: 0; border-top: 1px solid var(--line); overflow: visible; }
+  .layers { border-left: 0; border-top: 1px solid var(--line); max-height: 220px; }
+  .llist { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app" id="app">
+  <header class="top">
+    <div class="row">
+      <div class="brand"><i aria-hidden="true"></i>MineCircuit</div>
+      <div class="group">
+        <label class="label" for="sample">設計図</label>
+        <select class="btn" id="sample"></select>
+        <button class="btn" id="openBtn" type="button">ファイルを開く…</button>
+        <input id="file" type="file" accept=".nbt" hidden>
+      </div>
+      <div class="group">
+        <span class="label">MODPACK</span>
+        <button class="btn" id="packBtn" type="button" disabled title="プロトタイプでは未実装">未選択</button>
+      </div>
+      <div class="spacer"></div>
+      <dl class="facts" aria-label="設計図の情報">
+        <div><dt>寸法</dt><dd id="fSize" title="幅 × 高さ × 奥行き">–</dd></div>
+        <div><dt>ブロック</dt><dd id="fCount">–</dd></div>
+        <div><dt>種類</dt><dd id="fKinds">–</dd></div>
+        <div><dt>nbt付き</dt><dd id="fBe" title="生データ（ブロックエンティティ）を持つブロックの数">–</dd></div>
+        <div><dt>エンティティ</dt><dd id="fEnt">–</dd></div>
+        <div><dt>バージョン</dt><dd id="fVer">–</dd></div>
+        <div><dt>編集</dt><dd id="fEdits">なし</dd></div>
+      </dl>
+    </div>
+    <div class="row tools" role="toolbar" aria-label="表示の操作">
+      <div class="seg" role="group" aria-label="表示">
+        <button type="button" id="v3d" aria-pressed="true">3D</button>
+        <button type="button" id="v2d" aria-pressed="false">2D</button>
+      </div>
+      <div class="group">
+        <span class="label">視点</span>
+        <div class="seg" role="group" aria-label="視点" id="camSeg">
+          <button type="button" data-cam="iso" aria-pressed="true" title="斜め上から">斜め</button>
+          <button type="button" data-cam="top" aria-pressed="false" title="真上から">上</button>
+          <button type="button" data-cam="front" aria-pressed="false" title="南（+Z）から">正面</button>
+          <button type="button" data-cam="side" aria-pressed="false" title="東（+X）から">横</button>
+        </div>
+        <button class="btn" type="button" id="fit">全体を表示</button>
+      </div>
+      <div class="group">
+        <span class="label">段</span>
+        <button class="btn" type="button" id="tDown" aria-label="下の段へ">▼</button>
+        <span class="layerbox" id="tLayer">– / –</span>
+        <button class="btn" type="button" id="tUp" aria-label="上の段へ">▲</button>
+        <div class="seg" role="group" aria-label="段の表示" id="modeSeg">
+          <button type="button" data-mode="all" aria-pressed="false">すべて</button>
+          <button type="button" data-mode="hide" aria-pressed="true">上を消す</button>
+          <button type="button" data-mode="ghost" aria-pressed="false">上を半透明</button>
+          <button type="button" data-mode="only" aria-pressed="false">この段だけ</button>
+        </div>
+      </div>
+      <div class="group">
+        <span class="label">表示</span>
+        <div class="seg" role="group" aria-label="補助表示">
+          <button type="button" id="tgGrid" aria-pressed="true">グリッド</button>
+          <button type="button" id="tgAxes" aria-pressed="false" title="X 赤 / Y 緑 / Z 青">座標軸</button>
+          <button type="button" id="tgLabels" aria-pressed="true" title="2Dのマスにブロックの略称を出す">略称</button>
+        </div>
+      </div>
+      <div class="group">
+        <button class="btn" type="button" id="clearSel" disabled>選択を解除</button>
+        <button class="btn" type="button" id="clearHl" disabled>強調を解除</button>
+      </div>
+      <div class="group">
+        <span class="label">編集</span>
+        <button class="btn" type="button" id="undo" disabled title="Ctrl+Z">元に戻す</button>
+        <button class="btn" type="button" id="redo" disabled title="Ctrl+Y">やり直す</button>
+        <button class="btn" type="button" id="exportBtn" title="編集した設計図を .nbt で書き出す">書き出し（.nbt）</button>
+      </div>
+      <div class="spacer"></div>
+      <div class="group">
+        <span class="label">パネル</span>
+        <div class="seg" role="group" aria-label="パネルの表示">
+          <button type="button" id="tgLeft" aria-pressed="true">一覧</button>
+          <button type="button" id="tgRight" aria-pressed="true">詳細</button>
+        </div>
+        <button class="btn" type="button" id="fs">全画面</button>
+      </div>
+    </div>
+  </header>
+
+  <aside class="panel left">
+    <div class="section" id="brushSec">
+      <h2><span class="grow">置くブロック</span><span class="muted" style="font-weight:400;letter-spacing:0">R で回転</span></h2>
+      <div class="brush"><span class="big-sw" id="brushSw"></span><div><div class="bid" id="brushId">–</div><div class="bprops" id="brushProps"></div></div></div>
+      <div class="chips" id="brushChips" aria-label="この設計図のブロックから選ぶ"></div>
+      <form class="addid" id="addIdForm"><input id="addId" placeholder="IDを入力（例: create:shaft）" autocomplete="off" aria-label="ブロックID"><button class="btn" type="submit">使う</button></form>
+      <p class="note">Modpack未読み込みのため、向きなどの選択肢は分かりません。設計図にある状態を元に回転します。</p>
+    </div>
+    <div class="section">
+      <h2><span class="grow">ブロック一覧</span>
+        <span class="seg" role="group" aria-label="集計範囲">
+          <button type="button" id="cntAll" aria-pressed="true">全体</button>
+          <button type="button" id="cntLayer" aria-pressed="false">この段</button>
+        </span>
+      </h2>
+      <input class="search" id="search" type="search" placeholder="名前やIDで絞り込み（例: shaft）" autocomplete="off">
+      <ul class="blist" id="blist"></ul>
+      <p class="note" id="blistNote"></p>
+    </div>
+    <div class="section">
+      <h2>使っているMod</h2>
+      <div class="nslist" id="nslist"></div>
+      <p class="note">Modpackを読み込むと、ここに足りないModが出ます（このプロトタイプでは未実装）。</p>
+    </div>
+  </aside>
+
+  <main class="view" id="view">
+    <canvas id="c3d" aria-label="設計図の3D表示"></canvas>
+    <canvas id="c2d" hidden aria-label="選んだ段の2D表示"></canvas>
+    <div class="hud" id="hud"></div>
+    <div class="compass" id="compass" hidden>↑ 北（−Z）</div>
+    <div class="drop" id="drop" hidden>.nbt をここに落として開く</div>
+    <div class="tools-rail" role="toolbar" aria-label="ツール" id="toolRail">
+      <button type="button" data-tool="select" aria-pressed="true" title="選択（V）：ブロックの情報を見る"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 3l10 6.5-4.6 1.1L8.6 15z"/></svg><kbd>V</kbd></button>
+      <button type="button" data-tool="measure" aria-pressed="false" title="計測（M）：2つのブロックの距離を測る"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 14L14 3l3 3L6 17z"/><path d="M7 10l1.5 1.5M9.5 7.5L11 9M12 5l1.5 1.5"/></svg><kbd>M</kbd></button>
+      <button type="button" data-tool="connect" aria-pressed="false" title="つながり（C）：隣り合う同じ種類のブロックをまとめて強調"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="7.5" width="5" height="5" rx="1"/><rect x="12.5" y="7.5" width="5" height="5" rx="1"/><rect x="7.5" y="2.5" width="5" height="5" rx="1"/><path d="M7.5 10h5"/></svg><kbd>C</kbd></button>
+      <button type="button" data-tool="probe" aria-pressed="false" disabled title="プローブ：回転数と応力を見る（計算が未実装のため使えません）"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 3l5 5-7 7-3 1 1-3z"/><path d="M4 16l-1.5 1.5"/></svg></button>
+      <hr>
+      <button type="button" data-tool="place" aria-pressed="false" title="置く（B）：3Dは面の隣に、2Dはマスに置く。2Dで埋まったマスは置き換え、3DはShift+クリックで置き換え"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M10 2.5l6.5 3.5v8L10 17.5 3.5 14V6z"/><path d="M10 7v6M7 10h6"/></svg><kbd>B</kbd></button>
+      <button type="button" data-tool="erase" aria-pressed="false" title="消す（E）"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M10 2.5l6.5 3.5v8L10 17.5 3.5 14V6z"/><path d="M7.5 7.5l5 5M12.5 7.5l-5 5"/></svg><kbd>E</kbd></button>
+      <button type="button" data-tool="pick" aria-pressed="false" title="スポイト（I）：クリックしたブロックを「置くブロック」にする"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3-2 2-3-3z"/><path d="M11.5 5.5l-7 7-1 4 4-1 7-7"/></svg><kbd>I</kbd></button>
+    </div>
+    <div class="readout" id="readout" hidden></div>
+    <div class="err" id="err" hidden></div>
+  </main>
+
+  <nav class="layers" aria-label="段の一覧">
+    <div class="lhead"><span class="label">段・ブロック数</span></div>
+    <ul class="llist" id="llist"></ul>
+    <div class="lfoot">
+      <button class="btn" type="button" id="showAllLayers">すべて表示</button>
+      <button class="btn" type="button" id="soloLayer" title="選んだ段だけを表示し、ほかを隠す">この段だけ表示</button>
+    </div>
+  </nav>
+
+  <aside class="panel right">
+    <div class="section" id="inspector"></div>
+    <div class="section" id="calc"></div>
+  </aside>
+
+  <footer class="status">
+    <span>マウス位置 <b id="stHover">–</b></span>
+    <span>選択 <b id="stSel">–</b></span>
+    <span class="spacer"></span>
+    <span>ファイルはブラウザ内だけで読み込み、外部に送信しません</span>
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const SAMPLES = {"_.nbt": "H4sIAAAAAAAA/9VZXWgcVRS+s7OzOzu7iZGmWiMVLAg+FClWUIttdpM17WpNQraptT5sb2bubobMzgx37maTCFJQQUQQFKHtiy8+qfTFimCpBsQnEx8VH5QKgiAIvinYGs+dn2Rms0l2NklNF5bZmT33nO9837nn3plREMqgpKMvEBEhxL8yfAX4JjNIJibTmU4cBc4TChLNKZZBqRcspltmyrd3P19dW/jl5NX+V4JzAcmqjTVdOzOOEih1imCDTSNJQf3PN6bIc+VxQh3dYeC/iBkG81zJnG0YJqF4yiAwRCzoVDgMbsbMk9RqmJogot5xizJsDFuWoVlNk8cBjBMWwxyPxDEO/XzEjS+h3Ag2jCLEwKZK+CUFJUuM1GWU0DW0v66bRKW4yo6p1hSEdJhlEgFJwxCLiZBYFvBHI4njluMmvdi36AZZLHnB8g95SSdQdlxXZxp2kRh4np8nR3RKOKU8Zu9aTB2AZFFycrJU5Ez/tpB7fUzMr7y578DCkQOXZFCkUBga4sFSi/fmo8EOXvTO+4LrfT6Iiz4IsVAj6GUFyUPYqLv0cpqmDEudgQwCmVc/kJjtJzb4u3dp8Ff/eNO32VT6D/eG9F8/dmEHpBe2kD6HfNY9tvMPB6x3KX2xt9l3WChe+qLw4MDtT459G5G+pzWYL3k2uH7Bv74Ylv6BraQXAqXC0v+NIp/BW6vlkXLHuz3gfm9Eaw2JIpKAbUZCBRXYJIJgm9iIHdgkO4gldWCT6sAm7dskIjbeJJCQVLYJ0YZcIvtG4afjXpi0NbAUFJQeJaxp0RkJycPYxqrO5kuu42QZ2iz8GpBQtqBpRCszShznmaWl5SRKlDT4C4R+Z1lCKe+fYnJpya+g/Sol4P6Yo9dtg1RmoJ6YripgaTWoCs1bOLeysvIPHF+C43dwPO8l0l4xFMpMaJtZruQMWyajlmEQKrTLVESp08SsweSGQPHTPn5607QBYMnUyBwH61GQ9SmYIgZTkLKGzk/+lp/88mryMkoNY0c3ayg5Ojb6rIIy0Gqg8Vh0PgPuYSa6VZ2WUHqcklmYIieWlididgupYNYMnl9CcvvEiY8+PiIhhTscq1Ydwr589JsnRR66TGp1iM6LEJpMySxCh1B5/+LlDdmvmaM1RIPXr9/sFtEbHqLBT4++GEF04/H8fAxE3DyEKH/o0BPdIjrnIcof/OnPKKKrjXfjIALzMKJqlXWJSNjnI5o6FFXt+LVH/oiBiJuHEb0/eb5bjl7zEb139KkoR09/fyoOR2AeRvR5c6FbRLd9RJ9Nnoty9Fb9VhyOwDyM6MfLV7pF9JeP6IfmXBTRqwNvx0EE5tDresAV7HNnyRjVCOWdPtpWb6/rLAJKD1uzhBKttcMGi2u4wyb8DiuivjMUm06V0PD+AsKN6AYj1KOhZ40GDDuhIH1wwXCN+8151oU6vw7j8/44vz9WG6ZJDAH2GPYZS9gAXnipFbdeANoudXEXgJ727T5/+fKVcLsXdqzdR1X8N4aKiTYqJndtB3C8kx1Av88HMVXsEK3iTGPe9TbPMbNRYuGtjbS39E/skv4rMfQX71L9W3Ncp7/YRv/U3tJf3A39PS071j+42wjrn96BfbLYCU2d7pNbietwn9xaI3In+2Rv0WhZKYV1K2WcORZwHF6K5LtwjskbJRaeY5m9NceSd2iOyZvoH9ytx5xjW9KUuLNbEa+Ct5pRUZrWD9iapvA0UfZWNUm7VE2JGN0keK6z0x27o2razY69RX1JQxOFcrnblt3GeSckh2sxu7dqMXWHanGzKRs8PwzXYm7nVraMhHrccgv+HrnIF5127AzCqsefaJdVnv1ZbDQI5HDT4yjnc1S3oGw2SCGsdA/YpG1sEMYIf27WKwNVuE7QwNodq20ZujMNS6emW1SHYQq/PbdsQvl7JBllm+CLGlatBrRJVWw4BLzgOd1BwjwKHN7jI1OtWnOaEKPVS0r1i9930N6rjSlz0VMGQ6pAFReXYAdOJccAd0iZBpQLUBzYWA0eLp2O4Kdtq+mWQXAhiCU5VoNNw56GzDGKVebGZ7RBVmPd58fCUL0wS0nFu3nfRr6puq5pBtmphKMkBkLJqI//qmDDMmuVqk4d1pLYQMtOSp3GulnRKPSh9iFWce9KjDgE2g3oE/M7ReB2SrVJQoFTDbuJqRZDNZGY2iqfC/8Xnx6K9jl1S6aLextc7qKILelur3aCPmJaFNbJYEjwLsg9gDgVr4FDm+ev/M7y96v8OWf2AxH1T2DdaOJ5pxL5C1ae/wCJvK5t+R8AAA=="};
+
+/* ---------- NBT ---------- */
+async function gunzip(u8) {
+  const s = new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+class Reader {
+  constructor(u8) { this.u8 = u8; this.dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength); this.p = 0; this.td = new TextDecoder(); }
+  i8() { return this.dv.getInt8(this.p++); }
+  i16() { const v = this.dv.getInt16(this.p); this.p += 2; return v; }
+  i32() { const v = this.dv.getInt32(this.p); this.p += 4; return v; }
+  i64() { const v = this.dv.getBigInt64(this.p); this.p += 8; return v; }
+  f32() { const v = this.dv.getFloat32(this.p); this.p += 4; return v; }
+  f64() { const v = this.dv.getFloat64(this.p); this.p += 8; return v; }
+  str() { const n = this.dv.getUint16(this.p); this.p += 2; const s = this.td.decode(this.u8.subarray(this.p, this.p + n)); this.p += n; return s; }
+}
+const TAG = ['End','Byte','Short','Int','Long','Float','Double','ByteArray','String','List','Compound','IntArray','LongArray'];
+function readPayload(r, t) {
+  switch (t) {
+    case 1: return { t, v: r.i8() };
+    case 2: return { t, v: r.i16() };
+    case 3: return { t, v: r.i32() };
+    case 4: return { t, v: r.i64() };
+    case 5: return { t, v: r.f32() };
+    case 6: return { t, v: r.f64() };
+    case 7: { const n = r.i32(); const a = []; for (let i = 0; i < n; i++) a.push(r.i8()); return { t, v: a }; }
+    case 8: return { t, v: r.str() };
+    case 9: { const et = r.i8(); const n = r.i32(); const a = []; for (let i = 0; i < n; i++) a.push(readPayload(r, et)); return { t, et, v: a }; }
+    case 10: { const o = {}; for (;;) { const ct = r.i8(); if (ct === 0) break; const k = r.str(); o[k] = readPayload(r, ct); } return { t, v: o }; }
+    case 11: { const n = r.i32(); const a = []; for (let i = 0; i < n; i++) a.push(r.i32()); return { t, v: a }; }
+    case 12: { const n = r.i32(); const a = []; for (let i = 0; i < n; i++) a.push(r.i64()); return { t, v: a }; }
+    default: throw new Error('不明なタグ ' + t);
+  }
+}
+async function parseNbt(u8) {
+  if (u8[0] === 0x1f && u8[1] === 0x8b) u8 = await gunzip(u8);
+  const r = new Reader(u8); const t = r.i8();
+  if (t !== 10) throw new Error('NBTの先頭がCompoundではありません');
+  r.str(); return readPayload(r, t);
+}
+
+/* ---------- Blueprint ---------- */
+const AIR = new Set(['minecraft:air', 'minecraft:cave_air', 'minecraft:void_air']);
+const VERSIONS = [[2975,'1.18.2'],[3120,'1.19.2'],[3218,'1.19.3'],[3337,'1.19.4'],[3465,'1.20.1'],[3578,'1.20.2'],[3700,'1.20.4'],[3839,'1.20.6'],[3955,'1.21.1'],[4189,'1.21.4']];
+function versionName(dv) { if (dv == null) return '不明'; let name = null; for (const [n, v] of VERSIONS) if (dv >= n) name = v; return (name ? '約 ' + name : '1.18未満') + '（' + dv + '）'; }
+
+function blueprintFromNbt(name, root) {
+  const c = root.v;
+  if (!c.size || !c.blocks || !(c.palette || c.palettes)) throw new Error('Createの設計図（構造物NBT）の形式ではありません。size / palette / blocks が見つかりません。');
+  const size = c.size.v.map(x => x.v);
+  const palTag = c.palette || c.palettes.v[0];
+  const palette = palTag.v.map(p => {
+    const props = {}; if (p.v.Properties) for (const [k, v] of Object.entries(p.v.Properties.v)) props[k] = String(v.v);
+    return { id: p.v.Name.v, props };
+  });
+  const blocks = c.blocks.v.map(b => ({ pos: b.v.pos.v.map(x => x.v), state: b.v.state.v, nbt: b.v.nbt || null }));
+  const known = new Set(['size', 'palette', 'palettes', 'blocks', 'entities', 'DataVersion']);
+  const extra = Object.keys(c).filter(k => !known.has(k));
+  return makeBlueprint(name, size, palette, blocks, c.DataVersion ? c.DataVersion.v : null, c.entities ? c.entities.v.length : 0, extra, root);
+}
+function makeBlueprint(name, size, palette, blocks, dataVersion, entityCount, extra, root = null) {
+  const [W, H, D] = size;
+  const cells = new Int32Array(W * H * D).fill(-1);
+  const bes = new Map(); const solid = [];
+  for (const b of blocks) {
+    const st = palette[b.state]; if (!st || AIR.has(st.id)) continue;
+    const [x, y, z] = b.pos; const i = (y * D + z) * W + x;
+    cells[i] = b.state; if (b.nbt) bes.set(i, b.nbt); solid.push(i);
+  }
+  return { name, size, palette, cells, bes, solid, dataVersion, entityCount, extra, root,
+    idx: (x, y, z) => (y * D + z) * W + x, pos: i => [i % W, Math.floor(i / (W * D)), Math.floor(i / W) % D],
+    inside: (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < W && y < H && z < D,
+    recount() { this.solid = []; for (let i = 0; i < this.cells.length; i++) if (this.cells[i] >= 0) this.solid.push(i); } };
+}
+function makeStressSample() {
+  // 負荷テスト用の自動生成データ。実在の設計図ではない
+  const W = 40, H = 24, D = 40;
+  const ids = ['create:andesite_casing', 'create:shaft', 'create:cogwheel', 'create:large_cogwheel', 'create:mechanical_press', 'create:basin',
+    'create:mechanical_mixer', 'create:belt', 'create:depot', 'create:gearbox', 'minecraft:stone_bricks', 'create:fluid_pipe', 'create:fluid_tank', 'minecraft:glass'];
+  const palette = ids.map(id => ({ id, props: id.endsWith('shaft') || id.endsWith('cogwheel') ? { axis: 'y' } : {} }));
+  const blocks = []; let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let y = 0; y < H; y++) for (let z = 0; z < D; z++) for (let x = 0; x < W; x++) {
+    const edge = x === 0 || z === 0 || x === W - 1 || z === D - 1;
+    let st = -1;
+    if (y % 6 === 0) st = edge ? 10 : 0;
+    else if (edge && (x + z) % 4 === 0) st = 10;
+    else if (edge && y % 6 === 3) st = 13;
+    else if (!edge && x % 8 === 4 && z % 8 === 4) st = 1;
+    else if (!edge && y % 6 === 1 && rnd() < .18) st = 2 + Math.floor(rnd() * 10);
+    if (st >= 0) blocks.push({ pos: [x, y, z], state: st, nbt: null });
+  }
+  return makeBlueprint('負荷テスト（自動生成）', [W, H, D], palette, blocks, 3955, 0, []);
+}
+function makeEmpty() {
+  return makeBlueprint('新規.nbt', [16, 8, 16], [], [], 2975, 0, []);
+}
+
+/* ---------- names and colours ---------- */
+function prettyName(id) { const p = id.split(':')[1] || id; return p.replace(/_/g, ' '); }
+function nsOf(id) { return id.split(':')[0]; }
+function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+const colorCache = new Map();
+function colorOf(id) {
+  if (colorCache.has(id)) return colorCache.get(id);
+  const h = hash(id); const hue = h % 360; const sat = 28 + (h >> 9) % 30; const lig = 46 + (h >> 17) % 18;
+  const c = new THREE.Color(`hsl(${hue}, ${sat}%, ${lig}%)`); colorCache.set(id, c); return c;
+}
+const css = c => '#' + c.getHexString();
+
+/* ---------- state ---------- */
+const S = { bp: null, layer: 0, mode: 'hide', view: '3d', countScope: 'all', highlight: null, filter: '', selected: null, hover: null,
+  grid: true, axes: false, labels: true, cam: 'iso',
+  tool: 'select', hiddenLayers: new Set(), measure: [], group: null };
+const $ = id => document.getElementById(id);
+
+/* ---------- 3D ---------- */
+const canvas3 = $('c3d');
+const renderer = new THREE.WebGLRenderer({ canvas: canvas3, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
+const controls = new THREE.OrbitControls(camera, canvas3);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x6b6a62, 0.75));
+const sun = new THREE.DirectionalLight(0xffffff, 0.65); sun.position.set(0.6, 1, 0.35); scene.add(sun);
+const geo = new THREE.BoxGeometry(0.94, 0.94, 0.94);
+let solidMesh = null, ghostMesh = null, instIndex = [];
+const selBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.04, 1.04, 1.04)), new THREE.LineBasicMaterial({ color: 0xffffff }));
+selBox.visible = false; scene.add(selBox);
+const hovBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.01, 1.01, 1.01)), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: .5 }));
+hovBox.visible = false; scene.add(hovBox);
+let layerFrame = null, gridLines = null, axes = null;
+
+function themeColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function applyTheme() {
+  scene.background = new THREE.Color(themeColor('--viewport'));
+  selBox.material.color.set(themeColor('--accent'));
+  hovBox.material.color.set(themeColor('--fg'));
+  if (layerFrame) layerFrame.material.color.set(themeColor('--accent'));
+  if (gridLines) gridLines.material.color.set(themeColor('--grid'));
+  if (S.bp) { rebuild(); draw2d(); }
+}
+
+function visibleState(y) {
+  const L = S.layer;
+  if (S.hiddenLayers.has(y)) return 'none';
+  if (S.mode === 'all') return 'solid';
+  if (S.mode === 'only') return y === L ? 'solid' : 'none';
+  if (y <= L) return 'solid';
+  return S.mode === 'ghost' ? 'ghost' : 'none';
+}
+function matches(i, id) {
+  if (S.group) return S.group.has(i);
+  return !S.highlight || S.highlight === id;
+}
+
+function rebuild() {
+  const bp = S.bp; if (!bp) return;
+  const n = bp.solid.length;
+  if (!solidMesh || solidMesh.userData.cap < n) {
+    for (const m of [solidMesh, ghostMesh]) if (m) { scene.remove(m); m.dispose(); }
+    solidMesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial(), Math.max(n, 1));
+    ghostMesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ transparent: true, opacity: .12, depthWrite: false }), Math.max(n, 1));
+    solidMesh.userData.cap = Math.max(n, 1);
+    scene.add(solidMesh, ghostMesh);
+  }
+  const m4 = new THREE.Matrix4(); const dim = new THREE.Color(themeColor('--grid'));
+  const [W, H, D] = bp.size; const ox = -W / 2 + .5, oz = -D / 2 + .5;
+  let si = 0, gi = 0; instIndex = [];
+  for (const i of bp.solid) {
+    const [x, y, z] = bp.pos(i); const vis = visibleState(y); if (vis === 'none') continue;
+    const id = bp.palette[bp.cells[i]].id;
+    m4.makeTranslation(x + ox, y + .5, z + oz);
+    let col = colorOf(id); if (!matches(i, id)) col = col.clone().lerp(dim, .8);
+    if (vis === 'solid') { solidMesh.setMatrixAt(si, m4); solidMesh.setColorAt(si, col); instIndex[si] = i; si++; }
+    else { ghostMesh.setMatrixAt(gi, m4); ghostMesh.setColorAt(gi, col); gi++; }
+  }
+  solidMesh.count = si; ghostMesh.count = gi;
+  for (const m of [solidMesh, ghostMesh]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  // current layer frame
+  if (layerFrame) scene.remove(layerFrame);
+  const g = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-W / 2, 0, -D / 2), new THREE.Vector3(W / 2, 0, -D / 2), new THREE.Vector3(W / 2, 0, D / 2), new THREE.Vector3(-W / 2, 0, D / 2)]);
+  layerFrame = new THREE.LineLoop(g, new THREE.LineBasicMaterial({ color: themeColor('--accent') }));
+  layerFrame.position.y = S.layer + .02; layerFrame.visible = S.mode !== 'all'; scene.add(layerFrame);
+  placeSel(); placeMeasure();
+}
+let measureObj = null;
+function placeMeasure() {
+  if (measureObj) { scene.remove(measureObj); measureObj = null; }
+  if (!S.measure.length) return;
+  measureObj = new THREE.Group(); const acc = themeColor('--info');
+  for (const i of S.measure) {
+    const m = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.06, 1.06, 1.06)), new THREE.LineBasicMaterial({ color: acc }));
+    m.position.copy(worldPos(i)); measureObj.add(m);
+  }
+  if (S.measure.length === 2) {
+    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(S.measure.map(worldPos)), new THREE.LineDashedMaterial({ color: acc, dashSize: .3, gapSize: .2, depthTest: false }));
+    l.computeLineDistances(); l.renderOrder = 10; measureObj.add(l);
+  }
+  scene.add(measureObj);
+}
+function worldPos(i) { const [W, , D] = S.bp.size; const [x, y, z] = S.bp.pos(i); return new THREE.Vector3(x - W / 2 + .5, y + .5, z - D / 2 + .5); }
+function placeSel() { if (S.selected == null) { selBox.visible = false; return; } selBox.position.copy(worldPos(S.selected)); selBox.visible = true; }
+function setCam(kind) {
+  S.cam = kind; const [W, H, D] = S.bp.size; const r = Math.max(W, H, D);
+  controls.target.set(0, H / 2, 0);
+  const p = { iso: [r * 1.25, H / 2 + r * .95, r * 1.45], top: [0, H / 2 + r * 2.2, .001], front: [0, H / 2, r * 2.2], side: [r * 2.2, H / 2, 0] }[kind];
+  camera.position.set(...p);
+  camera.near = .1; camera.far = r * 20; camera.updateProjectionMatrix(); controls.update();
+  for (const b of $('camSeg').children) b.setAttribute('aria-pressed', String(b.dataset.cam === kind));
+}
+function fitCamera() { setCam('iso'); }
+controls.addEventListener('start', () => { for (const b of $('camSeg').children) b.setAttribute('aria-pressed', 'false'); });
+function buildHelpers() {
+  const [W, , D] = S.bp.size;
+  for (const o of [gridLines, axes]) if (o) scene.remove(o);
+  const pts = [];
+  for (let x = 0; x <= W; x++) pts.push(new THREE.Vector3(x - W / 2, 0, -D / 2), new THREE.Vector3(x - W / 2, 0, D / 2));
+  for (let z = 0; z <= D; z++) pts.push(new THREE.Vector3(-W / 2, 0, z - D / 2), new THREE.Vector3(W / 2, 0, z - D / 2));
+  gridLines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: themeColor('--grid') }));
+  gridLines.visible = S.grid; scene.add(gridLines);
+  axes = new THREE.AxesHelper(Math.max(3, Math.min(W, D) / 3)); axes.position.set(-W / 2, 0.01, -D / 2); axes.visible = S.axes; scene.add(axes);
+}
+function resize() {
+  const v = $('view'); const w = v.clientWidth, h = v.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / Math.max(h, 1); camera.updateProjectionMatrix();
+  if (S.view === '2d') draw2d();
+}
+new ResizeObserver(resize).observe($('view'));
+(function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
+
+const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2();
+function pick(ev) { const h = pickHit(ev); return h ? h.i : null; }
+function pickHit(ev) {
+  if (!solidMesh) return null;
+  const r = canvas3.getBoundingClientRect(); ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera); const hit = ray.intersectObject(solidMesh)[0];
+  if (!hit || hit.instanceId == null) return null;
+  const n = hit.face.normal; return { i: instIndex[hit.instanceId], n: [Math.round(n.x), Math.round(n.y), Math.round(n.z)] };
+}
+const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); const hitPt = new THREE.Vector3();
+function planeCell(ev) {
+  // 何もないところをクリックしたときは、今の段の床に置く
+  const r = canvas3.getBoundingClientRect(); ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera); plane.constant = -S.layer;
+  if (!ray.ray.intersectPlane(plane, hitPt)) return null;
+  const [W, , D] = S.bp.size; const x = Math.floor(hitPt.x + W / 2), z = Math.floor(hitPt.z + D / 2);
+  return S.bp.inside(x, S.layer, z) ? S.bp.idx(x, S.layer, z) : null;
+}
+function placeTarget(ev) {
+  const h = pickHit(ev);
+  if (h) {
+    if (ev.shiftKey) return { i: h.i, replace: true };
+    const [x, y, z] = S.bp.pos(h.i); const nx = x + h.n[0], ny = y + h.n[1], nz = z + h.n[2];
+    return S.bp.inside(nx, ny, nz) ? { i: S.bp.idx(nx, ny, nz) } : { out: true };
+  }
+  const c = planeCell(ev); return c == null ? null : { i: c };
+}
+let down = null;
+canvas3.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
+canvas3.addEventListener('pointerup', e => {
+  if (!down) return; const moved = Math.hypot(e.clientX - down[0], e.clientY - down[1]); down = null;
+  if (moved >= 5 || e.button !== 0) return;
+  if (S.tool === 'place') { const t = placeTarget(e); if (t && t.out) note('範囲の外には置けません（範囲の拡張は未実装）'); else if (t) placeAt(t.i, t.replace); return; }
+  usePick(pick(e));
+});
+canvas3.addEventListener('pointermove', e => {
+  if (S.tool === 'place') {
+    const t = placeTarget(e); const i = t && !t.out ? t.i : null; setHover(i);
+    if (i != null) { hovBox.position.copy(worldPos(i)); hovBox.material.color.set(themeColor('--accent')); hovBox.visible = true; } else hovBox.visible = false;
+    return;
+  }
+  hovBox.material.color.set(themeColor('--fg'));
+  const i = pick(e); setHover(i);
+  if (i != null) { hovBox.position.copy(worldPos(i)); hovBox.visible = true; } else hovBox.visible = false;
+});
+canvas3.addEventListener('pointerleave', () => { hovBox.visible = false; setHover(null); });
+
+/* ---------- 2D ---------- */
+const canvas2 = $('c2d'); let cell = 0, off = [0, 0];
+function draw2d() {
+  if (S.view !== '2d' || !S.bp) return;
+  const v = $('view'); const dpr = Math.min(devicePixelRatio, 2);
+  const w = v.clientWidth, h = v.clientHeight; canvas2.width = w * dpr; canvas2.height = h * dpr;
+  const ctx = canvas2.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = themeColor('--viewport'); ctx.fillRect(0, 0, w, h);
+  const [W, , D] = S.bp.size; const padL = 84, padR = 32, padTop = 84;
+  const padBottom = $('readout').hidden ? 24 : $('readout').offsetHeight + 28;
+  cell = Math.max(4, Math.floor(Math.min((w - padL - padR) / W, (h - padTop - padBottom) / D)));
+  off = [padL + Math.floor((w - padL - padR - cell * W) / 2), padTop + Math.floor((h - padTop - padBottom - cell * D) / 2)];
+  const grid = themeColor('--grid'), fg2 = themeColor('--fg-2'), dim = new THREE.Color(grid);
+  ctx.strokeStyle = grid; ctx.lineWidth = 1;
+  if (S.grid) for (let x = 0; x <= W; x++) { ctx.beginPath(); ctx.moveTo(off[0] + x * cell + .5, off[1]); ctx.lineTo(off[0] + x * cell + .5, off[1] + D * cell); ctx.stroke(); }
+  if (S.grid) for (let z = 0; z <= D; z++) { ctx.beginPath(); ctx.moveTo(off[0], off[1] + z * cell + .5); ctx.lineTo(off[0] + W * cell, off[1] + z * cell + .5); ctx.stroke(); }
+  // axis labels
+  ctx.fillStyle = fg2; ctx.font = '11px ' + getComputedStyle(document.body).fontFamily; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  const stepL = Math.max(1, Math.ceil(18 / cell));
+  for (let x = 0; x < W; x += stepL) ctx.fillText(String(x), off[0] + x * cell + cell / 2, off[1] - 4);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let z = 0; z < D; z += stepL) ctx.fillText(String(z), off[0] - 6, off[1] + z * cell + cell / 2);
+  // layer below as ghost
+  const L = S.layer;
+  for (let z = 0; z < D; z++) for (let x = 0; x < W; x++) {
+    const cur = S.bp.cells[S.bp.idx(x, L, z)];
+    const below = L > 0 ? S.bp.cells[S.bp.idx(x, L - 1, z)] : -1;
+    const px = off[0] + x * cell + 1, py = off[1] + z * cell + 1, s = cell - 1;
+    if (cur >= 0 && !AIR.has(S.bp.palette[cur].id)) {
+      const ci = S.bp.idx(x, L, z); const id = S.bp.palette[cur].id; let c = colorOf(id); if (!matches(ci, id)) c = c.clone().lerp(dim, .8);
+      ctx.fillStyle = css(c); ctx.fillRect(px, py, s, s);
+      if (cell >= 26 && S.labels) {
+        ctx.fillStyle = c.getHSL({}).l > .55 ? '#1b1b18' : '#f4f2ec'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '600 ' + Math.min(13, cell * .32) + 'px ' + getComputedStyle(document.body).fontFamily;
+        ctx.fillText(abbr(id), px + s / 2, py + s / 2);
+      }
+    } else if (below >= 0 && !AIR.has(S.bp.palette[below].id)) {
+      ctx.fillStyle = css(colorOf(S.bp.palette[below].id)); ctx.globalAlpha = .18; ctx.fillRect(px, py, s, s); ctx.globalAlpha = 1;
+    }
+  }
+  const mark = (i, color, wdt) => {
+    const [x, y, z] = S.bp.pos(i); if (y !== L) return;
+    ctx.strokeStyle = color; ctx.lineWidth = wdt; ctx.strokeRect(off[0] + x * cell + 1.5, off[1] + z * cell + 1.5, cell - 2, cell - 2);
+  };
+  if (S.hover != null) mark(S.hover, themeColor(S.tool === 'place' ? '--accent' : '--fg'), 1.5);
+  if (S.selected != null) mark(S.selected, themeColor('--accent'), 2.5);
+  for (const i of S.measure) mark(i, themeColor('--info'), 2.5);
+  if (S.measure.length === 2) {
+    const c = i => { const [x, , z] = S.bp.pos(i); return [off[0] + x * cell + cell / 2, off[1] + z * cell + cell / 2]; };
+    const [a, b] = S.measure.map(c); ctx.save(); ctx.strokeStyle = themeColor('--info'); ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); ctx.restore();
+  }
+}
+function abbr(id) { const p = (id.split(':')[1] || id).split('_'); return p.length > 1 ? (p[0][0] + p[1][0]).toUpperCase() : p[0].slice(0, 2).toUpperCase(); }
+function cellAt(ev) {
+  const r = canvas2.getBoundingClientRect(); const x = Math.floor((ev.clientX - r.left - off[0]) / cell), z = Math.floor((ev.clientY - r.top - off[1]) / cell);
+  const [W, , D] = S.bp.size; if (x < 0 || z < 0 || x >= W || z >= D) return null;
+  const i = S.bp.idx(x, S.layer, z); return S.bp.cells[i] >= 0 ? i : null;
+}
+function cellAny(ev) {
+  const r = canvas2.getBoundingClientRect(); const x = Math.floor((ev.clientX - r.left - off[0]) / cell), z = Math.floor((ev.clientY - r.top - off[1]) / cell);
+  return S.bp.inside(x, S.layer, z) ? S.bp.idx(x, S.layer, z) : null;
+}
+canvas2.addEventListener('click', e => {
+  if (S.tool === 'place') { const i = cellAny(e); if (i != null) placeAt(i, S.bp.cells[i] >= 0); return; }
+  usePick(cellAt(e));
+});
+canvas2.addEventListener('pointermove', e => { const i = S.tool === 'place' ? cellAny(e) : cellAt(e); if (i !== S.hover) { setHover(i); draw2d(); } });
+canvas2.addEventListener('pointerleave', () => { setHover(null); draw2d(); });
+
+/* ---------- panels ---------- */
+function counts(scope) {
+  const m = new Map(); const bp = S.bp;
+  for (const i of bp.solid) { if (scope === 'layer' && bp.pos(i)[1] !== S.layer) continue; const id = bp.palette[bp.cells[i]].id; m.set(id, (m.get(id) || 0) + 1); }
+  return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+function renderList() {
+  const ul = $('blist'); ul.textContent = '';
+  const q = S.filter.trim().toLowerCase(); const rows = counts(S.countScope).filter(([id]) => !q || id.includes(q) || prettyName(id).includes(q));
+  for (const [id, n] of rows) {
+    const li = document.createElement('li'); const b = document.createElement('button'); b.type = 'button';
+    b.setAttribute('aria-pressed', String(S.highlight === id)); b.title = 'クリックで3D/2D表示を強調';
+    b.innerHTML = `<span class="sw" style="background:${css(colorOf(id))}"></span><span class="bname">${esc(prettyName(id))}<small>${esc(id)}</small></span><span class="num">${n.toLocaleString()}</span>`;
+    b.addEventListener('click', () => setHighlight(S.highlight === id ? null : id));
+    li.append(b); ul.append(li);
+  }
+  const total = rows.reduce((a, [, n]) => a + n, 0);
+  $('blistNote').textContent = rows.length ? `${rows.length} 種類・${total.toLocaleString()} 個${S.countScope === 'layer' ? `（段 ${S.layer + 1}）` : ''}。名前はModpack未読み込みのためIDから作っています。` : 'この段にブロックはありません。';
+  const ns = new Map(); for (const [id, n] of counts('all')) ns.set(nsOf(id), (ns.get(nsOf(id)) || 0) + n);
+  $('nslist').innerHTML = [...ns.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => `<div class="nsrow"><span>${esc(k)}</span><span class="num muted">${n.toLocaleString()}</span></div>`).join('');
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
+
+function tagText(tag) {
+  switch (tag.t) {
+    case 4: return tag.v.toString() + 'L';
+    case 5: case 6: return (Math.round(tag.v * 1000) / 1000).toString() + (tag.t === 5 ? 'f' : 'd');
+    case 1: return tag.v + 'b';
+    case 2: return tag.v + 's';
+    case 8: return JSON.stringify(tag.v);
+    case 7: case 11: case 12: return `[${tag.v.length} 個]`;
+    default: return String(tag.v);
+  }
+}
+function treeHtml(tag, depth) {
+  if (tag.t === 10) {
+    return Object.entries(tag.v).map(([k, v]) => (v.t === 10 || v.t === 9)
+      ? `<details ${depth < 1 ? 'open' : ''}><summary><span class="k">${esc(k)}</span> <span class="t">${TAG[v.t]}${v.t === 9 ? `（${v.v.length}）` : ''}</span></summary><div class="tree">${treeHtml(v, depth + 1)}</div></details>`
+      : `<div><span class="k">${esc(k)}</span>: ${esc(tagText(v))}</div>`).join('');
+  }
+  if (tag.t === 9) {
+    return tag.v.map((v, i) => (v.t === 10 || v.t === 9)
+      ? `<details><summary><span class="k">[${i}]</span> <span class="t">${TAG[v.t]}</span></summary><div class="tree">${treeHtml(v, depth + 1)}</div></details>`
+      : `<div><span class="k">[${i}]</span> ${esc(tagText(v))}</div>`).join('') || '<div class="t">（空）</div>';
+  }
+  return esc(tagText(tag));
+}
+function renderInspector() {
+  const el = $('inspector'); const bp = S.bp;
+  if (S.selected == null) {
+    el.innerHTML = `<h2>選択中のブロック</h2><p class="note">3Dか2Dでブロックをクリックすると、ここにIDとブロック状態、設計図に保存された生データ（nbt）が出ます。</p>`;
+    return;
+  }
+  const i = S.selected; const st = bp.palette[bp.cells[i]]; const [x, y, z] = bp.pos(i); const nbt = bp.bes.get(i);
+  const props = Object.entries(st.props);
+  el.innerHTML = `<h2>選択中のブロック</h2>
+    <div><div class="title">${esc(prettyName(st.id))}</div><div class="muted" style="font-family:var(--font-mono);font-size:12px">${esc(st.id)}</div></div>
+    <dl class="kv"><dt>位置</dt><dd>${x}, ${y}, ${z}（段 ${y + 1}）</dd>
+    ${props.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+    ${nbt ? `<details class="nbt" open><summary>保存された生データ（nbt） <span class="chip bp">設計図から</span></summary><div class="tree">${treeHtml(nbt, 0)}</div></details>`
+          : `<p class="note">このブロックには生データ（nbt）がありません。</p>`}`;
+}
+function renderCalc() {
+  const el = $('calc'); const bp = S.bp;
+  const hasCreate = bp.solid.some(i => nsOf(bp.palette[bp.cells[i]].id) === 'create');
+  if (!hasCreate) { el.hidden = true; return; }
+  el.hidden = false;
+  // 保存時の Network 情報（参考値）を設計図から拾う
+  const nets = new Map();
+  for (const [, n] of bp.bes) { const net = n.v.Network; if (!net) continue; const id = net.v.Id ? net.v.Id.v.toString() : '?'; if (!nets.has(id)) nets.set(id, net.v); }
+  const netRows = [...nets.values()].map(v => `<span>保存時の値</span><span class="big">${fmt(v.Stress)} / ${fmt(v.Capacity)} SU</span>`).join('');
+  const netSize = [...nets.values()].map(v => v.Size ? v.Size.v : '?').join('・');
+  el.innerHTML = `<h2><span class="grow">計算：Createの応力</span><span class="chip ex">表示例・未実装</span></h2>
+    <div class="result">
+      <span>使用</span><span class="big">— SU</span>
+      <span>供給</span><span class="big">— SU</span>
+      ${netRows}
+    </div>
+    ${nets.size ? `<p class="note">保存時のネットワークは ${netSize} ブロックで、設計図の外のブロックも含むため参考値です。 <span class="chip bp">設計図から</span></p>` : ''}
+    <div><div class="label" style="margin-bottom:4px">仮定</div><ul class="list"><li>設計図の範囲の外は空気とみなす</li><li>Modpack未選択のため、応力の数値はCreateの初期値を使う</li></ul></div>
+    <button class="btn" type="button" disabled title="プロトタイプでは未実装">＋ 仮の入出力を追加</button>`;
+}
+function fmt(t) { return t ? Math.round(t.v).toLocaleString() : '?'; }
+
+function renderLayer() {
+  const H = S.bp.size[1]; const ul = $('llist'); ul.textContent = '';
+  const per = new Array(H).fill(0); for (const i of S.bp.solid) per[S.bp.pos(i)[1]]++;
+  for (let y = H - 1; y >= 0; y--) {
+    const li = document.createElement('li'); if (y === S.layer) li.className = 'active'; if (S.hiddenLayers.has(y)) li.classList.add('off');
+    const eye = document.createElement('button'); eye.type = 'button'; eye.className = 'eye';
+    eye.setAttribute('aria-pressed', String(!S.hiddenLayers.has(y))); eye.setAttribute('aria-label', `段 ${y + 1} を${S.hiddenLayers.has(y) ? '表示' : '隠す'}`);
+    eye.addEventListener('click', () => { S.hiddenLayers.has(y) ? S.hiddenLayers.delete(y) : S.hiddenLayers.add(y); renderLayer(); rebuild(); });
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'lbtn'; b.title = `段 ${y + 1}（Y=${y}）を選ぶ`;
+    b.innerHTML = `<b>${y + 1}</b><span>${per[y].toLocaleString()}</span>`; b.addEventListener('click', () => setLayer(y));
+    li.append(eye, b); ul.append(li);
+  }
+  const act = ul.querySelector('.active'); if (act) act.scrollIntoView({ block: 'nearest' });
+  $('tUp').disabled = S.layer >= H - 1; $('tDown').disabled = S.layer <= 0;
+  $('tLayer').textContent = `${S.layer + 1} / ${H}`;
+  $('showAllLayers').disabled = S.hiddenLayers.size === 0;
+  renderHud();
+}
+function renderHud() {
+  const modeName = { all: 'すべての段', hide: '上の段を消す', ghost: '上の段を半透明', only: 'この段だけ' }[S.mode];
+  $('hud').innerHTML = S.view === '3d'
+    ? `<span><b>${esc(S.bp.name)}</b></span><span>段 ${S.layer + 1}・${modeName}${S.hiddenLayers.size ? `・${S.hiddenLayers.size} 段を非表示` : ''}</span><span>ドラッグで回転、右ドラッグで移動、ホイールで拡大</span>`
+    : `<span><b>${esc(S.bp.name)}</b></span><span>段 ${S.layer + 1} を真上から表示。薄い色は1つ下の段</span>`;
+}
+function setHover(i) {
+  S.hover = i;
+  if (i == null) { $('stHover').textContent = '–'; return; }
+  const [x, y, z] = S.bp.pos(i); const s = S.bp.cells[i];
+  $('stHover').textContent = `(${x}, ${y}, ${z}) ${s >= 0 ? S.bp.palette[s].id : '（空き）'}`;
+}
+function select(i) {
+  S.selected = i; placeSel(); renderInspector(); draw2d(); syncButtons();
+  if (i == null) { $('stSel').textContent = '–'; return; }
+  const [x, y, z] = S.bp.pos(i); $('stSel').textContent = `(${x}, ${y}, ${z}) ${S.bp.palette[S.bp.cells[i]].id}`;
+}
+function setHighlight(id) { S.highlight = id; S.group = null; if (S.tool === 'connect') $('readout').hidden = true; rebuild(); draw2d(); renderList(); syncButtons(); }
+function syncButtons() { $('clearSel').disabled = S.selected == null; $('clearHl').disabled = S.highlight == null && S.group == null; }
+
+/* ---------- editing ---------- */
+const hist = { undo: [], redo: [] };
+function stateKey(st) { return st.id + '[' + Object.keys(st.props).sort().map(k => k + '=' + st.props[k]).join(',') + ']'; }
+function stateIndex(st) {
+  const k = stateKey(st); let i = S.bp.palette.findIndex(p => stateKey(p) === k);
+  if (i < 0) { S.bp.palette.push({ id: st.id, props: { ...st.props } }); i = S.bp.palette.length - 1; }
+  return i;
+}
+function cellState(i) { return { s: S.bp.cells[i], nbt: S.bp.bes.get(i) || null }; }
+function setCell(i, v) { S.bp.cells[i] = v.s; if (v.nbt) S.bp.bes.set(i, v.nbt); else S.bp.bes.delete(i); }
+function commit(label, changes) {
+  changes = changes.filter(c => c.before.s !== c.after.s || c.before.nbt !== c.after.nbt); if (!changes.length) return;
+  for (const c of changes) setCell(c.i, c.after);
+  hist.undo.push({ label, changes }); hist.redo = []; afterEdit();
+}
+function undo() { const e = hist.undo.pop(); if (!e) return; for (const c of [...e.changes].reverse()) setCell(c.i, c.before); hist.redo.push(e); afterEdit(); note(`元に戻しました：${e.label}`); }
+function redo() { const e = hist.redo.pop(); if (!e) return; for (const c of e.changes) setCell(c.i, c.after); hist.undo.push(e); afterEdit(); note(`やり直しました：${e.label}`); }
+function afterEdit() {
+  const bp = S.bp; bp.recount();
+  if (S.selected != null && bp.cells[S.selected] < 0) S.selected = null;
+  S.group = null; S.measure = S.measure.filter(i => bp.cells[i] >= 0);
+  refreshFacts(); renderLayer(); rebuild(); renderList(); renderInspector(); renderCalc(); renderBrush(); draw2d(); syncButtons();
+}
+function placeAt(i, replace) {
+  if (!S.brush) { note('先に「置くブロック」を選んでください'); return; }
+  const before = cellState(i); if (before.s >= 0 && !replace) return;
+  const s = stateIndex(S.brush);
+  // 新しく置いたブロックには生データ（nbt）がない。計算では初期値を使う
+  commit(before.s >= 0 ? `${prettyName(S.brush.id)} に置き換え` : `${prettyName(S.brush.id)} を置く`, [{ i, before, after: { s, nbt: null } }]);
+  // 置いた段が隠れている表示なら、その段へ移る
+  const y = S.bp.pos(i)[1]; if (visibleState(y) === 'none') { S.hiddenLayers.delete(y); setLayer(y); }
+}
+function eraseAt(i) { const before = cellState(i); if (before.s < 0) return; commit(`${prettyName(S.bp.palette[before.s].id)} を消す`, [{ i, before, after: { s: -1, nbt: null } }]); }
+const H_ORDER = ['north', 'east', 'south', 'west'];
+function rotateProps(props, vertical) {
+  const p = { ...props };
+  if (p.axis) p.axis = vertical ? (p.axis === 'y' ? 'x' : 'y') : ({ x: 'z', z: 'x', y: 'y' })[p.axis];
+  for (const key of ['facing', 'horizontal_facing']) {
+    if (!p[key]) continue;
+    if (vertical) { if (key === 'facing') p[key] = p[key] === 'up' ? 'down' : p[key] === 'down' ? 'north' : 'up'; }
+    else if (H_ORDER.includes(p[key])) p[key] = H_ORDER[(H_ORDER.indexOf(p[key]) + 1) % 4];
+  }
+  return p;
+}
+function rotateKey(vertical) {
+  if (S.tool === 'select' && S.selected != null) {
+    const i = S.selected; const before = cellState(i); const st = S.bp.palette[before.s];
+    const np = rotateProps(st.props, vertical); if (stateKey({ id: st.id, props: np }) === stateKey(st)) { note('このブロックには回せる向きがありません'); return; }
+    commit(`${prettyName(st.id)} を回す`, [{ i, before, after: { s: stateIndex({ id: st.id, props: np }), nbt: before.nbt } }]); return;
+  }
+  if (!S.brush) return;
+  const np = rotateProps(S.brush.props, vertical);
+  if (stateKey({ id: S.brush.id, props: np }) === stateKey(S.brush)) { note('このブロックには回せる向きがありません'); return; }
+  setBrush({ id: S.brush.id, props: np });
+}
+function setBrush(st) { S.brush = st; renderBrush(); if (S.tool === 'place') hovBox.material.color.set(themeColor('--accent')); }
+function defaultProps(id) {
+  const st = S.bp.palette.find(p => p.id === id); if (st) return { ...st.props };
+  return /shaft|cogwheel|chain_drive|gearshift|clutch|_log$|pillar/.test(id) ? { axis: 'y' } : {};
+}
+function renderBrush() {
+  const b = S.brush;
+  $('brushSw').style.background = b ? css(colorOf(b.id)) : 'transparent';
+  $('brushId').textContent = b ? b.id : '未選択';
+  $('brushProps').textContent = b && Object.keys(b.props).length ? Object.entries(b.props).map(([k, v]) => `${k}=${v}`).join('  ') : (b ? '向きなどの状態なし' : '');
+  const ids = [...new Set(S.bp.solid.map(i => S.bp.palette[S.bp.cells[i]].id))];
+  if (b && !ids.includes(b.id)) ids.unshift(b.id);
+  $('brushChips').innerHTML = ids.map(id => `<button type="button" data-id="${esc(id)}" aria-pressed="${b && b.id === id}" title="${esc(id)}"><span class="sw" style="background:${css(colorOf(id))}"></span>${esc(prettyName(id))}</button>`).join('');
+}
+function refreshFacts() {
+  const bp = S.bp;
+  $('fSize').textContent = `${bp.size[0]} × ${bp.size[1]} × ${bp.size[2]}`;
+  $('fCount').textContent = bp.solid.length.toLocaleString();
+  $('fKinds').textContent = new Set(bp.solid.map(i => bp.palette[bp.cells[i]].id)).size;
+  $('fBe').textContent = bp.bes.size.toLocaleString();
+  $('fEnt').textContent = bp.entityCount.toLocaleString();
+  $('fVer').textContent = versionName(bp.dataVersion);
+  $('fEdits').textContent = hist.undo.length ? `${hist.undo.length} 回` : 'なし';
+  $('undo').disabled = !hist.undo.length; $('redo').disabled = !hist.redo.length;
+  $('undo').title = hist.undo.length ? `元に戻す：${hist.undo.at(-1).label}（Ctrl+Z）` : 'Ctrl+Z';
+  $('redo').title = hist.redo.length ? `やり直す：${hist.redo.at(-1).label}（Ctrl+Y）` : 'Ctrl+Y';
+}
+let noteTimer = 0;
+function note(msg) {
+  const r = $('readout'); showReadout('お知らせ', `<p class="note" style="margin:0">${esc(msg)}</p>`);
+  clearTimeout(noteTimer); noteTimer = setTimeout(() => { if (r.querySelector('.rt span')?.textContent === 'お知らせ') { r.hidden = true; draw2d(); } }, 2600);
+}
+
+/* ---------- NBT writer and export ---------- */
+class Writer {
+  constructor() { this.buf = new Uint8Array(1024); this.n = 0; this.te = new TextEncoder(); }
+  need(k) { if (this.n + k > this.buf.length) { const b = new Uint8Array(Math.max(this.buf.length * 2, this.n + k)); b.set(this.buf); this.buf = b; } this.dv = new DataView(this.buf.buffer); }
+  i8(v) { this.need(1); this.dv.setInt8(this.n, v); this.n += 1; }
+  i16(v) { this.need(2); this.dv.setInt16(this.n, v); this.n += 2; }
+  i32(v) { this.need(4); this.dv.setInt32(this.n, v); this.n += 4; }
+  i64(v) { this.need(8); this.dv.setBigInt64(this.n, BigInt(v)); this.n += 8; }
+  f32(v) { this.need(4); this.dv.setFloat32(this.n, v); this.n += 4; }
+  f64(v) { this.need(8); this.dv.setFloat64(this.n, v); this.n += 8; }
+  str(s) { const b = this.te.encode(s); this.need(2 + b.length); this.dv.setUint16(this.n, b.length); this.n += 2; this.buf.set(b, this.n); this.n += b.length; }
+  bytes() { return this.buf.subarray(0, this.n); }
+}
+function writePayload(w, tag) {
+  switch (tag.t) {
+    case 1: w.i8(tag.v); break; case 2: w.i16(tag.v); break; case 3: w.i32(tag.v); break; case 4: w.i64(tag.v); break;
+    case 5: w.f32(tag.v); break; case 6: w.f64(tag.v); break; case 8: w.str(tag.v); break;
+    case 7: w.i32(tag.v.length); for (const x of tag.v) w.i8(x); break;
+    case 9: w.i8(tag.v.length ? tag.v[0].t : (tag.et || 0)); w.i32(tag.v.length); for (const x of tag.v) writePayload(w, x); break;
+    case 10: for (const [k, x] of Object.entries(tag.v)) { w.i8(x.t); w.str(k); writePayload(w, x); } w.i8(0); break;
+    case 11: w.i32(tag.v.length); for (const x of tag.v) w.i32(x); break;
+    case 12: w.i32(tag.v.length); for (const x of tag.v) w.i64(x); break;
+  }
+}
+const T = { int: v => ({ t: 3, v }), str: v => ({ t: 8, v }), list: (et, v) => ({ t: 9, et, v }), comp: v => ({ t: 10, v }) };
+function buildRoot(bp) {
+  // 使っている状態だけでパレットを作り直す。知らない一番上の項目と entities は元のまま残す
+  const used = new Map(); const pal = []; const blocks = [];
+  for (const i of bp.solid) {
+    const s = bp.cells[i]; if (!used.has(s)) { used.set(s, pal.length); pal.push(bp.palette[s]); }
+    const b = { pos: T.list(3, bp.pos(i).map(T.int)), state: T.int(used.get(s)) }; const nbt = bp.bes.get(i); if (nbt) b.nbt = nbt;
+    blocks.push(T.comp(b));
+  }
+  const palette = pal.map(st => { const o = { Name: T.str(st.id) }; if (Object.keys(st.props).length) o.Properties = T.comp(Object.fromEntries(Object.entries(st.props).map(([k, v]) => [k, T.str(v)]))); return T.comp(o); });
+  const base = bp.root ? { ...bp.root.v } : { entities: T.list(10, []), DataVersion: T.int(bp.dataVersion || 2975) };
+  delete base.palettes;
+  return T.comp({ ...base, size: T.list(3, bp.size.map(T.int)), palette: T.list(10, palette), blocks: T.list(10, blocks) });
+}
+async function exportNbt() {
+  const bp = S.bp; const w = new Writer(); w.i8(10); w.str(''); writePayload(w, buildRoot(bp));
+  const raw = w.bytes(); const gz = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+  // 書き出した内容を読み直して確かめる
+  const back = blueprintFromNbt('check', await parseNbt(gz.slice()));
+  const same = back.solid.length === bp.solid.length && back.solid.every((i, k) => stateKey(back.palette[back.cells[i]]) === stateKey(bp.palette[bp.cells[bp.solid[k]]]));
+  const fname = bp.name.replace(/\.nbt$/, '') + (hist.undo.length ? '_edited' : '') + '.nbt';
+  showReadout('書き出し', `<dl class="kv"><dt>ファイル名</dt><dd>${esc(fname)}</dd><dt>大きさ</dt><dd>${gz.length.toLocaleString()} バイト（gzip）</dd>
+    <dt>ブロック</dt><dd>${bp.solid.length.toLocaleString()} 個・状態 ${new Set(bp.solid.map(i => bp.cells[i])).size} 種類</dd>
+    <dt>読み直し</dt><dd>${same ? '一致（配置と状態を確認）' : '不一致'}</dd></dl>
+    <p class="note" style="margin:0" id="saveMsg">保存先を選ぶ画面を開いています…</p>`);
+  const msg = t => { const m = $('saveMsg'); if (m) m.textContent = t; };
+  const blocked = 'この表示環境ではファイル保存が許可されていないため、作成と読み直しの確認までです。保存は本番のアプリで行います。';
+  if (!window.showSaveFilePicker) { msg(blocked); return; }
+  try {
+    const fh = await showSaveFilePicker({ suggestedName: fname, types: [{ description: 'Structure NBT', accept: { 'application/octet-stream': ['.nbt'] } }] });
+    const ws = await fh.createWritable(); await ws.write(gz); await ws.close(); msg('保存しました。');
+  } catch (e) { msg(e && e.name === 'AbortError' ? '保存を取り消しました。' : blocked); }
+}
+
+/* ---------- tools ---------- */
+function setTool(t) {
+  S.tool = t; S.measure = []; S.group = null; $('readout').hidden = true; draw2d();
+  for (const b of $('toolRail').children) b.setAttribute('aria-pressed', String(b.dataset.tool === t));
+  if (t === 'measure') showReadout('計測', '<p class="note" style="margin:0">1つ目のブロックをクリックしてください。</p>');
+  if (t === 'place') showReadout('置く', `<p class="note" style="margin:0">3Dはクリックした面の隣、何もない所は今の段（${S.layer + 1}）の床に置きます。Shift+クリックで置き換え。2Dはマスをクリック。R で向きを回します。</p>`);
+  if (t === 'erase') showReadout('消す', '<p class="note" style="margin:0">クリックしたブロックを消します。Ctrl+Z で元に戻せます。</p>');
+  if (t === 'connect') showReadout('つながり', '<p class="note" style="margin:0">ブロックをクリックすると、隣り合う同じ種類のブロックをまとめて強調します。</p>');
+  rebuild(); draw2d(); syncButtons(); renderHud();
+}
+function showReadout(title, body) {
+  const r = $('readout'); r.innerHTML = `<div class="rt"><span>${title}</span><button type="button" class="x" aria-label="閉じる">×</button></div>${body}`; r.hidden = false;
+  r.querySelector('.x').addEventListener('click', () => { r.hidden = true; draw2d(); });
+  draw2d();
+}
+function usePick(i) {
+  if (S.tool === 'select') { select(i); return; }
+  if (i == null) return;
+  if (S.tool === 'erase') { eraseAt(i); return; }
+  if (S.tool === 'pick') { const st = S.bp.palette[S.bp.cells[i]]; setBrush({ id: st.id, props: { ...st.props } }); note(`置くブロックを ${st.id} にしました`); return; }
+  if (S.tool === 'measure') {
+    S.measure = S.measure.length >= 2 ? [i] : [...S.measure, i];
+    if (S.measure.length === 1) {
+      const [x, y, z] = S.bp.pos(i);
+      showReadout('計測', `<p class="note" style="margin:0">1つ目：(${x}, ${y}, ${z})。2つ目のブロックをクリックしてください。</p>`);
+    } else {
+      const [a, b] = S.measure.map(S.bp.pos); const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const eu = Math.hypot(...d), mh = Math.abs(d[0]) + Math.abs(d[1]) + Math.abs(d[2]);
+      showReadout('計測', `<dl class="kv"><dt>1つ目</dt><dd>(${a.join(', ')})</dd><dt>2つ目</dt><dd>(${b.join(', ')})</dd>
+        <dt>差</dt><dd>X ${sign(d[0])}　Y ${sign(d[1])}　Z ${sign(d[2])}</dd>
+        <dt>直線距離</dt><dd>${eu.toFixed(2)} ブロック</dd><dt>軸に沿った距離</dt><dd>${mh} ブロック（シャフトやベルトを軸に沿って引く長さ）</dd>
+        <dt>囲む範囲</dt><dd>${Math.abs(d[0]) + 1} × ${Math.abs(d[1]) + 1} × ${Math.abs(d[2]) + 1}</dd></dl>`);
+    }
+    placeMeasure(); draw2d(); return;
+  }
+  if (S.tool === 'connect') {
+    const id = S.bp.palette[S.bp.cells[i]].id; S.group = floodSame(i); S.highlight = null;
+    const ys = new Set([...S.group].map(j => S.bp.pos(j)[1]));
+    showReadout('つながり', `<dl class="kv"><dt>種類</dt><dd>${esc(id)}</dd><dt>個数</dt><dd>${S.group.size.toLocaleString()} 個</dd><dt>またがる段</dt><dd>${ys.size} 段</dd></dl>
+      <p class="note" style="margin:0">隣り合う同じ種類のブロックを集めただけで、回転や配管のつながりではありません。</p>`);
+    rebuild(); draw2d(); renderList(); syncButtons();
+  }
+}
+const sign = n => (n > 0 ? '+' : '') + n;
+function floodSame(start) {
+  const bp = S.bp; const [W, H, D] = bp.size; const st = bp.cells[start]; const seen = new Set([start]); const q = [start];
+  while (q.length) {
+    const i = q.pop(); const [x, y, z] = bp.pos(i);
+    for (const [dx, dy, dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]) {
+      const nx = x + dx, ny = y + dy, nz = z + dz; if (nx < 0 || ny < 0 || nz < 0 || nx >= W || ny >= H || nz >= D) continue;
+      const j = bp.idx(nx, ny, nz); if (!seen.has(j) && bp.cells[j] === st) { seen.add(j); q.push(j); }
+    }
+  }
+  return seen;
+}
+function setLayer(l) {
+  const H = S.bp.size[1]; S.layer = Math.max(0, Math.min(H - 1, l));
+  renderLayer(); rebuild(); draw2d(); if (S.countScope === 'layer') renderList();
+}
+
+function load(bp) {
+  S.bp = bp; S.selected = null; S.hover = null; S.highlight = null; S.layer = bp.solid.length ? bp.size[1] - 1 : 0;
+  S.hiddenLayers = new Set(); S.measure = []; S.group = null; $('readout').hidden = true; if (S.tool !== 'select') setTool(S.tool);
+  $('err').hidden = true; hist.undo = []; hist.redo = [];
+  const first = bp.solid.length ? bp.palette[bp.cells[bp.solid[0]]] : { id: 'create:andesite_casing', props: {} };
+  S.brush = { id: first.id, props: { ...first.props } }; renderBrush();
+  refreshFacts();
+  $('stSel').textContent = '–';
+  buildHelpers(); renderLayer(); rebuild(); fitCamera(); renderList(); renderInspector(); renderCalc(); draw2d(); syncButtons();
+}
+async function loadBytes(name, u8) {
+  try { load(blueprintFromNbt(name, await parseNbt(u8))); }
+  catch (e) { $('err').hidden = false; $('err').textContent = `${name} を開けませんでした。${e.message}`; }
+}
+
+/* ---------- wiring ---------- */
+const sel = $('sample');
+for (const k of Object.keys(SAMPLES)) sel.add(new Option('例：' + k.replace(/\.nbt$/, '').replace('[AstralExamples] ', 'Create Astral ').replace(/^_$/, '小型ベルトライン'), k));
+sel.add(new Option('例：負荷テスト（自動生成・約9千ブロック）', '__stress'));
+sel.add(new Option('新規（空の 16 × 8 × 16）', '__new'));
+sel.addEventListener('change', () => openSample(sel.value));
+function openSample(k) {
+  if (k === '__stress') { load(makeStressSample()); return; }
+  if (k === '__new') { load(makeEmpty()); setTool('place'); return; }
+  const b = atob(SAMPLES[k]); const u8 = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u8[i] = b.charCodeAt(i);
+  loadBytes(k.replace(/^_\.nbt$/, '小型ベルトライン.nbt'), u8);
+}
+$('openBtn').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', async e => { const f = e.target.files[0]; if (f) { sel.add(new Option(f.name, '__file'), 0); sel.value = '__file'; loadBytes(f.name, new Uint8Array(await f.arrayBuffer())); } });
+const view = $('view'); let dragDepth = 0;
+view.addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; $('drop').hidden = false; });
+view.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('drop').hidden = true; } });
+view.addEventListener('dragover', e => e.preventDefault());
+view.addEventListener('drop', async e => { e.preventDefault(); dragDepth = 0; $('drop').hidden = true; const f = e.dataTransfer.files[0]; if (f) loadBytes(f.name, new Uint8Array(await f.arrayBuffer())); });
+
+function setView(v) {
+  S.view = v; $('v3d').setAttribute('aria-pressed', String(v === '3d')); $('v2d').setAttribute('aria-pressed', String(v === '2d'));
+  canvas3.hidden = v !== '3d'; canvas2.hidden = v !== '2d'; $('compass').hidden = v !== '2d';
+  for (const b of $('camSeg').children) b.disabled = v !== '3d';
+  $('fit').disabled = $('tgAxes').disabled = v !== '3d'; $('tgLabels').disabled = v !== '2d';
+  renderHud(); if (v === '2d') draw2d(); else resize();
+}
+$('v3d').addEventListener('click', () => setView('3d'));
+$('v2d').addEventListener('click', () => setView('2d'));
+$('modeSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return; S.mode = b.dataset.mode;
+  for (const x of $('modeSeg').children) x.setAttribute('aria-pressed', String(x === b));
+  renderHud(); rebuild();
+});
+$('toolRail').addEventListener('click', e => { const b = e.target.closest('button'); if (b && !b.disabled) setTool(b.dataset.tool); });
+$('showAllLayers').addEventListener('click', () => { S.hiddenLayers.clear(); renderLayer(); rebuild(); });
+$('soloLayer').addEventListener('click', () => { const H = S.bp.size[1]; S.hiddenLayers = new Set([...Array(H).keys()].filter(y => y !== S.layer)); renderLayer(); rebuild(); });
+$('tUp').addEventListener('click', () => setLayer(S.layer + 1));
+$('tDown').addEventListener('click', () => setLayer(S.layer - 1));
+$('camSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b && S.bp) setCam(b.dataset.cam); });
+$('fit').addEventListener('click', () => S.bp && setCam(S.cam || 'iso'));
+function toggle(btnId, key, after) { $(btnId).addEventListener('click', () => { S[key] = !S[key]; $(btnId).setAttribute('aria-pressed', String(S[key])); after(); }); }
+toggle('tgGrid', 'grid', () => { if (gridLines) gridLines.visible = S.grid; draw2d(); });
+toggle('tgAxes', 'axes', () => { if (axes) axes.visible = S.axes; });
+toggle('tgLabels', 'labels', () => draw2d());
+$('clearSel').addEventListener('click', () => select(null));
+$('clearHl').addEventListener('click', () => { setHighlight(null); });
+$('undo').addEventListener('click', undo);
+$('redo').addEventListener('click', redo);
+$('exportBtn').addEventListener('click', () => exportNbt().catch(err => note('書き出せませんでした：' + err.message)));
+$('brushChips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; setBrush({ id: b.dataset.id, props: defaultProps(b.dataset.id) }); });
+$('addIdForm').addEventListener('submit', e => {
+  e.preventDefault(); const v = $('addId').value.trim();
+  if (!/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(v)) { note('IDは「mod名:ブロック名」の形で入力してください（例: create:shaft）'); return; }
+  setBrush({ id: v, props: defaultProps(v) }); $('addId').value = ''; $('addId').blur(); if (S.tool !== 'place') setTool('place');
+});
+function panel(btnId, cls) { $(btnId).addEventListener('click', () => { const on = $('app').classList.toggle(cls); $(btnId).setAttribute('aria-pressed', String(!on)); }); }
+panel('tgLeft', 'no-left'); panel('tgRight', 'no-right');
+if (!document.documentElement.requestFullscreen) $('fs').hidden = true;
+$('fs').addEventListener('click', () => {
+  const p = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  if (p && p.catch) p.catch(() => { $('fs').disabled = true; $('fs').title = 'この環境では全画面にできません'; });
+});
+document.addEventListener('fullscreenchange', () => { $('fs').textContent = document.fullscreenElement ? '全画面を終了' : '全画面'; });
+$('cntAll').addEventListener('click', () => { S.countScope = 'all'; $('cntAll').setAttribute('aria-pressed', 'true'); $('cntLayer').setAttribute('aria-pressed', 'false'); renderList(); });
+$('cntLayer').addEventListener('click', () => { S.countScope = 'layer'; $('cntAll').setAttribute('aria-pressed', 'false'); $('cntLayer').setAttribute('aria-pressed', 'true'); renderList(); });
+$('search').addEventListener('input', e => { S.filter = e.target.value; renderList(); });
+window.addEventListener('keydown', e => {
+  if (!S.bp || e.target.matches('input, select, textarea')) return;
+  if (e.key === 'PageUp' || e.key === ']') { setLayer(S.layer + 1); e.preventDefault(); }
+  if (e.key === 'PageDown' || e.key === '[') { setLayer(S.layer - 1); e.preventDefault(); }
+  if (e.key === 'Escape') select(null);
+  if (e.key === 'g' || e.key === 'G') $('tgGrid').click();
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { e.shiftKey ? redo() : undo(); e.preventDefault(); return; }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { redo(); e.preventDefault(); return; }
+  if (e.ctrlKey || e.metaKey) return;
+  if (e.key === 'b' || e.key === 'B') setTool('place');
+  if (e.key === 'e' || e.key === 'E') setTool('erase');
+  if (e.key === 'i' || e.key === 'I') setTool('pick');
+  if (e.key === 'r' || e.key === 'R') rotateKey(e.shiftKey);
+  if ((e.key === 'Delete' || e.key === 'Backspace') && S.selected != null) { eraseAt(S.selected); e.preventDefault(); }
+  if (e.key === 'v' || e.key === 'V') setTool('select');
+  if (e.key === 'm' || e.key === 'M') setTool('measure');
+  if (e.key === 'c' || e.key === 'C') setTool('connect');
+  if (e.key === 'ArrowUp' && e.altKey) { setLayer(S.layer + 1); e.preventDefault(); }
+  if (e.key === 'ArrowDown' && e.altKey) { setLayer(S.layer - 1); e.preventDefault(); }
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+document.fonts && document.fonts.ready.then(() => draw2d());
+
+applyTheme();
+sel.value = Object.keys(SAMPLES)[0]; openSample(sel.value);
+</script>
+
+</html>
