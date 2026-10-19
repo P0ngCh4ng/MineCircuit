@@ -357,7 +357,7 @@ details.nbt summary { cursor: pointer; color: var(--fg-2); font-family: var(--fo
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
-const SAMPLES = {"_.nbt": "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"};
+const SAMPLES = {};
 
 /* ---------- NBT ---------- */
 async function gunzip(u8) {
@@ -450,6 +450,33 @@ function makeStressSample() {
     if (st >= 0) blocks.push({ pos: [x, y, z], state: st, nbt: null });
   }
   return makeBlueprint('負荷テスト（自動生成）', [W, H, D], palette, blocks, 3955, 0, []);
+}
+function makeDemoSample() {
+  // デモ用に作った配置。見た目の例で、ゲームで動くことは確かめていない
+  const pal = [
+    { id: 'minecraft:polished_andesite', props: {} },
+    { id: 'create:creative_motor', props: { facing: 'east' } },
+    { id: 'create:shaft', props: { axis: 'x' } },
+    { id: 'create:cogwheel', props: { axis: 'x' } },
+    { id: 'create:belt', props: { facing: 'east', slope: 'horizontal', part: 'start', casing: 'false' } },
+    { id: 'create:belt', props: { facing: 'east', slope: 'horizontal', part: 'middle', casing: 'false' } },
+    { id: 'create:belt', props: { facing: 'east', slope: 'horizontal', part: 'end', casing: 'false' } },
+    { id: 'create:mechanical_press', props: { horizontal_facing: 'north' } },
+    { id: 'create:shaft', props: { axis: 'z' } },
+    { id: 'create:cogwheel', props: { axis: 'z' } },
+    { id: 'create:depot', props: {} },
+    { id: 'create:andesite_casing', props: {} },
+    { id: 'create:gearbox', props: { axis: 'y' } },
+  ];
+  const blocks = []; const put = (x, y, z, s) => blocks.push({ pos: [x, y, z], state: s, nbt: null });
+  for (let x = 0; x < 10; x++) for (let z = 0; z < 5; z++) put(x, 0, z, 0);
+  put(0, 1, 2, 1); put(1, 1, 2, 2); put(2, 1, 2, 2); put(3, 1, 2, 3);
+  put(4, 1, 2, 4); for (let x = 5; x < 8; x++) put(x, 1, 2, 5); put(8, 1, 2, 6);
+  put(9, 1, 2, 10);
+  put(3, 1, 1, 12); put(3, 2, 1, 8); put(3, 3, 1, 9); put(4, 3, 1, 8); put(5, 3, 1, 9);
+  put(6, 3, 1, 8); put(6, 3, 2, 7);
+  for (const x of [2, 4, 6]) put(x, 1, 4, 11);
+  return makeBlueprint('デモ：小さな加工ライン（自動生成）', [10, 4, 5], pal, blocks, 3955, 0, []);
 }
 function makeEmpty() {
   return makeBlueprint('新規.nbt', [16, 8, 16], [], [], 2975, 0, []);
@@ -1053,11 +1080,13 @@ async function loadBytes(name, u8) {
 /* ---------- wiring ---------- */
 const sel = $('sample');
 for (const k of Object.keys(SAMPLES)) sel.add(new Option('例：' + k.replace(/\.nbt$/, '').replace('[AstralExamples] ', 'Create Astral ').replace(/^_$/, '小型ベルトライン'), k));
+sel.add(new Option('例：小さな加工ライン（デモ）', '__demo'));
 sel.add(new Option('例：負荷テスト（自動生成・約9千ブロック）', '__stress'));
 sel.add(new Option('新規（空の 16 × 8 × 16）', '__new'));
 sel.addEventListener('change', () => openSample(sel.value));
 function openSample(k) {
   if (k === '__stress') { load(makeStressSample()); return; }
+  if (k === '__demo') { load(makeDemoSample()); return; }
   if (k === '__new') { load(makeEmpty()); setTool('place'); return; }
   const b = atob(SAMPLES[k]); const u8 = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u8[i] = b.charCodeAt(i);
   loadBytes(k.replace(/^_\.nbt$/, '小型ベルトライン.nbt'), u8);
@@ -1142,7 +1171,7 @@ new MutationObserver(applyTheme).observe(document.documentElement, { attributes:
 document.fonts && document.fonts.ready.then(() => draw2d());
 
 applyTheme();
-sel.value = Object.keys(SAMPLES)[0]; openSample(sel.value);
+sel.value = Object.keys(SAMPLES)[0] || '__demo'; openSample(sel.value);
 </script>
 
 </html>
