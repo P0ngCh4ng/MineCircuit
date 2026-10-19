@@ -12,6 +12,7 @@ export interface CalcWorkerHost {
 export function createCalcWorkerHost(registry: PluginRegistry, post: (message: FromCalcWorker) => void): CalcWorkerHost {
   let nextCallId = 1
   const pendingCalls = new Map<number, { resolve: (text: string | null) => void; reject: (e: Error) => void }>()
+  const pendingLists = new Map<number, { resolve: (entries: string[]) => void; reject: (e: Error) => void }>()
 
   /** Worker の中の Modpack の代理。設定ファイルは画面側に問い合わせる */
   function packProxy(info: PackInfo, requestId: number): CalcModpack {
@@ -24,6 +25,12 @@ export function createCalcWorkerHost(registry: PluginRegistry, post: (message: F
           const callId = nextCallId++
           pendingCalls.set(callId, { resolve, reject })
           post({ type: 'config', requestId, callId, path })
+        }),
+      list: (path) =>
+        new Promise<string[]>((resolve, reject) => {
+          const callId = nextCallId++
+          pendingLists.set(callId, { resolve, reject })
+          post({ type: 'list', requestId, callId, path })
         }),
     }
   }
@@ -55,6 +62,14 @@ export function createCalcWorkerHost(registry: PluginRegistry, post: (message: F
           pendingCalls.delete(message.callId)
           if (message.error !== undefined) call.reject(new Error(message.error))
           else call.resolve(message.text)
+          break
+        }
+        case 'list-reply': {
+          const call = pendingLists.get(message.callId)
+          if (!call) return
+          pendingLists.delete(message.callId)
+          if (message.error !== undefined) call.reject(new Error(message.error))
+          else call.resolve([...message.entries])
           break
         }
       }

@@ -65,6 +65,9 @@ export class WorkerCalcBackend implements CalcBackend {
       case 'config':
         void this.answerConfig(message.requestId, message.callId, message.path)
         break
+      case 'list':
+        void this.answerList(message.requestId, message.callId, message.path)
+        break
     }
   }
 
@@ -76,6 +79,17 @@ export class WorkerCalcBackend implements CalcBackend {
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e)
       this.port.postMessage({ type: 'config-reply', callId, text: null, error })
+    }
+  }
+
+  private async answerList(requestId: number, callId: number, path: string): Promise<void> {
+    const pack = this.pending.get(requestId)?.pack ?? null
+    try {
+      const entries = pack?.list ? await pack.list(path) : []
+      this.port.postMessage({ type: 'list-reply', callId, entries: [...entries] })
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e)
+      this.port.postMessage({ type: 'list-reply', callId, entries: [], error })
     }
   }
 }

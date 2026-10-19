@@ -16,6 +16,12 @@ export interface CalcModpack {
   hasNamespace(ns: string): boolean
   /** Modpack のフォルダからの相対パスで設定ファイルを読む。なければ null */
   config(path: string): Promise<string | null>
+  /**
+   * Modpack のフォルダの中の項目の名前（名前順。フォルダは末尾に `/`。`saves/` など）。
+   * フォルダがなければ空の配列。ワールドごとの設定（saves/<ワールド>/serverconfig/）を探すのに使う。
+   * 持たない実装もあるので省略できる。
+   */
+  list?(dir: string): Promise<string[]>
 }
 
 /** プラグインの run に渡すもの */
