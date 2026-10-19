@@ -28,6 +28,14 @@ export type ToCalcWorker =
       /** 読めなかったときの理由 */
       readonly error?: string
     }
+  | {
+      /** 'list' の返事 */
+      readonly type: 'list-reply'
+      readonly callId: number
+      readonly entries: readonly string[]
+      /** 読めなかったときの理由 */
+      readonly error?: string
+    }
 
 /** Worker → 画面 */
 export type FromCalcWorker =
@@ -37,6 +45,13 @@ export type FromCalcWorker =
       /** プラグインが Modpack の設定ファイルを読みたい */
       readonly type: 'config'
       /** どの計算から読みたいか */
+      readonly requestId: number
+      readonly callId: number
+      readonly path: string
+    }
+  | {
+      /** プラグインが Modpack のフォルダの中の一覧を見たい（saves/ など） */
+      readonly type: 'list'
       readonly requestId: number
       readonly callId: number
       readonly path: string

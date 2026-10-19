@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { blueprintFixture } from '../../tests/fixtures/blueprintFixture'
 import { NOOP_PLUGIN_ID, noopCalcPlugin } from '../../tests/fixtures/noopCalcPlugin'
-import type { CalcModpack } from '../calc/calcPlugin'
+import type { CalcModpack, CalcPlugin } from '../calc/calcPlugin'
+import { resolved } from '../calc/provenance'
 import { PluginRegistry } from '../calc/pluginRegistry'
 import type { FromCalcWorker, ToCalcWorker } from './calcProtocol'
 import { WorkerCalcBackend, type CalcWorkerPort } from './calcWorkerClient'
@@ -67,6 +68,34 @@ describe('計算の Worker', () => {
     // 設計図に出てくる namespace のうち、Modpack にあるものだけを送る
     const run = worker.sent.find((m) => m.type === 'run')
     expect(run?.type === 'run' && run.pack).toEqual({ namespaces: ['create'] })
+  })
+
+  it('Worker の中から Modpack のフォルダの一覧を画面側に問い合わせる', async () => {
+    const asked: string[] = []
+    const pack: CalcModpack = {
+      hasNamespace: () => true,
+      config: async () => null,
+      list: async (dir) => {
+        asked.push(dir)
+        return ['World/']
+      },
+    }
+    const listing: CalcPlugin = {
+      ...noopCalcPlugin(),
+      run: async (_bp, ctx) => ({
+        summary: [{ label: '一覧', value: resolved((await ctx.pack?.list?.('saves/'))?.join() ?? '', 'modpack') }],
+        issues: [],
+        assumptions: [],
+      }),
+    }
+    const [o] = await new WorkerCalcBackend(fakeWorker(new PluginRegistry([listing]))).run({ blueprint: bp, pack, ports: [] })
+    expect(asked).toEqual(['saves/'])
+    expect(o.status === 'ok' && o.result.summary[0].value.value).toBe('World/')
+
+    // list を持たない Modpack では空の一覧
+    const noList: CalcModpack = { hasNamespace: () => true, config: async () => null }
+    const [o2] = await new WorkerCalcBackend(fakeWorker(new PluginRegistry([listing]))).run({ blueprint: bp, pack: noList, ports: [] })
+    expect(o2.status === 'ok' && o2.result.summary[0].value.value).toBe('')
   })
 
   it('設定ファイルを読めなかったら、そのプラグインの error になる', async () => {
