@@ -32,14 +32,14 @@
 
 ## コマンド
 
-雛形を作った後に、実際のスクリプト名に合わせてここを直す。
-
 ```
-npm run dev        # 開発サーバー
-npm run test       # テスト（Vitest）
-npm run typecheck  # 型チェック（vue-tsc）
-npm run lint       # Lint
-npm run build      # 本番ビルド
+npm install        # 依存を入れる（バージョンは package.json で固定。.npmrc で save-exact）
+npm run dev        # 開発サーバー（Vite）
+npm run typecheck  # 型チェック（vue-tsc -b）
+npm run build      # 本番ビルド（型チェックのあと vite build。出力は dist/）
+npm run preview    # ビルド結果の確認
+npm run test       # テスト（Vitest）。#2 で追加する
+npm run lint       # Lint（ESLint）。#2 で追加する
 ```
 
 作業を終える前に `test`・`typecheck`・`lint` を通すこと。
