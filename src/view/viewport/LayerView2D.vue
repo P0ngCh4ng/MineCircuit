@@ -7,10 +7,12 @@ import { useDocumentSession } from '../document/documentSession'
 import { useCalcStore } from '../stores/calcStore'
 import { clampLayer, useLayerStore } from '../stores/layerStore'
 import { useProbeStore } from '../stores/probeStore'
+import { useMeasureStore } from '../stores/measureStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
 import { pick2D, type GridLayout2D, type PickScene2D } from '../tools/picker'
 import type { PickTarget } from '../tools/tool'
+import { ANALYSIS_COLORS_2D, drawAnalysisOverlay2D } from './analysisOverlay2D'
 import { layoutGrid2D } from './layerGrid2D'
 import { DARK_THEME_2D, drawLayer2D, LIGHT_THEME_2D } from './layerRenderer2D'
 
@@ -24,6 +26,7 @@ const viewMode = useViewStore()
 const highlight = useSearchHighlight()
 const calc = useCalcStore()
 const probe = useProbeStore()
+const measures = useMeasureStore()
 
 const host = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -78,11 +81,26 @@ function draw(): void {
     highlighted: highlight.value,
     calcMarks: { network: probe.networkPositions, issues: calc.issuePositions },
   })
+  // 計測とつながり（#16）
+  drawAnalysisOverlay2D(
+    ctx,
+    grid,
+    layer.value,
+    { measurePoints: measures.measurePoints, connectGroup: measures.connectGroup?.positions ?? null },
+    ANALYSIS_COLORS_2D[dark.value ? 'dark' : 'light'],
+  )
 }
 
 // 計算結果の印（ネットワークの強調と問題の位置。#31）が変わったら描き直す
 watch(
   () => [probe.networkPositions, calc.issuePositions],
+  () => draw(),
+  { flush: 'post' },
+)
+
+// 計測とつながりが変わったら描き直す（#16）
+watch(
+  () => [measures.measurePoints, measures.connectGroup],
   () => draw(),
   { flush: 'post' },
 )

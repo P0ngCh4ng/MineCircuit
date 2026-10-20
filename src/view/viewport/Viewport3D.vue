@@ -8,6 +8,7 @@ import { useDocumentSession } from '../document/documentSession'
 import { useBrushStore } from '../stores/brushStore'
 import { useCalcStore } from '../stores/calcStore'
 import { useProbeStore } from '../stores/probeStore'
+import { useMeasureStore } from '../stores/measureStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
 import { blockColor } from './blockColor'
@@ -36,6 +37,7 @@ const brush = useBrushStore()
 const highlight = useSearchHighlight()
 const calc = useCalcStore()
 const probe = useProbeStore()
+const measures = useMeasureStore()
 
 const host = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -193,6 +195,16 @@ onMounted(() => {
       () => [probe.networkPositions, calc.issuePositions, view.layerDisplay] as const,
       ([network, issues, display]) => {
         calcOverlay.update(network, issues, display)
+        render()
+      },
+      { immediate: true },
+    ),
+    // 計測とつながり（#16）
+    watch(
+      () => [measures.measurePoints, measures.connectGroup] as const,
+      ([points, group]) => {
+        scene.setMeasurePoints(points)
+        scene.setConnectGroup(group?.positions ?? null)
         render()
       },
       { immediate: true },
