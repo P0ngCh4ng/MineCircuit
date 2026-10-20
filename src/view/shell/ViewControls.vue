@@ -4,6 +4,8 @@
 import { computed } from 'vue'
 import EditControls from '../edit/EditControls.vue'
 import { useDocumentSession } from '../document/documentSession'
+import { LAYER_MODES, type LayerMode } from '../layers/layerDisplay'
+import { useLayerNavigation } from '../layers/useLayerNavigation'
 import { useSearchStore } from '../stores/searchStore'
 import { useViewStore } from '../stores/viewStore'
 import { CAMERA_VIEWS } from '../viewport/cameraViews'
@@ -15,6 +17,12 @@ const search = useSearchStore()
 const noBlueprint = computed(() => session.current.value === null)
 /** 視点は3D表示だけで使う */
 const noCamera = computed(() => noBlueprint.value || view.mode !== '3d')
+const nav = useLayerNavigation()
+const layerText = computed(() => (nav.height.value > 0 ? `${nav.current.value + 1} / ${nav.height.value}` : '– / –'))
+
+function onModeChange(e: Event): void {
+  view.setLayerMode((e.target as HTMLSelectElement).value as LayerMode)
+}
 </script>
 
 <template>
@@ -38,7 +46,19 @@ const noCamera = computed(() => noBlueprint.value || view.mode !== '3d')
         全体を表示
       </button>
     </div>
-    <!-- 段の移動と表示方法（#10） -->
+    <div class="bar-group" role="group" aria-label="段">
+      <span class="bar-label">段</span>
+      <button type="button" data-layer="down" title="1つ下の段へ（PageDown）" aria-label="1つ下の段へ" :disabled="!nav.canDown.value" @click="nav.down()">
+        ▼
+      </button>
+      <span class="layer-box" data-testid="layer-current" aria-live="polite">{{ layerText }}</span>
+      <button type="button" data-layer="up" title="1つ上の段へ（PageUp）" aria-label="1つ上の段へ" :disabled="!nav.canUp.value" @click="nav.up()">
+        ▲
+      </button>
+      <select aria-label="段の表示方法" title="段の表示方法" :value="view.layerMode" :disabled="noBlueprint" @change="onModeChange">
+        <option v-for="m in LAYER_MODES" :key="m.id" :value="m.id" :title="m.title">{{ m.label }}</option>
+      </select>
+    </div>
     <div class="bar-group" role="group" aria-label="補助表示">
       <span class="bar-label">補助表示</span>
       <button type="button" data-toggle="grid" title="床のマス目を出す（G）" :aria-pressed="view.showGrid" @click="view.toggleGrid()">
@@ -81,6 +101,13 @@ const noCamera = computed(() => noBlueprint.value || view.mode !== '3d')
 </template>
 
 <style scoped>
+.layer-box {
+  min-width: 56px;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 button[aria-pressed='true'] {
   background: color-mix(in srgb, Highlight 22%, Canvas);
   border-color: Highlight;

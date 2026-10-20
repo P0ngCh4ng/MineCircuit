@@ -1,5 +1,5 @@
 // 今の段（docs/design.md の ViewState の layer）。値は y（0 始まり）。画面では +1 して出す。
-// ここでは値を持つだけ。段の移動（▲▼、PageUp / PageDown）と表示方法は #10 で足す。
+// ここでは値を持つだけ。設計図の高さに収めて動かすのは layers/useLayerNavigation.ts、表示方法は viewStore。
 
 import { defineStore } from 'pinia'
 import { ref } from 'vue'

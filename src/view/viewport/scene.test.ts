@@ -7,8 +7,8 @@ import { placeBlock } from '../../edit/editCommand'
 import { EditHistory } from '../../edit/editHistory'
 import { layerVisibility, SHOW_ALL_LAYERS, type LayerDisplay } from '../layers/layerDisplay'
 import { blockColor, blockColorCss, hslToHex } from './blockColor'
-import { collectBlockInstances, countInstances } from './blockInstances'
-import { BlueprintMeshBuilder, type BlockMeshInfo } from './blueprintMeshBuilder'
+import { collectBlockInstances, countInstances, countVisible } from './blockInstances'
+import { BlueprintMeshBuilder, layerClipFor, type BlockMeshInfo } from './blueprintMeshBuilder'
 import { BlueprintScene } from './blueprintScene'
 import { blueprintCenter, cameraPose, fitDistance, viewDirection } from './cameraViews'
 import { DARK_THEME, LIGHT_THEME } from './viewportTheme'
@@ -63,19 +63,25 @@ describe('collectBlockInstances', () => {
       .place([0, 0, 0], 'create:shaft', { axis: 'x' })
       .place([1, 0, 0], 'create:shaft', { axis: 'y' })
       .toBlueprint()
-    const groups = collectBlockInstances(bp, () => 'solid')
+    const groups = collectBlockInstances(bp)
     expect(groups).toHaveLength(1)
-    expect(groups[0]).toMatchObject({ id: 'create:shaft', color: blockColor('create:shaft'), ghost: [] })
-    expect(groups[0].solid).toEqual([0, 0, 0, 1, 0, 0])
+    expect(groups[0]).toMatchObject({ id: 'create:shaft', color: blockColor('create:shaft') })
+    expect(groups[0].positions).toEqual([0, 0, 0, 1, 0, 0])
+    expect([...groups[0].layerCounts]).toEqual([[0, 2]])
   })
 
-  it('ID の順に並べ、隠す段は入れず、半透明の段は ghost に入れる', () => {
-    const groups = collectBlockInstances(sample(), (y) => layerVisibility(display(0, 'ghostAbove', [1]), y))
+  it('ID の順に並べ、すべての段を集め、段ごとの数から見える数を数える', () => {
+    const groups = collectBlockInstances(sample())
     expect(groups.map((g) => g.id)).toEqual(['create:cogwheel', 'create:shaft', 'minecraft:stone'])
-    const cog = groups[0]
-    expect(cog.solid).toEqual([])
-    expect(cog.ghost).toEqual([2, 2, 2])
-    expect(countInstances(groups)).toEqual({ solid: 4, ghost: 1 })
+    expect(groups[0].positions).toEqual([2, 2, 2])
+    expect([...groups[2].layerCounts]).toEqual([
+      [0, 3],
+      [1, 1],
+    ])
+    const visibility = (d: LayerDisplay) => (y: number) => layerVisibility(d, y)
+    expect(countInstances(groups, visibility(SHOW_ALL_LAYERS))).toEqual({ solid: 6, ghost: 0 })
+    expect(countInstances(groups, visibility(display(0, 'ghostAbove', [1])))).toEqual({ solid: 4, ghost: 1 })
+    expect(countVisible(groups[2], visibility(display(1, 'only')))).toEqual({ solid: 1, ghost: 0 })
   })
 
   it('リージョンのずれを足し、重なる位置は先のリージョンだけを入れる', () => {
@@ -84,8 +90,8 @@ describe('collectBlockInstances', () => {
     const b = new BlockVolume({ name: 'b', size: [2, 1, 1], palette: [state('minecraft:glass')], cells: Int32Array.of(0, 0) })
     const c = new BlockVolume({ name: 'c', size: [1, 1, 1], offset: [4, 2, 0], palette: [state('minecraft:dirt')], cells: Int32Array.of(0) })
     const bp = new Blueprint('multi.litematic', 'litematic', 0, [a, c, b])
-    const groups = collectBlockInstances(bp, () => 'solid')
-    expect(Object.fromEntries(groups.map((g) => [g.id, g.solid]))).toEqual({
+    const groups = collectBlockInstances(bp)
+    expect(Object.fromEntries(groups.map((g) => [g.id, g.positions]))).toEqual({
       'minecraft:dirt': [4, 2, 0],
       'minecraft:glass': [1, 0, 0],
       'minecraft:stone': [0, 0, 0],
@@ -94,36 +100,70 @@ describe('collectBlockInstances', () => {
 })
 
 describe('BlueprintMeshBuilder', () => {
-  it('種類ごとに InstancedMesh を作り、ブロックの中心に置く', () => {
+  it('種類ごとに普通と半透明の InstancedMesh を作り、置き場所を共有してブロックの中心に置く', () => {
     const builder = new BlueprintMeshBuilder()
-    const root = builder.build(collectBlockInstances(sample(), (y) => (y === 2 ? 'ghost' : 'solid')))
+    const { root, pairs } = builder.build(collectBlockInstances(sample()))
     const meshes = root.children as THREE.InstancedMesh[]
     expect(meshes.map((m) => m.userData as BlockMeshInfo)).toEqual([
+      { id: 'create:cogwheel', ghost: false },
       { id: 'create:cogwheel', ghost: true },
       { id: 'create:shaft', ghost: false },
+      { id: 'create:shaft', ghost: true },
       { id: 'minecraft:stone', ghost: false },
+      { id: 'minecraft:stone', ghost: true },
     ])
-    const stone = meshes[2]
-    expect(stone.count).toBe(4)
-    const m = new THREE.Matrix4()
-    const p = new THREE.Vector3()
-    const centers = [0, 1, 2, 3].map((i) => {
-      stone.getMatrixAt(i, m)
-      p.setFromMatrixPosition(m)
-      return [p.x, p.y, p.z]
-    })
-    expect(centers).toEqual([
-      [0.5, 0.5, 0.5],
-      [1.5, 0.5, 0.5],
-      [2.5, 0.5, 0.5],
-      [1.5, 1.5, 1.5],
+    expect(pairs).toHaveLength(3)
+    const stone = pairs[2]
+    expect(stone.solid.count).toBe(4)
+    expect(stone.ghost.instanceMatrix).toBe(stone.solid.instanceMatrix)
+    const centers = () =>
+      [0, 1, 2, 3].map((i) => {
+        const m = new THREE.Matrix4()
+        stone.solid.getMatrixAt(i, m)
+        const p = new THREE.Vector3().setFromMatrixPosition(m)
+        const s = new THREE.Vector3().setFromMatrixScale(m)
+        return [p.x, p.y, p.z, s.x]
+      })
+    expect(centers()).toEqual([
+      [0.5, 0.5, 0.5, 1],
+      [1.5, 0.5, 0.5, 1],
+      [2.5, 0.5, 0.5, 1],
+      [1.5, 1.5, 1.5, 1],
     ])
-    expect((stone.material as THREE.MeshLambertMaterial).color.getHex()).toBe(blockColor('minecraft:stone'))
-    const ghost = meshes[0].material as THREE.MeshLambertMaterial
+    // 隠す段のブロックは大きさを 0 にする
+    builder.writeMatrices(stone, (y) => y === 0)
+    expect(centers().map((c) => c[3])).toEqual([0, 0, 0, 1])
+    expect((stone.solid.material as THREE.MeshLambertMaterial).color.getHex()).toBe(blockColor('minecraft:stone'))
+    const ghost = stone.ghost.material as THREE.MeshLambertMaterial
     expect(ghost.transparent).toBe(true)
     expect(ghost.depthWrite).toBe(false)
     builder.disposeMeshes(root)
     expect(root.children).toHaveLength(0)
+    builder.dispose()
+  })
+
+  it('段の表示方法をクリッピング面の位置に変える。面の数は変えない', () => {
+    const builder = new BlueprintMeshBuilder()
+    const { pairs } = builder.build(collectBlockInstances(sample()))
+    const solid = pairs[0].solid.material as THREE.MeshLambertMaterial
+    const ghost = pairs[0].ghost.material as THREE.MeshLambertMaterial
+    const kept = (planes: THREE.Plane[], y: number) => planes.every((p) => p.distanceToPoint(new THREE.Vector3(0, y, 0)) >= 0)
+    // 段 y のブロックの中心は y + 0.5
+    const solidLayers = () => [0, 1, 2].filter((y) => kept(solid.clippingPlanes!, y + 0.5))
+    const ghostLayers = () => [0, 1, 2].filter((y) => kept(ghost.clippingPlanes!, y + 0.5))
+
+    builder.setClip(layerClipFor('all', 1))
+    expect([solidLayers(), ghostLayers()]).toEqual([
+      [0, 1, 2],
+      [0, 1, 2],
+    ])
+    builder.setClip(layerClipFor('hideAbove', 1))
+    expect(solidLayers()).toEqual([0, 1])
+    builder.setClip(layerClipFor('ghostAbove', 0))
+    expect([solidLayers(), ghostLayers()]).toEqual([[0], [1, 2]])
+    builder.setClip(layerClipFor('only', 1))
+    expect(solidLayers()).toEqual([1])
+    expect([solid.clippingPlanes!.length, ghost.clippingPlanes!.length]).toEqual([2, 1])
     builder.dispose()
   })
 
@@ -185,6 +225,44 @@ describe('BlueprintScene', () => {
     expect(frame.position.y).toBeCloseTo(1.02)
     scene.setLayerDisplay(display(0, 'only'))
     expect(scene.renderStats).toEqual({ solid: 4, ghost: 0, meshes: 2 })
+  })
+
+  it('段の表示方法と今の段を変えても、メッシュを作り直さない', () => {
+    const scene = new BlueprintScene()
+    scene.setBlueprint(sample())
+    const group = scene.blockGroup!
+    const meshes = [...group.children]
+    for (const mode of ['hideAbove', 'ghostAbove', 'only', 'all'] as const) {
+      for (const layer of [0, 1, 2]) scene.setLayerDisplay(display(layer, mode))
+    }
+    expect(scene.blockGroup).toBe(group)
+    expect(group.children).toEqual(meshes)
+  })
+
+  it('非表示にした段は、ブロックの大きさを 0 にして隠し、表示に戻すと元に戻す', () => {
+    const scene = new BlueprintScene()
+    scene.setBlueprint(sample())
+    const group = scene.blockGroup!
+    const stone = () => scene.blockGroup!.children.find((o) => o.name === 'minecraft:stone') as THREE.InstancedMesh
+    const scales = () =>
+      [0, 1, 2, 3].map((i) => {
+        const m = new THREE.Matrix4()
+        stone().getMatrixAt(i, m)
+        return new THREE.Vector3().setFromMatrixScale(m).x
+      })
+    scene.setLayerDisplay(display(0, 'all', [0]))
+    expect(scales()).toEqual([0, 0, 0, 1])
+    expect(scene.renderStats).toEqual({ solid: 2, ghost: 0, meshes: 2 })
+    scene.setLayerDisplay(display(0, 'all', [0, 1, 2]))
+    expect(scene.renderStats).toEqual({ solid: 0, ghost: 0, meshes: 0 })
+    scene.setLayerDisplay(display(0, 'all'))
+    expect(scales()).toEqual([1, 1, 1, 1])
+    expect(scene.blockGroup).toBe(group)
+    // 隠した段は、設計図を描き直しても隠したまま
+    scene.setLayerDisplay(display(0, 'all', [0]))
+    scene.setBlueprint(sample())
+    expect(scene.renderStats.solid).toBe(2)
+    expect(scales()).toEqual([0, 0, 0, 1])
   })
 
   it('グリッドと座標軸の表示を切り替える', () => {

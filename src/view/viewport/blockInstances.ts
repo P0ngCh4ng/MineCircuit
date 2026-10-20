@@ -1,5 +1,9 @@
 // 3D表示で描くブロックを、種類（ID）ごとにまとめる。Three.js に依存しない部分。
 // BlueprintMeshBuilder がこの結果から InstancedMesh を作る。
+//
+// 段の表示方法（すべて・上を消す・上を半透明・この段だけ）と段ごとの非表示は、
+// メッシュを作り直さずに切り替える（#10）。そのため、ここではすべての段のブロックを集め、
+// 段ごとの数（layerCounts）を一緒に持っておく。
 
 import type { Blueprint } from '../../domain/blueprint'
 import type { LayerVisibility } from '../layers/layerDisplay'
@@ -10,10 +14,12 @@ export interface BlockInstanceGroup {
   /** ブロックの ID（"create:shaft"）。同じ ID は向きなどの状態が違っても同じ色なので1つにまとめる */
   readonly id: string
   readonly color: number
-  /** 普通に描くブロック */
-  readonly solid: readonly number[]
-  /** 半透明で描くブロック（今の段より上を半透明にする表示方法のとき） */
-  readonly ghost: readonly number[]
+  /** 検索の強調で薄くするブロックのまとまりなら true（#15）。普通に描く段でも半透明で描く */
+  readonly dimmed: boolean
+  /** すべての段のブロックの位置 */
+  readonly positions: readonly number[]
+  /** 段（y）ごとのブロックの数 */
+  readonly layerCounts: ReadonlyMap<number, number>
 }
 
 /** 段 y の見え方を返す関数。layerVisibility(display, y) を渡す */
@@ -22,19 +28,18 @@ export type LayerVisibilityOf = (y: number) => LayerVisibility
 /** 強調表示で薄くするブロックなら true を返す関数（座標は設計図全体の座標） */
 export type DimmedOf = (x: number, y: number, z: number) => boolean
 
+interface GroupBuilder {
+  positions: number[]
+  layerCounts: Map<number, number>
+}
+
 /**
- * 設計図のブロックを ID ごとにまとめる。空きと、隠す段のブロックは入れない。
- * dimmed を渡すと、普通に描くブロックのうち dimmed が true のものを半透明にする（検索の強調、#15）。
- * 並びは ID の文字列順（毎回同じ順にして、描き直しで色や順番が揺れないようにする）。
+ * 設計図のブロックを ID ごとにまとめる。空きは入れない。
+ * dimmed を渡すと、dimmed が true のブロックを別のまとまり（dimmed: true）に分ける（検索の強調、#15）。
+ * 並びは ID の文字列順で、同じ ID なら普通のまとまりが先（毎回同じ順にして、描き直しで色や順番が揺れないようにする）。
  */
-export function collectBlockInstances(
-  blueprint: Blueprint,
-  visibilityOf: LayerVisibilityOf,
-  dimmed: DimmedOf | null = null,
-): BlockInstanceGroup[] {
-  const groups = new Map<string, { solid: number[]; ghost: number[] }>()
-  // 同じ段を何度も聞かないように覚えておく
-  const visibilityCache = new Map<number, LayerVisibility>()
+export function collectBlockInstances(blueprint: Blueprint, dimmed: DimmedOf | null = null): BlockInstanceGroup[] {
+  const groups = new Map<string, { normal: GroupBuilder | null; dimmed: GroupBuilder | null }>()
   const multiRegion = blueprint.regions.length > 1
 
   blueprint.regions.forEach((region, ri) => {
@@ -45,38 +50,60 @@ export function collectBlockInstances(
       const z = lz + oz
       // リージョンが重なる位置は、先のリージョンだけを描く（Blueprint.get と同じ）
       if (multiRegion && ri > 0 && blueprint.locate([x, y, z])?.region !== region) return
-      let visibility = visibilityCache.get(y)
-      if (visibility === undefined) {
-        visibility = visibilityOf(y)
-        visibilityCache.set(y, visibility)
-      }
-      if (visibility === 'hidden') return
       const id = state.id.toString()
-      let group = groups.get(id)
-      if (!group) {
-        group = { solid: [], ghost: [] }
-        groups.set(id, group)
+      let entry = groups.get(id)
+      if (!entry) {
+        entry = { normal: null, dimmed: null }
+        groups.set(id, entry)
       }
-      const solid = visibility === 'solid' && !(dimmed && dimmed(x, y, z))
-      ;(solid ? group.solid : group.ghost).push(x, y, z)
+      const dim = dimmed !== null && dimmed(x, y, z)
+      let group = dim ? entry.dimmed : entry.normal
+      if (!group) {
+        group = { positions: [], layerCounts: new Map() }
+        if (dim) entry.dimmed = group
+        else entry.normal = group
+      }
+      group.positions.push(x, y, z)
+      group.layerCounts.set(y, (group.layerCounts.get(y) ?? 0) + 1)
     })
   })
 
-  return [...groups.keys()]
-    .sort()
-    .map((id) => {
-      const g = groups.get(id)!
-      return { id, color: blockColor(id), solid: g.solid, ghost: g.ghost }
-    })
+  const result: BlockInstanceGroup[] = []
+  for (const id of [...groups.keys()].sort()) {
+    const entry = groups.get(id)!
+    const color = blockColor(id)
+    if (entry.normal) result.push({ id, color, dimmed: false, ...entry.normal })
+    if (entry.dimmed) result.push({ id, color, dimmed: true, ...entry.dimmed })
+  }
+  return result
 }
 
-/** まとめた中のブロックの数（普通・半透明） */
-export function countInstances(groups: readonly BlockInstanceGroup[]): { solid: number; ghost: number } {
+/**
+ * 1つのまとまりのうち、普通に描く数と半透明で描く数。
+ * 薄くするまとまりは、普通に描く段でも半透明として数える。
+ */
+export function countVisible(group: BlockInstanceGroup, visibilityOf: LayerVisibilityOf): { solid: number; ghost: number } {
+  let solid = 0
+  let ghost = 0
+  for (const [y, n] of group.layerCounts) {
+    const v = visibilityOf(y)
+    if (v === 'solid' && !group.dimmed) solid += n
+    else if (v !== 'hidden') ghost += n
+  }
+  return { solid, ghost }
+}
+
+/** まとめた中で、普通に描く数と半透明で描く数の合計 */
+export function countInstances(
+  groups: readonly BlockInstanceGroup[],
+  visibilityOf: LayerVisibilityOf,
+): { solid: number; ghost: number } {
   let solid = 0
   let ghost = 0
   for (const g of groups) {
-    solid += g.solid.length / 3
-    ghost += g.ghost.length / 3
+    const c = countVisible(g, visibilityOf)
+    solid += c.solid
+    ghost += c.ghost
   }
   return { solid, ghost }
 }
