@@ -69,6 +69,8 @@ export const useMeasureStore = defineStore('measure', () => {
       measureTool.reset()
       setConnectStart(null)
     },
+    // 開いた直後のクリックを消さないように、開いたその場で消す
+    { flush: 'sync' },
   )
 
   return { measurePoints, measurement, connectStart, connectGroup, setMeasurePoints, setConnectStart }
