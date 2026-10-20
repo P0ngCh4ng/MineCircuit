@@ -4,8 +4,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Blueprint } from '../../domain/blueprint'
 import { useDocumentSession } from '../document/documentSession'
+import { useBrushStore } from '../stores/brushStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
+import { blockColor } from './blockColor'
 import { BlueprintScene } from './blueprintScene'
 import { createViewportRenderer, type SceneRenderer, type SceneRendererFactory } from './viewportRenderer'
 import { currentThemeName, viewportTheme, watchThemeName } from './viewportTheme'
@@ -25,6 +27,7 @@ const CLICK_TOLERANCE = 4
 const session = useDocumentSession()
 const tools = useToolStore()
 const view = useViewStore()
+const brush = useBrushStore()
 
 const host = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -152,6 +155,15 @@ onMounted(() => {
       ([selected, hovered]) => {
         scene.setSelected(selected)
         scene.setHovered(hovered)
+        render()
+      },
+      { immediate: true },
+    ),
+    // 置くツールの見本（#18）
+    watch(
+      () => [brush.ghostPos, brush.state] as const,
+      ([pos, state]) => {
+        scene.setGhost(pos, state ? blockColor(state.id.toString()) : null)
         render()
       },
       { immediate: true },

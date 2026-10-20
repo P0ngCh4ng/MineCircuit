@@ -4,6 +4,7 @@
 import { watch } from 'vue'
 import { useDocumentSession } from './document/documentSession'
 import { useRotateAction } from './edit/rotateAction'
+import { useEditTools } from './edit/useEditTools'
 import LayerPanel from './layers/LayerPanel.vue'
 import LeftPanel from './panels/LeftPanel.vue'
 import RightPanel from './panels/RightPanel.vue'
@@ -20,6 +21,7 @@ const calc = useCalcStore()
 const view = useViewStore()
 const session = useDocumentSession()
 const rotate = useRotateAction()
+const edit = useEditTools()
 
 // 設計図が入れ替わったら、前の設計図の選択を消し、計算の対象を変える
 watch(session.current, (doc) => {
@@ -34,6 +36,7 @@ useKeyboardShortcuts({
   undo: () => session.undo(),
   redo: () => session.redo(),
   rotateBrush: (a) => rotate(a.vertical),
+  deleteSelection: () => edit.deleteSelected(),
   toggleGrid: () => view.toggleGrid(),
 })
 </script>

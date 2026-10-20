@@ -5,6 +5,7 @@
 import { defineStore } from 'pinia'
 import { computed, markRaw, ref, shallowRef, watch } from 'vue'
 import type { BlockState } from '../../domain/blockState'
+import type { Vec3 } from '../../domain/vec3'
 import { BlockBrush } from '../../edit/blockBrush'
 import { propertyValueOptionsFor } from '../../edit/orientationOptions'
 import { useModpackContentStore } from './modpackContent'
@@ -22,6 +23,8 @@ export const useBrushStore = defineStore('brush', () => {
   const version = ref(0)
   /** 回せなかったときの知らせ（選択中のブロックを回したときも使う）。次の操作で消す */
   const message = ref<string | null>(null)
+  /** 置くツールで、置くブロックの見本を出すマス（3D表示）。出さなければ null */
+  const ghostPos = shallowRef<Vec3 | null>(null)
 
   /** 置くブロックの状態。画面ではこれを読む */
   const state = computed<BlockState | null>(() => {
@@ -57,6 +60,11 @@ export const useBrushStore = defineStore('brush', () => {
     message.value = next
   }
 
+  /** 置くブロックの見本を出すマスを変える（置くツールから呼ぶ） */
+  function setGhost(pos: Vec3 | null): void {
+    ghostPos.value = pos
+  }
+
   // Modpack を読み終えた・外したら、取りうる値を読み直す
   watch(
     () => content.pack,
@@ -74,5 +82,5 @@ export const useBrushStore = defineStore('brush', () => {
     },
   )
 
-  return { state, message, setFromBlock, rotate, setMessage }
+  return { state, message, ghostPos, setFromBlock, rotate, setMessage, setGhost }
 })
