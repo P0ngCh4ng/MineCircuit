@@ -6,6 +6,7 @@
 
 import * as THREE from 'three'
 import type { Blueprint } from '../../domain/blueprint'
+import { cellIndex } from '../../domain/blockVolume'
 import { equalsVec3, type Vec3 } from '../../domain/vec3'
 import { layerVisibility, SHOW_ALL_LAYERS, type LayerDisplay } from '../layers/layerDisplay'
 import { pick3D, type PickRay } from '../tools/picker'
@@ -64,6 +65,9 @@ export class BlueprintScene {
   private selected: Vec3 | null = null
   private hovered: Vec3 | null = null
   private ghost: Vec3 | null = null
+  /** 強調するブロックの位置（cellIndex の番号）。強調していなければ null */
+  private highlight: ReadonlySet<number> | null = null
+  private highlightPositions: readonly Vec3[] | null = null
   private theme: ViewportTheme = LIGHT_THEME
   private stats = { solid: 0, ghost: 0, meshes: 0 }
 
@@ -102,6 +106,7 @@ export class BlueprintScene {
   setBlueprint(blueprint: Blueprint | null): void {
     const sizeChanged = !sameVec3(this.blueprint?.size ?? null, blueprint?.size ?? null)
     this.blueprint = blueprint
+    if (sizeChanged) this.highlight = this.highlightKeys()
     this.rebuildBlocks()
     if (sizeChanged) this.rebuildHelpers()
     this.updateMarkers()
@@ -156,6 +161,21 @@ export class BlueprintScene {
     return this.ghostBox.visible ? this.ghost : null
   }
 
+  /**
+   * 強調するブロックの位置（設計図全体の座標）。それ以外のブロックを半透明にする。
+   * null で強調を解除する。空の配列なら、すべて半透明になる。
+   */
+  setHighlight(positions: readonly Vec3[] | null): void {
+    this.highlightPositions = positions
+    this.highlight = this.highlightKeys()
+    this.rebuildBlocks()
+  }
+
+  /** 強調しているブロックの位置。強調していなければ null */
+  get highlighted(): readonly Vec3[] | null {
+    return this.highlightPositions
+  }
+
   setTheme(theme: ViewportTheme): void {
     this.theme = theme
     this.ambient.intensity = theme.ambient
@@ -204,10 +224,28 @@ export class BlueprintScene {
     const bp = this.blueprint
     if (!bp) return
     const display = this.display
-    const groups = collectBlockInstances(bp, (y) => layerVisibility(display, y))
+    const highlight = this.highlight
+    const size = bp.size
+    const dimmed = highlight ? (x: number, y: number, z: number) => !highlight.has(cellIndex(size, x, y, z)) : null
+    const groups = collectBlockInstances(bp, (y) => layerVisibility(display, y), dimmed)
     this.blocks = this.builder.build(groups)
     this.scene.add(this.blocks)
     this.stats = { ...countInstances(groups), meshes: this.blocks.children.length }
+  }
+
+  /** 強調する位置を、設計図の大きさでの cellIndex の番号の集まりにする */
+  private highlightKeys(): ReadonlySet<number> | null {
+    const positions = this.highlightPositions
+    if (!positions) return null
+    const size = this.blueprint?.size
+    const keys = new Set<number>()
+    if (size) {
+      for (const [x, y, z] of positions) {
+        const i = cellIndex(size, x, y, z)
+        if (i >= 0) keys.add(i)
+      }
+    }
+    return keys
   }
 
   /** グリッド・座標軸・段の枠を、設計図の大きさに合わせて作り直す */

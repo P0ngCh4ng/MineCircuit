@@ -3,6 +3,7 @@
 // 左ドラッグで回す、右ドラッグで動かす、ホイールで拡大・縮小。動かさずに離したらクリック。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Blueprint } from '../../domain/blueprint'
+import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
 import { useBrushStore } from '../stores/brushStore'
 import { useToolStore } from '../stores/toolStore'
@@ -28,6 +29,8 @@ const session = useDocumentSession()
 const tools = useToolStore()
 const view = useViewStore()
 const brush = useBrushStore()
+/** 検索で強調するブロックの位置（#15） */
+const highlight = useSearchHighlight()
 
 const host = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -146,6 +149,15 @@ onMounted(() => {
       ([grid, axes]) => {
         scene.setGridVisible(grid)
         scene.setAxesVisible(axes)
+        render()
+      },
+      { immediate: true },
+    ),
+    watch(
+      highlight,
+      (positions, before) => {
+        if (positions === null && (before ?? null) === null) return
+        scene.setHighlight(positions)
         render()
       },
       { immediate: true },

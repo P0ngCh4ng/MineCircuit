@@ -1,10 +1,13 @@
 <script setup lang="ts">
 // 左パネルの「ブロック一覧」。ID ごとのブロック数を、全体か今の段で出す（#11）。
-// 名前は Modpack を読み込んでいれば表示名、なければ ID。絞り込み検索と強調は #15 で足す。
+// 名前は Modpack を読み込んでいれば表示名、なければ ID。
+// 絞り込み検索（ID と表示名）と、行のクリックで 3D/2D 表示のそのブロックを強調する（#15）。
 import { computed, ref } from 'vue'
+import { isEmptyQuery, matchesBlockQuery } from '../../analysis/blockSearch'
 import { useDocumentSession } from '../document/documentSession'
 import { useModpackContentStore } from '../stores/modpackContent'
 import { clampLayer, useLayerStore } from '../stores/layerStore'
+import { useSearchStore } from '../stores/searchStore'
 import { useBlueprintStats } from './useBlueprintStats'
 
 type CountScope = 'all' | 'layer'
@@ -20,6 +23,7 @@ const session = useDocumentSession()
 const content = useModpackContentStore()
 const layers = useLayerStore()
 const stats = useBlueprintStats()
+const search = useSearchStore()
 
 const scope = ref<CountScope>('all')
 
@@ -29,11 +33,21 @@ const layer = computed(() => {
   return bp ? clampLayer(layers.current, bp.size[1]) : 0
 })
 
-const rows = computed<BlockRow[]>(() => {
+/** 範囲（全体／この段）の行。絞り込む前 */
+const allRows = computed<BlockRow[]>(() => {
   const s = stats.value
   if (!s) return []
   const counts = scope.value === 'all' ? s.countAll() : s.countLayer(layer.value)
   return [...counts].map(([id, count]) => ({ id, name: content.displayName(id), count }))
+})
+
+const filtering = computed(() => !isEmptyQuery(search.query))
+
+/** 絞り込んだ後の行 */
+const rows = computed<BlockRow[]>(() => {
+  const q = search.query
+  if (isEmptyQuery(q)) return allRows.value
+  return allRows.value.filter((r) => matchesBlockQuery(q, r.id, r.name))
 })
 
 const total = computed(() => rows.value.reduce((sum, r) => sum + r.count, 0))
@@ -41,14 +55,23 @@ const total = computed(() => rows.value.reduce((sum, r) => sum + r.count, 0))
 const summary = computed(() => {
   if (rows.value.length === 0) return null
   const where = scope.value === 'layer' ? `（段 ${layer.value + 1}）` : ''
-  return `${rows.value.length.toLocaleString()} 種類・${total.value.toLocaleString()} 個${where}`
+  const of = filtering.value ? `（${allRows.value.length.toLocaleString()} 種類のうち）` : ''
+  return `${rows.value.length.toLocaleString()} 種類・${total.value.toLocaleString()} 個${where}${of}`
+})
+
+/** 強調しているブロックの名前。強調していなければ null */
+const highlightLabel = computed(() => {
+  const id = search.highlightId
+  if (id === null) return null
+  return content.displayName(id) ?? id
 })
 
 const note = computed(() => {
   if (!session.current.value) return '設計図を開くと、ブロックの数が出ます。'
-  if (rows.value.length === 0) {
+  if (allRows.value.length === 0) {
     return scope.value === 'layer' ? `段 ${layer.value + 1} にブロックはありません。` : 'ブロックが置かれていません。'
   }
+  if (rows.value.length === 0) return `「${search.text.trim()}」に合うブロックはありません。ID か名前の一部を入れてください。`
   if (content.phase !== 'loaded') return '名前は ID のままです。Modpack を読み込むと、Mod のブロックは表示名で出ます。'
   return null
 })
@@ -71,14 +94,34 @@ const note = computed(() => {
         </button>
       </span>
     </div>
-    <!-- 絞り込み検索（#15）はここに足す -->
+    <input
+      type="search"
+      class="search"
+      aria-label="ブロックを絞り込む"
+      placeholder="ID か名前で絞り込む"
+      :value="search.text"
+      :disabled="!session.current.value"
+      @input="search.setText(($event.target as HTMLInputElement).value)"
+    />
+    <p v-if="highlightLabel" class="highlight" data-testid="highlight-status">
+      <span>強調中：{{ highlightLabel }}</span>
+      <button type="button" data-action="clear-highlight" @click="search.clearHighlight()">強調を解除</button>
+    </p>
     <ul v-if="rows.length > 0" class="rows">
       <li v-for="r in rows" :key="r.id" :data-id="r.id">
-        <span class="name" :title="r.id">
-          {{ r.name ?? r.id }}
-          <small v-if="r.name">{{ r.id }}</small>
-        </span>
-        <span class="count">{{ r.count.toLocaleString() }}</span>
+        <button
+          type="button"
+          class="row"
+          :aria-pressed="search.highlightId === r.id"
+          :title="search.highlightId === r.id ? `${r.id} の強調を解除する` : `${r.id} を強調し、ほかを薄くする`"
+          @click="search.toggleHighlight(r.id)"
+        >
+          <span class="name">
+            {{ r.name ?? r.id }}
+            <small v-if="r.name">{{ r.id }}</small>
+          </span>
+          <span class="count">{{ r.count.toLocaleString() }}</span>
+        </button>
       </li>
     </ul>
     <p v-if="summary" class="summary">{{ summary }}</p>
@@ -143,11 +186,66 @@ h2 {
   gap: 2px;
 }
 
-.rows li {
+.search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+}
+
+.highlight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.highlight span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.highlight button {
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.row {
   display: flex;
   align-items: baseline;
   gap: 6px;
+  width: 100%;
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: color-mix(in srgb, CanvasText 8%, transparent);
+}
+
+.row[aria-pressed='true'] {
+  background: color-mix(in srgb, Highlight 22%, Canvas);
+  border-color: Highlight;
 }
 
 .name {

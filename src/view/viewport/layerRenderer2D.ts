@@ -65,7 +65,15 @@ export interface LayerScene2D {
   readonly selected: Vec3 | null
   /** 文字のフォント（font-family） */
   readonly fontFamily: string
+  /**
+   * 検索で強調するブロックの位置（#15）。今の段のうち、ここにないブロックを薄く描く。
+   * null か省略で強調しない
+   */
+  readonly highlighted?: readonly Vec3[] | null
 }
+
+/** 強調しているときの、強調しないブロックの濃さ（0〜1） */
+export const HIGHLIGHT_DIM_ALPHA = 0.18
 
 /** canvas の 2D コンテキストのうち、ここで使う部分。テストでは偽物を渡せる */
 export type Canvas2DLike = Pick<
@@ -97,6 +105,15 @@ function luminance(color: number): number {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255
 }
 
+/** 強調する位置のうち、段 layer にあるものを x + z × 幅 の番号にする */
+function highlightedOnLayer(positions: readonly Vec3[], layer: number, width: number): Set<number> {
+  const keys = new Set<number>()
+  for (const [x, y, z] of positions) {
+    if (y === layer && x >= 0 && x < width && z >= 0) keys.add(x + z * width)
+  }
+  return keys
+}
+
 /**
  * 今の段を描く。width × height は CSS ピクセル（呼ぶ側で devicePixelRatio を掛けておく）。
  */
@@ -118,14 +135,18 @@ export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, sc
     ctx.restore()
   }
 
-  // 今の段
+  // 今の段。強調しているときは、強調するマス（x + z × 幅）以外を薄くする
   const cells = layerCells(blueprint, layer)
+  const highlight = scene.highlighted ? highlightedOnLayer(scene.highlighted, layer, w) : null
+  const dimmed = (c: { x: number; z: number }): boolean => highlight !== null && !highlight.has(c.x + c.z * w)
   const gap = cs >= 8 ? 1 : 0
   for (const c of cells) {
     ctx.fillStyle = blockColorCss(c.id)
     // 下の段の薄い色を消してから塗る
     ctx.clearRect(ox + c.x * cs, oy + c.z * cs, cs, cs)
+    if (dimmed(c)) ctx.globalAlpha = HIGHLIGHT_DIM_ALPHA
     ctx.fillRect(ox + c.x * cs + gap, oy + c.z * cs + gap, cs - gap * 2, cs - gap * 2)
+    ctx.globalAlpha = 1
   }
 
   // マス目
@@ -153,6 +174,7 @@ export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, sc
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     for (const c of cells) {
+      if (dimmed(c)) continue
       ctx.fillStyle = luminance(blockColor(c.id)) > 0.55 ? '#1b1b18' : '#f4f2ec'
       ctx.fillText(blockAbbreviation(c.id), ox + c.x * cs + cs / 2, oy + c.z * cs + cs / 2)
     }
