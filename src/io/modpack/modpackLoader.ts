@@ -1,9 +1,11 @@
 // Modpack のフォルダの mods/*.jar を読み、Modpack を作る（docs/design.md「Modpack / ModpackLoader」）。
+// jar の外の翻訳（resourcepacks/ と ModTranslations/）も読み、jar の翻訳の上に重ねる（langPacks.ts）。
 // jar を開く処理（scan）は差し替えられる。画面では Web Worker で開き、テストではその場で開く。
 // 読んだ結果は jar ごとに保存し（JarCache）、2回目からは変わった jar だけを読み直す。
 
 import { isDirectoryEntry, type FileSource, type FileStat } from '../fileSource'
 import { scanJar, type JarSummary } from './jarScanner'
+import { findLangPacks, hasNames, langPackFromSummary, readFolderLangPack, type LangPack, type LangPackLocation } from './langPacks'
 import { Modpack, type ModpackProblem } from './modpack'
 import { MODS_DIR } from './modpackFolder'
 
@@ -18,13 +20,13 @@ export interface JarCache {
 
 /** 読み込みの進み具合 */
 export interface ModpackLoadProgress {
-  /** 終わった jar の数 */
+  /** 終わった jar とリソースパックの数 */
   readonly done: number
-  /** jar の数 */
+  /** jar とリソースパック（ModTranslations/ を含む）の数 */
   readonly total: number
-  /** 保存した結果を使った jar の数 */
+  /** 保存した結果を使った jar と zip のリソースパックの数 */
   readonly fromCache: number
-  /** いま読んでいる jar のファイル名。終わったら null */
+  /** いま読んでいる jar のファイル名、またはリソースパックのパス。終わったら null */
   readonly current: string | null
 }
 
@@ -102,21 +104,24 @@ export class ModpackLoader {
   }
 
   /**
-   * mods/*.jar を開き、Mod の情報と表示名を集める。
-   * mods/ がなければ FileNotFoundError を投げる。読めない jar は Modpack.problems に入れて続ける。
+   * mods/*.jar を開き、Mod の情報と表示名を集める。続けて resourcepacks/ と ModTranslations/ の翻訳を読む。
+   * mods/ がなければ FileNotFoundError を投げる。読めない jar やパックは Modpack.problems に入れて続ける。
    */
   async load(): Promise<Modpack> {
     const jars = (await this.source.list(MODS_DIR)).filter(isJar).sort()
+    const packLocations = await findLangPacks(this.source)
+    const total = jars.length + packLocations.length
     const summaries: JarSummary[] = []
+    const langPacks: LangPack[] = []
     const problems: ModpackProblem[] = []
     let fromCache = 0
 
     for (let i = 0; i < jars.length; i++) {
       this.throwIfAborted()
       const jar = jars[i]
-      this.onProgress?.({ done: i, total: jars.length, fromCache, current: jar })
+      this.onProgress?.({ done: i, total, fromCache, current: jar })
       try {
-        const result = await this.loadJar(jar)
+        const result = await this.loadArchive(`${MODS_DIR}/${jar}`, jar)
         summaries.push(result.summary)
         if (result.cached) fromCache++
       } catch (e) {
@@ -124,13 +129,44 @@ export class ModpackLoader {
         problems.push({ jar, message: `jar を読めませんでした（${errorText(e)}）` })
       }
     }
+
+    for (let i = 0; i < packLocations.length; i++) {
+      this.throwIfAborted()
+      const location = packLocations[i]
+      this.onProgress?.({ done: jars.length + i, total, fromCache, current: location.path })
+      try {
+        const result = await this.loadLangPack(location)
+        if (hasNames(result.pack) || result.pack.problems.length > 0) langPacks.push(result.pack)
+        if (result.cached) fromCache++
+      } catch (e) {
+        if (e instanceof ModpackLoadAbortedError) throw e
+        problems.push({ jar: location.path, message: `リソースパックを読めませんでした（${errorText(e)}）` })
+      }
+    }
+
     this.throwIfAborted()
-    this.onProgress?.({ done: jars.length, total: jars.length, fromCache, current: null })
-    return new Modpack(summaries, this.source, problems)
+    this.onProgress?.({ done: total, total, fromCache, current: null })
+    return new Modpack(summaries, this.source, problems, langPacks)
   }
 
-  private async loadJar(jar: string): Promise<{ summary: JarSummary; cached: boolean }> {
-    const path = `${MODS_DIR}/${jar}`
+  private async loadLangPack(location: LangPackLocation): Promise<{ pack: LangPack; cached: boolean }> {
+    if (location.kind === 'folder') {
+      return { pack: await readFolderLangPack(this.source, location.path), cached: false }
+    }
+    // zip のリソースパックは jar と同じく開いて保存する。保存の鍵はパスで jar と分ける
+    const result = await this.loadArchive(location.path, location.path, true)
+    return { pack: langPackFromSummary(location.path, result.summary), cached: result.cached }
+  }
+
+  /**
+   * zip（jar またはリソースパック）を開いて読む。jar は保存の鍵と結果に使う名前。
+   * langOnly なら、保存する前に翻訳以外（Mod の情報、namespace、ブロック状態の定義）を捨てる。
+   */
+  private async loadArchive(
+    path: string,
+    jar: string,
+    langOnly = false,
+  ): Promise<{ summary: JarSummary; cached: boolean }> {
     const stat = this.source.stat ? await this.source.stat(path) : null
 
     // 大きさと更新時刻が分かれば、中身を読む前に保存した結果を探す
@@ -147,7 +183,8 @@ export class ModpackLoader {
       if (hit) return { summary: hit, cached: true }
     }
 
-    const summary = await this.scan(jar, bytes)
+    const scanned = await this.scan(jar, bytes)
+    const summary = langOnly ? { ...scanned, mods: [], namespaces: [], blockStates: {} } : scanned
     if (key !== null && this.cache) {
       try {
         await this.cache.put(key, summary)

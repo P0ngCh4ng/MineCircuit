@@ -5,6 +5,7 @@
 import type { ResourceLocation } from '../../domain/resourceLocation'
 import { FileNotFoundError, normalizePath, type FileSource } from '../fileSource'
 import { LANG_CODES, type JarSummary, type JsonValue, type LangCode, type LangTable } from './jarScanner'
+import type { LangPack } from './langPacks'
 import type { ModInfo } from './modMetadata'
 
 /** jar の中にないが、いつもある namespace（Minecraft 本体） */
@@ -12,6 +13,7 @@ export const BUILTIN_NAMESPACES: readonly string[] = ['minecraft']
 
 /** 読めなかった jar やファイル */
 export interface ModpackProblem {
+  /** jar のファイル名、またはリソースパックのパス（`resourcepacks/foo.zip`） */
   readonly jar: string
   readonly message: string
 }
@@ -28,6 +30,8 @@ export class Modpack {
   readonly problems: readonly ModpackProblem[]
   /** 読んだ jar の数 */
   readonly jarCount: number
+  /** 翻訳を読んだ jar の外の置き場所（`resourcepacks/foo.zip`、`ModTranslations`）。優先度の低い順 */
+  readonly langPacks: readonly string[]
 
   private readonly namespaceSet: ReadonlySet<string>
   private readonly lang: Record<LangCode, LangTable>
@@ -38,8 +42,14 @@ export class Modpack {
    * jar ごとの結果からまとめる。summaries は jar の名前順に渡す。
    * 同じキーの表示名やブロック状態の定義が複数の jar にあれば、後の jar のものを使う。
    * source は設定ファイルを読むための Modpack のフォルダ。null なら config() は常に null。
+   * langPacks は jar の外の翻訳（リソースパックなど）で、優先度の低い順に渡す。jar の翻訳より優先し、後ろのものほど優先する。
    */
-  constructor(summaries: readonly JarSummary[], source: FileSource | null, problems: readonly ModpackProblem[] = []) {
+  constructor(
+    summaries: readonly JarSummary[],
+    source: FileSource | null,
+    problems: readonly ModpackProblem[] = [],
+    langPacks: readonly LangPack[] = [],
+  ) {
     const mods: ModInfo[] = []
     const namespaces = new Set<string>()
     const lang: Record<LangCode, LangTable> = { ja_jp: {}, en_us: {} }
@@ -52,6 +62,11 @@ export class Modpack {
       for (const [id, def] of Object.entries(s.blockStates)) blockStates.set(id, def)
       for (const message of s.problems) allProblems.push({ jar: s.jar, message })
     }
+    for (const p of langPacks) {
+      for (const code of LANG_CODES) Object.assign(lang[code], p.lang[code])
+      for (const message of p.problems) allProblems.push({ jar: p.path, message })
+    }
+    this.langPacks = langPacks.map((p) => p.path)
     this.mods = mods
     this.namespaces = [...namespaces].sort()
     this.namespaceSet = namespaces
@@ -69,7 +84,8 @@ export class Modpack {
 
   /**
    * 表示名。`block.<ns>.<path>`、`item.<ns>.<path>` の順に探す。その言語の翻訳がなければ null。
-   * Minecraft 本体の翻訳は mods/ にないので、`minecraft:` のブロックは null になる。
+   * リソースパック・ModTranslations の翻訳があれば jar の翻訳より優先する。
+   * Minecraft 本体の翻訳は mods/ にないので、リソースパックが足していなければ `minecraft:` のブロックは null になる。
    */
   displayName(id: ResourceLocation, lang: LangCode): string | null {
     const table = this.lang[lang]
