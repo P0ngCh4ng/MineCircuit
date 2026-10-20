@@ -2,6 +2,7 @@
 // 2D表示（LayerView2D）。今の段を真上から見たマス目で描く。docs/ui.md「2D表示と計測」。
 // マウスの位置は picker.ts の pick2D でマスに直し、toolStore を通して今のツールに渡す。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
 import { clampLayer, useLayerStore } from '../stores/layerStore'
 import { useToolStore } from '../stores/toolStore'
@@ -17,6 +18,8 @@ const session = useDocumentSession()
 const layers = useLayerStore()
 const tools = useToolStore()
 const viewMode = useViewStore()
+/** 検索で強調するブロックの位置（#15） */
+const highlight = useSearchHighlight()
 
 const host = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -68,12 +71,13 @@ function draw(): void {
     hovered: tools.hoverTarget?.pos ?? null,
     selected: tools.selectedPos,
     fontFamily: getComputedStyle(el).fontFamily || 'sans-serif',
+    highlighted: highlight.value,
   })
 }
 
 // 設計図・段・表示の設定・マウスの下・選択が変わったら描き直す
 watch(
-  () => [layout.value, session.version.value, layer.value, viewMode.showLabels, props.showGrid, tools.hoverTarget, tools.selectedPos, dark.value],
+  () => [layout.value, session.version.value, layer.value, viewMode.showLabels, props.showGrid, tools.hoverTarget, tools.selectedPos, dark.value, highlight.value],
   () => draw(),
   { flush: 'post' },
 )
