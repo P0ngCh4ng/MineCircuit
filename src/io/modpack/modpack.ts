@@ -108,4 +108,19 @@ export class Modpack {
       throw e
     }
   }
+
+  /**
+   * Modpack のフォルダの中の項目の名前（名前順。フォルダは末尾に `/`）。dir は Modpack のフォルダからの相対パス
+   * （`saves/` など）。フォルダがない、または source がなければ空の配列。
+   * 計算プラグインがワールドごとの設定（saves/<ワールド>/serverconfig/）を探すのに使う（CalcModpack.list）。
+   */
+  async list(dir: string): Promise<string[]> {
+    if (!this.source) return []
+    try {
+      return [...(await this.source.list(normalizePath(dir)))].sort()
+    } catch (e) {
+      if (e instanceof FileNotFoundError) return []
+      throw e
+    }
+  }
 }

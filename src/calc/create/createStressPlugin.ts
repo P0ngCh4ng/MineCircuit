@@ -149,7 +149,7 @@ function probes(graph: KineticGraph, ev: KineticEvaluation): CalcProbe[] {
         ),
       })
     }
-    result.push({ pos: [node.pos[0], node.pos[1], node.pos[2]], values })
+    result.push({ pos: [node.pos[0], node.pos[1], node.pos[2]], values, network: r.network })
   })
   return result
 }

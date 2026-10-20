@@ -4,7 +4,9 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
+import { useCalcStore } from '../stores/calcStore'
 import { clampLayer, useLayerStore } from '../stores/layerStore'
+import { useProbeStore } from '../stores/probeStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
 import { pick2D, type GridLayout2D, type PickScene2D } from '../tools/picker'
@@ -20,6 +22,8 @@ const tools = useToolStore()
 const viewMode = useViewStore()
 /** 検索で強調するブロックの位置（#15） */
 const highlight = useSearchHighlight()
+const calc = useCalcStore()
+const probe = useProbeStore()
 
 const host = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -72,8 +76,16 @@ function draw(): void {
     selected: tools.selectedPos,
     fontFamily: getComputedStyle(el).fontFamily || 'sans-serif',
     highlighted: highlight.value,
+    calcMarks: { network: probe.networkPositions, issues: calc.issuePositions },
   })
 }
+
+// 計算結果の印（ネットワークの強調と問題の位置。#31）が変わったら描き直す
+watch(
+  () => [probe.networkPositions, calc.issuePositions],
+  () => draw(),
+  { flush: 'post' },
+)
 
 // 設計図・段・表示の設定・マウスの下・選択が変わったら描き直す
 watch(

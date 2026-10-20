@@ -54,6 +54,11 @@ export interface CalcAssumption {
 export interface CalcProbe {
   readonly pos: Vec3
   readonly values: readonly CalcSummaryItem[]
+  /**
+   * つながったブロックのまとまり（Create なら回転のネットワーク）の番号。
+   * 同じプラグインで同じ番号のブロックは、画面でまとめて強調する（ネットのハイライト）。なければ省略
+   */
+  readonly network?: number
 }
 
 export interface CalcResult {

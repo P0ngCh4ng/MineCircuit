@@ -6,10 +6,13 @@ import type { Blueprint } from '../../domain/blueprint'
 import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
 import { useBrushStore } from '../stores/brushStore'
+import { useCalcStore } from '../stores/calcStore'
+import { useProbeStore } from '../stores/probeStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
 import { blockColor } from './blockColor'
 import { BlueprintScene } from './blueprintScene'
+import { CalcOverlay3D } from './calcOverlay3D'
 import { createViewportRenderer, type SceneRenderer, type SceneRendererFactory } from './viewportRenderer'
 import { currentThemeName, viewportTheme, watchThemeName } from './viewportTheme'
 
@@ -31,6 +34,8 @@ const view = useViewStore()
 const brush = useBrushStore()
 /** 検索で強調するブロックの位置（#15） */
 const highlight = useSearchHighlight()
+const calc = useCalcStore()
+const probe = useProbeStore()
 
 const host = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -43,6 +48,9 @@ const blueprintVersion = computed(() => ({
 }))
 
 const scene = new BlueprintScene()
+// 計算結果の印（ネットワークの強調と問題の位置。#31）
+const calcOverlay = new CalcOverlay3D()
+scene.scene.add(calcOverlay.group)
 let renderer: SceneRenderer | null = null
 let resizeObserver: ResizeObserver | null = null
 let stopTheme: (() => void) | null = null
@@ -180,6 +188,15 @@ onMounted(() => {
       },
       { immediate: true },
     ),
+    // 計算結果の印（#31）
+    watch(
+      () => [probe.networkPositions, calc.issuePositions, view.layerDisplay] as const,
+      ([network, issues, display]) => {
+        calcOverlay.update(network, issues, display)
+        render()
+      },
+      { immediate: true },
+    ),
   )
 })
 
@@ -190,10 +207,11 @@ onBeforeUnmount(() => {
   renderer?.dispose()
   renderer = null
   scene.dispose()
+  calcOverlay.dispose()
   tools.hover(null)
 })
 
-defineExpose({ scene })
+defineExpose({ scene, calcOverlay })
 </script>
 
 <template>

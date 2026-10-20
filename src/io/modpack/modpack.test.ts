@@ -3,6 +3,7 @@ import { ResourceLocation } from '../../domain/resourceLocation'
 import { jarKeyPrefix } from './indexedDbJarCache'
 import type { JarSummary } from './jarScanner'
 import { Modpack } from './modpack'
+import { MemoryFileSource } from '../memoryFileSource'
 
 function summary(jar: string, partial: Partial<JarSummary>): JarSummary {
   return { jar, mods: [], namespaces: [], lang: { ja_jp: {}, en_us: {} }, blockStates: {}, problems: [], ...partial }
@@ -29,6 +30,20 @@ describe('Modpack', () => {
       { jar: 'a.jar', message: 'p1' },
     ])
     expect(await pack.config('config/a.toml')).toBeNull()
+    expect(await pack.list('saves/')).toEqual([])
+  })
+
+  it('list でフォルダの中を名前順に返す。フォルダがなければ空の配列', async () => {
+    const enc = new TextEncoder()
+    const source = new MemoryFileSource([
+      ['saves/b/serverconfig/create-server.toml', enc.encode('x')],
+      ['saves/a/level.dat', enc.encode('')],
+      ['saves/readme.txt', enc.encode('')],
+    ])
+    const pack = new Modpack([], source)
+    expect(await pack.list('saves/')).toEqual(['a/', 'b/', 'readme.txt'])
+    expect(await pack.list('saves/b/serverconfig')).toEqual(['create-server.toml'])
+    expect(await pack.list('config/')).toEqual([])
   })
 })
 
