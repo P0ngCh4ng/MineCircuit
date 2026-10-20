@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // 右パネルの計算結果。プラグインごとに、合計・問題・仮定を出す。
+// 問題と仮定の位置をクリックすると、そのブロックを選択し、その段へ移ってネットワークを強調する（#31）。
 import { computed } from 'vue'
 import { PROVENANCE_LABELS } from '../calc/provenance'
-import type { Vec3 } from '../domain/vec3'
+import { formatPos } from './calc/probeModel'
+import { useJumpTo } from './calc/useProbeTool'
 import { useCalcStore } from './stores/calcStore'
-import { useToolStore } from './stores/toolStore'
 
 const calc = useCalcStore()
-const tools = useToolStore()
+const jumpTo = useJumpTo()
 
 const statusText = computed(() => {
   switch (calc.status) {
@@ -20,13 +21,6 @@ const statusText = computed(() => {
   }
 })
 
-function formatPos(pos: Vec3): string {
-  return `[${pos.join(', ')}]`
-}
-
-function select(pos: Vec3): void {
-  tools.setSelected(pos)
-}
 </script>
 
 <template>
@@ -60,7 +54,7 @@ function select(pos: Vec3): void {
           <p v-if="o.result.issues.length === 0" class="none">問題はありません。</p>
           <ul v-else class="issues">
             <li v-for="(issue, i) in o.result.issues" :key="i">
-              <button type="button" class="pos" @click="select(issue.pos)">{{ formatPos(issue.pos) }}</button>
+              <button type="button" class="pos" :title="`${formatPos(issue.pos)} へ移る`" @click="jumpTo(issue.pos)">{{ formatPos(issue.pos) }}</button>
               {{ issue.message }}
             </li>
           </ul>
@@ -69,7 +63,7 @@ function select(pos: Vec3): void {
           <p v-if="o.result.assumptions.length === 0" class="none">仮定はありません。</p>
           <ul v-else class="assumptions">
             <li v-for="(a, i) in o.result.assumptions" :key="i">
-              <button v-if="a.pos" type="button" class="pos" @click="select(a.pos)">{{ formatPos(a.pos) }}</button>
+              <button v-if="a.pos" type="button" class="pos" :title="`${formatPos(a.pos)} へ移る`" @click="jumpTo(a.pos)">{{ formatPos(a.pos) }}</button>
               {{ a.message }}
             </li>
           </ul>

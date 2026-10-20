@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { blueprintFixture } from '../../../tests/fixtures/blueprintFixture'
 import { nbt } from '../../domain/nbt'
 import type { CalcModpack } from '../calcPlugin'
+import { MemoryFileSource } from '../../io/memoryFileSource'
+import { Modpack } from '../../io/modpack/modpack'
 import { createBuiltinRegistry } from '../builtinPlugins'
 import { loadCreateConfig, parseTomlSubset, readCreateServerConfig } from './createConfig'
 import { CreateValueResolver } from './createValueResolver'
@@ -97,6 +99,16 @@ describe('create-server.toml', () => {
     expect((await loadCreateConfig(fakePack({}))).config).toBeNull()
     expect((await loadCreateConfig(null)).config).toBeNull()
   })
+
+  it('io の Modpack（FileSource つき）から saves/*/serverconfig の設定を見つける', async () => {
+    const source = new MemoryFileSource([
+      ['saves/World 2/serverconfig/create-server.toml', new TextEncoder().encode(TOML)],
+      ['saves/World 1/level.dat', new Uint8Array()],
+    ])
+    const lookup = await loadCreateConfig(new Modpack([], source))
+    expect(lookup.config?.path).toBe('saves/World 2/serverconfig/create-server.toml')
+    expect(lookup.config?.maxRotationSpeed).toBe(128)
+  })
 })
 
 describe('Create の応力プラグイン', () => {
@@ -122,6 +134,22 @@ describe('Create の応力プラグイン', () => {
     expect(press?.values[1].value).toEqual({ value: '128 SU（8 SU/RPM）', source: 'builtin' })
     // Worker から送れる素のデータ
     expect(structuredClone(result)).toEqual(result)
+  })
+
+  it('プローブに回転のネットワークの番号を付ける（つながっていないブロックは別の番号）', async () => {
+    const bp = blueprintFixture()
+      .place([0, 0, 0], 'create:creative_motor', { facing: 'east' }, nbt.compound({ ScrollValue: nbt.int(16) }))
+      .place([1, 0, 0], 'create:shaft', { axis: 'x' })
+      .place([2, 0, 0], 'create:mechanical_press', { facing: 'east' })
+      .place([0, 0, 2], 'create:shaft', { axis: 'x' })
+      .toBlueprint()
+    const result = await runCreateStress(bp, { pack: null, ports: [] })
+    const net = (pos: string) => result.probes?.find((p) => p.pos.join() === pos)?.network
+    expect(net('0,0,0')).toBeTypeOf('number')
+    expect(net('1,0,0')).toBe(net('0,0,0'))
+    expect(net('2,0,0')).toBe(net('0,0,0'))
+    expect(net('0,0,2')).toBeTypeOf('number')
+    expect(net('0,0,2')).not.toBe(net('0,0,0'))
   })
 
   it('Modpack の設定ファイルの値を使う', async () => {

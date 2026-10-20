@@ -70,10 +70,25 @@ export interface LayerScene2D {
    * null か省略で強調しない
    */
   readonly highlighted?: readonly Vec3[] | null
+  /** 計算結果の印（#31）。今の段にあるものだけ描く。なければ省略 */
+  readonly calcMarks?: CalcMarks2D
 }
 
 /** 強調しているときの、強調しないブロックの濃さ（0〜1） */
 export const HIGHLIGHT_DIM_ALPHA = 0.18
+
+/** 2D表示に重ねる計算結果の印 */
+export interface CalcMarks2D {
+  /** プローブでクリックしたブロックと、回転でつながったブロック */
+  readonly network: readonly Vec3[] | null
+  /** 問題の位置 */
+  readonly issues: readonly Vec3[]
+}
+
+/** ネットワークの印の色（3D表示の calcOverlay3D と同じ） */
+export const NETWORK_MARK_CSS = '#14a3c7'
+/** 問題の印の色 */
+export const ISSUE_MARK_CSS = '#e0402a'
 
 /** canvas の 2D コンテキストのうち、ここで使う部分。テストでは偽物を渡せる */
 export type Canvas2DLike = Pick<
@@ -197,6 +212,27 @@ export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, sc
   ctx.textBaseline = 'top'
   ctx.fillText('z', ox - 34, oy + 2)
   ctx.fillText('↓', ox - 34, oy + 16)
+
+  // 計算結果の印：ネットワークは青緑、問題は赤。半透明で塗って枠を引く
+  const calcMark = (positions: readonly Vec3[] | null | undefined, color: string, lineWidth: number): void => {
+    if (!positions) return
+    ctx.save()
+    for (const pos of positions) {
+      if (pos[1] !== layer) continue
+      const px = ox + pos[0] * cs
+      const py = oy + pos[2] * cs
+      ctx.globalAlpha = 0.3
+      ctx.fillStyle = color
+      ctx.fillRect(px, py, cs, cs)
+      ctx.globalAlpha = 1
+      ctx.strokeStyle = color
+      ctx.lineWidth = lineWidth
+      ctx.strokeRect(px + lineWidth / 2, py + lineWidth / 2, cs - lineWidth, cs - lineWidth)
+    }
+    ctx.restore()
+  }
+  calcMark(scene.calcMarks?.network, NETWORK_MARK_CSS, 2)
+  calcMark(scene.calcMarks?.issues, ISSUE_MARK_CSS, 2)
 
   // 枠：マウスの下と選択中
   const mark = (pos: Vec3 | null, color: string, lineWidth: number): void => {

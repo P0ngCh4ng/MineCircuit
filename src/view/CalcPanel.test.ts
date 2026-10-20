@@ -10,7 +10,10 @@ import { placeBlock } from '../edit/editCommand'
 import { EditHistory } from '../edit/editHistory'
 import CalcPanel from './CalcPanel.vue'
 import { useCalcStore } from './stores/calcStore'
+import { useLayerStore } from './stores/layerStore'
+import { useProbeStore } from './stores/probeStore'
 import { useToolStore } from './stores/toolStore'
+import { useViewStore } from './stores/viewStore'
 
 function setup(plugins = [noopCalcPlugin()]) {
   const pinia = createPinia()
@@ -59,12 +62,17 @@ describe('CalcPanel（右パネルの計算結果）', () => {
     expect(calc.issuePositions).toEqual([[1, 0, 0]])
   })
 
-  it('問題の位置を押すと、そのブロックを選ぶ', async () => {
+  it('問題の位置を押すと、そのブロックを選び、その段へ移ってプローブの対象にする', async () => {
     const { calc, wrapper } = setup()
     await calc.attach(sample())
     await flushPromises()
+    useLayerStore().setLayer(1)
+    useViewStore().setLayerHidden(0, true)
     await wrapper.find('.issues .pos').trigger('click')
     expect(useToolStore().selectedPos).toEqual([1, 0, 0])
+    expect(useLayerStore().current).toBe(0)
+    expect(useViewStore().hiddenLayers.has(0)).toBe(false)
+    expect(useProbeStore().probedPos).toEqual([1, 0, 0])
   })
 
   it('編集が止まってから計算し直す', async () => {
