@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 表示部分。docs/ui.md「全体の配置」の「表示部分」。
 // 3D表示（#9）と2D表示（#14）はこの部品の中に置く。左上に縦のツールバー、左下に結果の表示。
+import MeasureReadout from '../analysis/MeasureReadout.vue'
 import { useDocumentSession } from '../document/documentSession'
 import { useFileDrop } from '../document/useFileDrop'
 import { useViewStore } from '../stores/viewStore'
@@ -40,6 +41,7 @@ const drop = useFileDrop((file) => void session.openFile(file))
 
     <!-- 左下の結果の表示。計測（#16）や書き出し（#21）のお知らせもここに足す -->
     <div class="readouts">
+      <MeasureReadout />
       <div v-if="error" class="error" role="alert">
         <span>{{ error }}</span>
         <button type="button" @click="session.clearError()">閉じる</button>

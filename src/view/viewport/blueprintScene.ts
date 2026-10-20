@@ -11,6 +11,7 @@ import { equalsVec3, type Vec3 } from '../../domain/vec3'
 import { layerVisibility, SHOW_ALL_LAYERS, type LayerDisplay } from '../layers/layerDisplay'
 import { pick3D, type PickRay } from '../tools/picker'
 import type { PickTarget } from '../tools/tool'
+import { AnalysisOverlay3D } from './analysisOverlay3D'
 import { collectBlockInstances, countInstances, type BlockInstanceGroup } from './blockInstances'
 import { BlueprintMeshBuilder, layerClipFor, type BlockMeshPair } from './blueprintMeshBuilder'
 import { LIGHT_THEME, type ViewportTheme } from './viewportTheme'
@@ -74,10 +75,13 @@ export class BlueprintScene {
   private highlightPositions: readonly Vec3[] | null = null
   private theme: ViewportTheme = LIGHT_THEME
   private stats = { solid: 0, ghost: 0, meshes: 0 }
+  /** 計測とつながりの重ね描き（#16） */
+  readonly analysisOverlay = new AnalysisOverlay3D()
+  private connectGroup: readonly Vec3[] | null = null
 
   constructor() {
     this.sun.position.set(0.6, 1, 0.35)
-    this.scene.add(this.ambient, this.sun, this.selectionBox, this.hoverBox, this.ghostBox)
+    this.scene.add(this.ambient, this.sun, this.selectionBox, this.hoverBox, this.ghostBox, this.analysisOverlay.group)
     this.ghostBox.name = 'ghost'
     this.ghostBox.visible = false
     this.ghostBox.renderOrder = 5
@@ -125,6 +129,18 @@ export class BlueprintScene {
     this.applyLayerDisplay()
     this.updateLayerFrame()
     this.updateMarkers()
+    this.updateConnectGroup()
+  }
+
+  /** 計測ツールで選んだ点（0〜2個）。2個なら点線で結ぶ */
+  setMeasurePoints(points: readonly Vec3[]): void {
+    this.analysisOverlay.setMeasurePoints(points)
+  }
+
+  /** つながりツールのまとまり。隠した段のブロックは強調しない */
+  setConnectGroup(positions: readonly Vec3[] | null): void {
+    this.connectGroup = positions
+    this.updateConnectGroup()
   }
 
   get layerDisplay(): LayerDisplay {
@@ -191,6 +207,7 @@ export class BlueprintScene {
     this.frameMaterial.color.set(theme.layerFrame)
     this.selectionMaterial.color.set(theme.selection)
     this.hoverMaterial.color.set(theme.hover)
+    this.analysisOverlay.setTheme(theme.name)
   }
 
   get currentTheme(): ViewportTheme {
@@ -219,6 +236,13 @@ export class BlueprintScene {
     for (const o of [this.grid, this.axes, this.layerFrame, this.selectionBox, this.hoverBox, this.ghostBox]) disposeObject(o)
     for (const m of [this.gridMaterial, this.frameMaterial, this.selectionMaterial, this.hoverMaterial, this.ghostMaterial]) m.dispose()
     this.axes?.dispose()
+    this.analysisOverlay.dispose()
+  }
+
+  private updateConnectGroup(): void {
+    const display = this.display
+    const group = this.connectGroup?.filter((p) => layerVisibility(display, p[1]) !== 'hidden') ?? null
+    this.analysisOverlay.setConnectGroup(group)
   }
 
   private rebuildBlocks(): void {
