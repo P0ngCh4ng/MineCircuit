@@ -397,6 +397,19 @@ Create の `KineticNetwork.calculateCapacity` は、動力源の **生む回転�
 | `belt` | `Controller`（ワールド座標）、`IsController`、`Length`、`Index`、`Casing`、`Covered`、`Inventory` など | ベルトの組 |
 | `chain_conveyor`（6.0） | `Connections`（相対位置の集合） | つながるチェーンコンベア |
 
+### 画面で変えられる項目
+
+詳細パネルの「計算に使う設定」で変えられるのは、ゲームの中で利用者が決める値だけ（`calc/create/createBlockSettings.ts`）。
+
+| ブロック | 項目 | 範囲 | 生データがないときに作るもの |
+| --- | --- | --- | --- |
+| `creative_motor` | `ScrollValue`（int、回転数） | −256〜256 | `{id: "create:motor", ScrollValue}` |
+| `rotation_speed_controller` | `ScrollValue`（int、目標の回転数） | −256〜256 | `{id: "create:rotation_speed_controller", ScrollValue}` |
+
+- 範囲は初期設定の上限（`maxMotorSpeed`・`maxRotationSpeed`、どちらも 256）。Modpack の設定で上限を変えている場合は考えない。
+- `FlowScore`（水車）、`Running`・`LastGenerated`（風車）、`EnginePower`（蒸気エンジン）などは、ゲームが周りの状態から決め直す値なので、画面では変えない。
+- [ ] アプリで作った生データ（`id` と `ScrollValue` だけ）を、ゲームが読んで同じ回転数になるか（#22 で確かめる）
+
 ### バージョンの違い
 
 - 項目の名前は 1.18.2（0.5.1）と 1.21.1（6.0）で同じ。

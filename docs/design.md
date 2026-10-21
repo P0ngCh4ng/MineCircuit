@@ -335,11 +335,14 @@ interface EditCommand {
 function placeBlock(bp: Blueprint, pos: Vec3, state: BlockState, replace: boolean): EditCommand | null
 function eraseBlock(bp: Blueprint, pos: Vec3): EditCommand | null
 function rotateBlock(bp: Blueprint, pos: Vec3, vertical: boolean): EditCommand | null
+// 生データの項目 key を tag にする。生データがなければ initial の写しから作る
+function setBlockEntityTag(bp: Blueprint, pos: Vec3, key: string, tag: NbtTag, initial: RawNbt | null, label: string | null): EditCommand | null
 // 後で: fillRegion, copyRegion, rotateRegion, resizeBlueprint
 ```
 
 - 新しく置いたブロックは `blockEntity: null`。計算では値の出どころの仕組みで初期値を使う
 - 回転では生データ（nbt）をそのまま引き継ぐ
+- 生データの項目を変える操作は、元の生データを書き換えず、写しを作って項目だけを差し替える。元に戻すと元の生データ（同じもの）を書き戻す。どのブロックのどの項目を変えられるか、生データがないときに何を入れるかは、Mod ごとの知識なので calc に置く（`calc/blockSettings.ts` の `blockSettingsFor`）。画面はそれを表示するだけ
 - 範囲の外への配置は、範囲の拡張（`resizeBlueprint`）を作るまでは受け付けない
 
 ### 履歴
