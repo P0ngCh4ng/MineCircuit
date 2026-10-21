@@ -46,7 +46,16 @@ npm run lint       # Lint（ESLint）。層と依存の向きも調べる（esli
 
 作業を終える前に `test`・`typecheck`・`lint` を通すこと。
 
-デスクトップ版のコマンド（`tauri:dev`・`tauri:build`）は #64 で足す。動かすには Rust と Visual Studio の C++ ビルドツールが要る。ブラウザ版の作業には要らない。
+デスクトップ版（Tauri）のコマンド。動かすには Rust（rustup。版は `src-tauri/rust-toolchain.toml` で固定）と Visual Studio の C++ ビルドツール（「C++ によるデスクトップ開発」）が要る。ブラウザ版の作業には要らない。
+
+```
+npm run tauri:dev    # デスクトップ版を開発モードで開く（Vite の開発サーバーを起動し、ウィンドウで表示）
+npm run tauri:build  # Windows 用のインストーラーを作る（.msi と .exe。出力は src-tauri/target/release/bundle/）
+```
+
+- Rust の依存は `src-tauri/Cargo.toml` で `=` で固定し、`src-tauri/Cargo.lock` をコミットする。
+- 許可する操作は `src-tauri/capabilities/default.json`、CSP は `src-tauri/tauri.conf.json` に書く。許可を足すときは、先に確認を取ること（下の「データと権利のルール」）。
+- CI（`.github/workflows/desktop.yml`）は、`src-tauri/` か package の変更を含むプルリクエストで Windows 用のビルドを確かめる。`v*` のタグを push すると、インストーラーを作って下書きのリリースに置く。タグの前に `package.json` の `version` を上げる（アプリの版はここから取る）。
 
 ## フォルダ構成
 

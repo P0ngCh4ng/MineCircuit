@@ -1,0 +1,27 @@
+# デスクトップ版（Tauri）の Rust 側。起動と公式プラグインの登録だけを書く（docs/design.md「デスクトップ版（Tauri）」）
+# バージョンは = で固定する。公開から2週間以内の版は使わない
+[package]
+name = "minecircuit"
+version = "0.0.0"
+description = "MineCircuit（非公式）デスクトップ版"
+license = "MIT"
+repository = "https://github.com/P0ngCh4ng/MineCircuit"
+edition = "2021"
+rust-version = "1.90"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "=2.7.1", features = [] }
+
+[dependencies]
+tauri = { version = "=2.12.1", features = [] }
+tauri-plugin-fs = "=2.6.0"
+tauri-plugin-dialog = "=2.8.1"
+tauri-plugin-persisted-scope = "=2.4.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

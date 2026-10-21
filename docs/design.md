@@ -169,6 +169,20 @@ class TauriFileSink implements FileSink { /* @tauri-apps/plugin-dialog の save 
 - **Rust 側**（`src-tauri/`）には、Tauri の起動と、公式プラグイン（fs、dialog、persisted-scope）の登録と、許可（capabilities）の設定だけを書く。独自のコマンドは作らない。処理を Rust に書くと、ブラウザ版と動きがずれ、Vitest でテストできなくなるため。
 - **許可しない操作**：ネットワーク、シェル、自動更新。CSP でも外部への通信を止める。
 
+許可の一覧（`src-tauri/capabilities/default.json`。メインウィンドウだけ）:
+
+| 許可 | 使いみち |
+| --- | --- |
+| `core:default` | Tauri の基本（ウィンドウ・イベント・パスなどの読み取り）。通信やファイルの許可は含まない |
+| `dialog:allow-open`・`dialog:allow-save` | ファイル・フォルダを選ぶ画面と、保存先を選ぶ画面。メッセージの画面は使わない |
+| `fs:allow-read-file`・`fs:allow-read-dir`・`fs:allow-stat`・`fs:allow-exists` | 選んだフォルダ（Modpack）と選んだファイルを読む |
+| `fs:allow-write-file` | 保存の画面で選んだファイルに書く |
+
+- fs の許可には固定の範囲（`$HOME` など）を付けない。範囲は、dialog プラグインが利用者の選んだパスを実行中に足すものだけになる。フォルダを選ぶときは `recursive: true` を渡して中まで読めるようにし、persisted-scope がその範囲を次回も残す。
+- fs の範囲は読み書きで分かれていないので、選んだフォルダにも書けてしまう。書き込みは `TauriFileSink` が保存の画面で選んだパスにだけ行う、とコードで守る。
+- CSP（`src-tauri/tauri.conf.json`）は、自分のファイル（`'self'`）と Tauri の内部の通信（`ipc:`・`http://ipc.localhost`）と `blob:`・`data:` だけを許す。外部の URL への通信・読み込みはすべて止まる。Vue の静的な部分が `style` 属性を使うため、`style-src` だけ `'unsafe-inline'` を許し、Tauri がそこに nonce を足さないようにしている（`dangerousDisableAssetCspModification`）。開発中（`devCsp`）は Vite の更新通知（`ws://localhost:5173`）も許す。
+- ウィンドウのドラッグ&ドロップは Tauri ではなくページに渡す（`dragDropEnabled: false`）。ブラウザ版と同じ方法で設計図を開けるようにするため。
+
 ### BlueprintReader
 
 設計図の形式ごとに1クラス。最初は `.nbt` だけ。

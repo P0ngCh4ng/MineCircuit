@@ -6,7 +6,7 @@ import globals from 'globals'
 import layerDependency from './eslint-rules/layer-dependency.js'
 
 export default defineConfig(
-  { ignores: ['dist/', 'node_modules/', 'prototype/', '.agents/', 'coverage/'] },
+  { ignores: ['dist/', 'node_modules/', 'prototype/', '.agents/', 'coverage/', 'src-tauri/target/', 'src-tauri/gen/'] },
   js.configs.recommended,
   tseslint.configs.recommended,
   // 書き方の好みに関わる規則は入れず、誤りを見つける規則だけを使う
@@ -27,8 +27,8 @@ export default defineConfig(
     },
   },
   {
-    // 設定ファイル、Lint のルール、テストは Node で動く
-    files: ['*.config.{js,ts}', 'eslint-rules/**', 'tests/**', 'src/**/*.test.ts'],
+    // 設定ファイル、Lint のルール、scripts/、テストは Node で動く
+    files: ['*.config.{js,ts}', 'eslint-rules/**', 'scripts/**', 'tests/**', 'src/**/*.test.ts'],
     languageOptions: { globals: { ...globals.node } },
   },
 )
