@@ -1,6 +1,6 @@
 # MineCircuit クラス設計
 
-作成日: 2026-10-19 / 更新: 2026-10-19（編集と書き出しを追加） / 仕様: [spec.md](spec.md)
+作成日: 2026-10-19 / 更新: 2026-10-22（デスクトップ版を追加） / 仕様: [spec.md](spec.md)
 
 TypeScriptで書く。コード例は設計を示すためのもので、細部は実装時に決める。
 
@@ -145,7 +145,29 @@ interface FileSink {
 
 class BrowserFileSource implements FileSource { /* File System Access API */ }
 class BrowserFileSink implements FileSink { /* showSaveFilePicker */ }
+class TauriFileSource implements FileSource { /* @tauri-apps/plugin-fs。デスクトップ版 */ }
+class TauriFileSink implements FileSink { /* @tauri-apps/plugin-dialog の save + plugin-fs の writeFile */ }
 ```
+
+#### デスクトップ版（Tauri）
+
+デスクトップ版は、ブラウザ版の画面をそのまま Tauri 2 で包む。違うのはファイルの読み書きだけで、`FileSource` / `FileSink` とその周り（Modpack の登録、設計図を開く・保存する）を差し替える。
+
+| 部分 | ブラウザ版 | デスクトップ版 |
+| --- | --- | --- |
+| Modpack のフォルダ | `BrowserFileSource`（フォルダのハンドル） | `TauriFileSource`（フォルダのパス） |
+| 登録の保存 | IndexedDB にハンドルを保存。許可が切れたら出し直す | IndexedDB にパスを保存。次回も許可なしで読む |
+| 設計図を開く | `<input type="file">` とドラッグ&ドロップ | 同じ。ファイルを選ぶ画面だけ Tauri のダイアログにしてもよい |
+| 保存 | `BrowserFileSink`（保存先を選ぶ画面。なければダウンロード） | `TauriFileSink`（保存先を選ぶ画面で選んだパスに書く） |
+| 表示名の保存 | IndexedDB | 同じ（WebView2 の IndexedDB） |
+
+- **どちらで動いているかの判定は view の1か所だけ**（`view/platform/`）で行い、そこで実装を選んでストアに渡す。io・edit・analysis・calc は、どちらで動いているかを知らない。
+- **`TauriFileSource` などは `src/io/tauri/` に置く。** Tauri の API（`@tauri-apps/*`）を import してよいのは、`src/io/tauri/` と `view/platform/` だけにする。ブラウザ版のビルドにも入るが、動的 import で読み、ブラウザでは呼ばない。Lint の決まりに足す。
+- **Modpack の登録**は、今の `ModpackRegistry<H>` のハンドルの型 `H` をパス（`string`）にして使う。`ModpackHandleOpener` の実装を Tauri 用に足すだけで、登録の一覧や画面は変えない。
+- **読む許可の範囲**：Tauri の fs プラグインは、許可した場所しか読めない。利用者がダイアログで選んだフォルダだけを許可し、`tauri-plugin-persisted-scope` で次回も同じ範囲を許可する。読み込みは選んだフォルダの中だけ、書き込みは保存の画面で選んだファイルだけにする。
+- **jar の読み方**：今は jar を丸ごと読んでいる。デスクトップ版はファイルの一部だけを読めるので、`FileSource` に任意の `readRange?(path, start, end)` を足し、zip の末尾（ファイルの一覧）と必要な項目だけを読むようにできる。足すかどうかは、デスクトップ版で読み込み時間を測ってから決める。
+- **Rust 側**（`src-tauri/`）には、Tauri の起動と、公式プラグイン（fs、dialog、persisted-scope）の登録と、許可（capabilities）の設定だけを書く。独自のコマンドは作らない。処理を Rust に書くと、ブラウザ版と動きがずれ、Vitest でテストできなくなるため。
+- **許可しない操作**：ネットワーク、シェル、自動更新。CSP でも外部への通信を止める。
 
 ### BlueprintReader
 
@@ -210,7 +232,7 @@ class Modpack {
 
 - namespace と modId は一致しないModがあるため、`hasNamespace` は jar の `assets/<namespace>/` で判定する。
 - jar から読むのは翻訳ファイル・モデル・ブロック状態の定義・テクスチャだけ。Javaのコードは実行しない。
-- 読み込んだ表示名の一覧はブラウザ内に保存し、2回目以降を速くする。jar ごとに、ファイル名・大きさ・更新時刻を鍵にして IndexedDB に保存し、変わった jar だけ読み直す。
+- 読み込んだ表示名の一覧はアプリ内（IndexedDB）に保存し、2回目以降を速くする。jar ごとに、ファイル名・大きさ・更新時刻を鍵にして IndexedDB に保存し、変わった jar だけ読み直す。
 - jar を開く処理（zip の展開と JSON の解釈）は Web Worker で行う。`ModpackLoader` は開く関数を差し替えられるので、テストでは Worker なしで動く。
 - `minecraft` の namespace は jar になくても、常にあるとみなす。本体の翻訳は mods/ にないので、リソースパックが足していなければ本体のブロックの表示名は出ない。
 

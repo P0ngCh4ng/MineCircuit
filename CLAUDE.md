@@ -1,6 +1,6 @@
 # MineCircuit 開発ガイド
 
-工業Mod（Createなど）の設計図を、ゲームの外で確認・編集・計算するWebアプリ。サーバーは持たず、ブラウザだけで動く静的サイトとして作る。
+工業Mod（Createなど）の設計図を、ゲームの外で確認・編集・計算するアプリ。サーバーは持たない。同じコードから、ブラウザで動く静的サイトと、Tauri で包んだデスクトップアプリ（Windows）の2つを作る。
 
 実装を始める前に、関係する書類を読むこと。
 
@@ -12,7 +12,7 @@
 | [docs/create-stress.md](docs/create-stress.md) | Createの応力計算の規則と数値。回転のつながり、速度比、初期値、計算の手順 |
 | [prototype/index.html](prototype/index.html) | UIプロトタイプ。1ファイルの参考実装 |
 
-作業は GitHub の Issue 単位で進める。マイルストーン M0〜M5 が仕様書の「開発の順番」に対応する。
+作業は GitHub の Issue 単位で進める。マイルストーン M0〜M6 が仕様書の「開発の順番」に対応する（M6 はデスクトップ版）。
 
 ## 技術構成
 
@@ -28,6 +28,7 @@
 | テスト | Vitest | 画面の部品のテストは @vue/test-utils と happy-dom |
 | 型チェック | vue-tsc | |
 | Lint | ESLint | |
+| デスクトップ版 | Tauri 2 系（`src-tauri/`） | Rust 側は起動と公式プラグイン（fs、dialog、persisted-scope）の設定だけ。独自のコマンドは作らない |
 
 バージョンは雛形を作るときに `package.json` で固定する。公開から2週間以内の版は避ける。
 
@@ -45,6 +46,8 @@ npm run lint       # Lint（ESLint）。層と依存の向きも調べる（esli
 
 作業を終える前に `test`・`typecheck`・`lint` を通すこと。
 
+デスクトップ版のコマンド（`tauri:dev`・`tauri:build`）は #64 で足す。動かすには Rust と Visual Studio の C++ ビルドツールが要る。ブラウザ版の作業には要らない。
+
 ## フォルダ構成
 
 設計書の層をそのままフォルダにする。依存は上から下への一方向だけ。下の層から上の層を import しない。
@@ -52,12 +55,13 @@ npm run lint       # Lint（ESLint）。層と依存の向きも調べる（esli
 ```
 src/
   domain/      データの型。ResourceLocation, BlockState, Blueprint, BlockVolume。他の層に依存しない
-  io/          読み込み・書き出し。nbt/, readers/, writers/, modpack/, FileSource, FileSink
+  io/          読み込み・書き出し。nbt/, readers/, writers/, modpack/, tauri/, FileSource, FileSink
   edit/        編集の操作と履歴。EditCommand, EditHistory, BlockBrush
   analysis/    集計・検索・計測。BlueprintStats, BlockSearch, measure
   calc/        計算プラグイン。CalcPlugin, Provenance, 各Modのプラグイン
   view/        画面。Vue の部品、Three.js の描画、ツール、Pinia のストア
   workers/     Web Worker（Modpack の読み込み、計算）
+src-tauri/     デスクトップ版の Rust 側（起動と設定だけ）
 tests/
   fixtures/    テスト用の設計図を作るヘルパー
 ```
@@ -65,6 +69,8 @@ tests/
 `view/` 以外は Vue と Three.js に依存させない。こうすると、読み込み・編集・計算を画面なしでテストできる。
 
 各層が import してよいのは、自分と、この一覧で自分より上にある層だけ（domain ← io ← edit ← analysis ← calc）。view と workers はその5つを使える。view は workers も使える。Vue・Three.js・Pinia は view の中だけ。破ると `npm run lint` が失敗する。
+
+Tauri の API（`@tauri-apps/*`）を import してよいのは `src/io/tauri/` と `src/view/platform/` だけ。ブラウザ版とデスクトップ版のどちらで動いているかを調べるのも `view/platform/` だけにして、ほかの層は知らないままにする。
 
 ## 設計のルール
 
@@ -83,7 +89,8 @@ tests/
 リポジトリは公開している。次を守ること。
 
 - Minecraft 本体と各 Mod のテクスチャ・モデル・翻訳ファイル・jar を、リポジトリにもアプリにも入れない。アプリは利用者の PC にあるファイルを、その場で読むだけにする。
-- 利用者のファイルはブラウザ内だけで処理し、外部に送信しない。外部への通信を足すときは、先に確認を取ること。
+- 利用者のファイルは利用者の PC の中（ブラウザ版はブラウザ内）だけで処理し、外部に送信しない。外部への通信を足すときは、先に確認を取ること。デスクトップ版の自動更新も外部への通信にあたる。
+- デスクトップ版で許可する操作（Tauri の capabilities）は最小にする。ファイルは利用者が選んだ場所だけを読み書きする。ネットワーク・シェルの許可を足すときは、先に確認を取ること。
 - 他人が作った設計図（Modpack 付属の例を含む）をリポジトリに入れない。テスト用の設計図はコードで生成する（`tests/fixtures/`）。
 - Mod の数値（応力の初期値など）をアプリに入れるときは、出典とライセンスを README の「注記」に書く。
 - 画面と README に、非公式ツールであることを書いておく。Minecraft のロゴは使わない。
