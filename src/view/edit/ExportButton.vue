@@ -2,18 +2,19 @@
 // 「書き出し（.nbt）」ボタン（#21）。
 // 生データのないブロックや足りない Mod があれば、先に知らせて確かめてから書き出す。
 // 保存先を選ぶ画面は利用者の操作の中でしか開けないので、書き出しはクリックの処理から直接始める。
+// 保存先はブラウザ版とデスクトップ版で違う（view/platform/fileAccess.ts の createBlueprintSink）。
 import { computed, ref } from 'vue'
 import type { FileSink } from '../../io/fileSink'
-import { BrowserFileSink } from '../../io/browserFileSink'
 import { exportBlueprint } from '../../io/writers/exportBlueprint'
 import { exportSummary } from '../../io/writers/exportSummary'
 import { useMissingMods } from '../analysis/useMissingMods'
 import { useDocumentSession } from '../document/documentSession'
+import { createBlueprintSink } from '../platform/fileAccess'
 import ModalDialog from '../shell/ModalDialog.vue'
 import { exportErrorMessage, exportNotices, exportResultMessage } from './exportMessages'
 
 const props = withDefaults(defineProps<{ createSink?: () => FileSink }>(), {
-  createSink: () => new BrowserFileSink(),
+  createSink: createBlueprintSink,
 })
 
 const session = useDocumentSession()

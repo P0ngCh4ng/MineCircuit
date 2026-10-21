@@ -11,6 +11,9 @@
     "fs:allow-read-dir",
     "fs:allow-stat",
     "fs:allow-exists",
+    "fs:allow-open",
+    "fs:allow-read",
+    "fs:allow-seek",
     "fs:allow-write-file"
   ]
 }

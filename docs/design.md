@@ -136,6 +136,7 @@ interface FileSource {
   list(dir: string): Promise<string[]>
   read(path: string): Promise<ArrayBuffer>
   stat?(path: string): Promise<{ size: number; lastModified: number } | null>   // 変わった jar だけ読み直すため。なくてもよい
+  readRange?(path: string, start: number, end: number): Promise<ArrayBuffer>    // ファイルの一部だけ。jar の必要な部分だけを読むため。なくてもよい
 }
 
 // 保存先。ブラウザでは保存先を選ぶ画面、Tauri版ではファイルに直接書く
@@ -145,7 +146,7 @@ interface FileSink {
 
 class BrowserFileSource implements FileSource { /* File System Access API */ }
 class BrowserFileSink implements FileSink { /* showSaveFilePicker */ }
-class TauriFileSource implements FileSource { /* @tauri-apps/plugin-fs。デスクトップ版 */ }
+class TauriFileSource implements FileSource { /* @tauri-apps/plugin-fs。デスクトップ版。readRange は open + seek + read */ }
 class TauriFileSink implements FileSink { /* @tauri-apps/plugin-dialog の save + plugin-fs の writeFile */ }
 ```
 
@@ -157,15 +158,16 @@ class TauriFileSink implements FileSink { /* @tauri-apps/plugin-dialog の save 
 | --- | --- | --- |
 | Modpack のフォルダ | `BrowserFileSource`（フォルダのハンドル） | `TauriFileSource`（フォルダのパス） |
 | 登録の保存 | IndexedDB にハンドルを保存。許可が切れたら出し直す | IndexedDB にパスを保存。次回も許可なしで読む |
-| 設計図を開く | `<input type="file">` とドラッグ&ドロップ | 同じ。ファイルを選ぶ画面だけ Tauri のダイアログにしてもよい |
+| 設計図を開く | `<input type="file">` とドラッグ&ドロップ | ファイルを選ぶ画面は Tauri のダイアログ（`pickTauriBlueprintFile`）。ドラッグ&ドロップは同じ |
 | 保存 | `BrowserFileSink`（保存先を選ぶ画面。なければダウンロード） | `TauriFileSink`（保存先を選ぶ画面で選んだパスに書く） |
 | 表示名の保存 | IndexedDB | 同じ（WebView2 の IndexedDB） |
 
-- **どちらで動いているかの判定は view の1か所だけ**（`view/platform/`）で行い、そこで実装を選んでストアに渡す。io・edit・analysis・calc は、どちらで動いているかを知らない。
+- **どちらで動いているかの判定は view の1か所だけ**（`view/platform/`）で行い、そこで実装を選んでストアに渡す。io・edit・analysis・calc は、どちらで動いているかを知らない。実装を選ぶ関数は `view/platform/fileAccess.ts`（`createBlueprintSink`、`loadDesktopModpackFolders`、`pickDesktopBlueprintFile`、画面の注意書きの `fileHandlingNotice`）。io/tauri/ はここから動的 import で読む。
 - **`TauriFileSource` などは `src/io/tauri/` に置く。** Tauri の API（`@tauri-apps/*`）を import してよいのは、`src/io/tauri/` と `view/platform/` だけにする。ブラウザ版のビルドにも入るが、動的 import で読み、ブラウザでは呼ばない。Lint の決まりに足す。
-- **Modpack の登録**は、今の `ModpackRegistry<H>` のハンドルの型 `H` をパス（`string`）にして使う。`ModpackHandleOpener` の実装を Tauri 用に足すだけで、登録の一覧や画面は変えない。
+- **Modpack の登録**は、今の `ModpackRegistry<H>` のハンドルの型 `H` をパス（`string`）にして使う（`io/tauri/tauriModpackRegistry.ts`）。`ModpackHandleOpener` の実装を Tauri 用に足すだけで、登録の一覧や画面は変えない。保存先は `IndexedDbModpackStore<H>`（`io/modpack/indexedDbModpackStore.ts`）で、ブラウザ版（`minecircuit-modpacks`）と名前を分けて `minecircuit-modpacks-desktop` に入れる。
+  - 開くときは、まずフォルダの一覧を読んで確かめる。読む許可の範囲の外（persisted-scope の記録が消えた、など）なら `needs-permission` にし、「フォルダを読む許可を出す」で同じフォルダを選び直してもらう（選ぶと Tauri が範囲を足し直す）。別のフォルダを選んだら開かない。フォルダが消えていれば、そのパスを書いたエラーにする。
 - **読む許可の範囲**：Tauri の fs プラグインは、許可した場所しか読めない。利用者がダイアログで選んだフォルダだけを許可し、`tauri-plugin-persisted-scope` で次回も同じ範囲を許可する。読み込みは選んだフォルダの中だけ、書き込みは保存の画面で選んだファイルだけにする。
-- **jar の読み方**：今は jar を丸ごと読んでいる。デスクトップ版はファイルの一部だけを読めるので、`FileSource` に任意の `readRange?(path, start, end)` を足し、zip の末尾（ファイルの一覧）と必要な項目だけを読むようにできる。足すかどうかは、デスクトップ版で読み込み時間を測ってから決める。
+- **jar の読み方**：`FileSource` の任意の `readRange?(path, start, end)` と `stat` の両方があれば、zip の末尾（ファイルの一覧）と必要な項目だけを読む（`io/modpack/partialZip.ts`。下の「Modpack / ModpackLoader」）。`TauriFileSource`（open + seek + read）、`BrowserFileSource` と `<input webkitdirectory>` のファイル（どちらも `File.slice`）が持つ。どちらでも結果は丸ごと読んだときと同じ。
 - **Rust 側**（`src-tauri/`）には、Tauri の起動と、公式プラグイン（fs、dialog、persisted-scope）の登録と、許可（capabilities）の設定だけを書く。独自のコマンドは作らない。処理を Rust に書くと、ブラウザ版と動きがずれ、Vitest でテストできなくなるため。
 - **許可しない操作**：ネットワーク、シェル、自動更新。CSP でも外部への通信を止める。
 
@@ -176,6 +178,7 @@ class TauriFileSink implements FileSink { /* @tauri-apps/plugin-dialog の save 
 | `core:default` | Tauri の基本（ウィンドウ・イベント・パスなどの読み取り）。通信やファイルの許可は含まない |
 | `dialog:allow-open`・`dialog:allow-save` | ファイル・フォルダを選ぶ画面と、保存先を選ぶ画面。メッセージの画面は使わない |
 | `fs:allow-read-file`・`fs:allow-read-dir`・`fs:allow-stat`・`fs:allow-exists` | 選んだフォルダ（Modpack）と選んだファイルを読む |
+| `fs:allow-open`・`fs:allow-read`・`fs:allow-seek` | jar の一部だけを読む（開く・位置を移す・読む）。開くのは読むためだけ（`read: true`）。閉じるのは `core:default` に入っている |
 | `fs:allow-write-file` | 保存の画面で選んだファイルに書く |
 
 - fs の許可には固定の範囲（`$HOME` など）を付けない。範囲は、dialog プラグインが利用者の選んだパスを実行中に足すものだけになる。フォルダを選ぶときは `recursive: true` を渡して中まで読めるようにし、persisted-scope がその範囲を次回も残す。
@@ -248,6 +251,11 @@ class Modpack {
 - jar から読むのは翻訳ファイル・モデル・ブロック状態の定義・テクスチャだけ。Javaのコードは実行しない。
 - 読み込んだ表示名の一覧はアプリ内（IndexedDB）に保存し、2回目以降を速くする。jar ごとに、ファイル名・大きさ・更新時刻を鍵にして IndexedDB に保存し、変わった jar だけ読み直す。
 - jar を開く処理（zip の展開と JSON の解釈）は Web Worker で行う。`ModpackLoader` は開く関数を差し替えられるので、テストでは Worker なしで動く。
+- jar の必要な部分だけを読む（`FileSource` に `readRange` と `stat` があるとき。`io/modpack/partialZip.ts`）：
+  - 末尾の 64KB ほど（ファイルの一覧の場所を書いた目印と zip64 の目印）→ ファイルの一覧 → 欲しい項目（Mod の情報、翻訳、ブロック状態の定義、jar の中の jar）の順に、その範囲だけを読む。項目は並んで入っているので、項目の終わりは次の項目の始まりで決める。間が 64KB 以下の項目はまとめて1回で読み、読む回数を減らす。
+  - ファイルを読むのは画面側（Tauri のファイルの読み書きは Worker から呼べない）。読んだものは圧縮されたまま（`ExtractedZip`：すべての項目の名前と、欲しい項目の圧縮されたバイト列）Worker へ移し（コピーしない）、Worker で展開と JSON の解釈を行う。Worker へ渡すものは `JarContent`（ファイル全体の `zip` か、取り出した `entries`）。
+  - 結果は fflate の `unzipSync` で丸ごと読んだときと同じになるよう、fflate と同じ読み方をする（zip64、名前の文字コード、末尾のコメントを含む）。想定と違う形（zip でない、zip の前に余計なデータがある、読めたバイト数が足りない、など）なら、丸ごと読む方法に戻す。壊れた jar のお知らせは、丸ごと読んだときと同じ文になる。
+  - 保存の鍵（大きさと更新時刻）と IndexedDB への保存は、丸ごと読むときと同じ。
 - `minecraft` の namespace は jar になくても、常にあるとみなす。本体の翻訳は mods/ にないので、リソースパックが足していなければ本体のブロックの表示名は出ない。
 
 #### jar の外の翻訳

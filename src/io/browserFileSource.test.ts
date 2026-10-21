@@ -53,6 +53,14 @@ describe('BrowserFileSource', () => {
     expect(new Uint8Array(await s.read('mods/create.jar'))).toEqual(new Uint8Array([1, 2]))
   })
 
+  it('readRange はファイルの一部だけを返す', async () => {
+    const s = new BrowserFileSource(fakeDirectory('P', { 'a.jar': new Uint8Array([1, 2, 3, 4, 5]) }))
+    expect(new Uint8Array(await s.readRange('a.jar', 1, 3))).toEqual(new Uint8Array([2, 3]))
+    expect(new Uint8Array(await s.readRange('a.jar', 3, 100))).toEqual(new Uint8Array([4, 5]))
+    await expect(s.readRange('none.jar', 0, 1)).rejects.toBeInstanceOf(FileNotFoundError)
+    await expect(s.readRange('a.jar', 3, 1)).rejects.toThrow(RangeError)
+  })
+
   it('ないものは FileNotFoundError', async () => {
     const s = new BrowserFileSource(profile())
     await expect(s.read('mods/none.jar')).rejects.toBeInstanceOf(FileNotFoundError)

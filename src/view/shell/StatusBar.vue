@@ -2,6 +2,7 @@
 // 下の状態表示。マウス位置、選択中のブロック、注意書き
 import { computed } from 'vue'
 import type { Vec3 } from '../../domain/vec3'
+import { fileHandlingNotice } from '../platform/fileAccess'
 import { useBrushStore } from '../stores/brushStore'
 import { useToolStore } from '../stores/toolStore'
 
@@ -14,6 +15,8 @@ function formatPos(pos: Vec3 | null): string {
 
 const hover = computed(() => formatPos(tools.hoverTarget?.pos ?? null))
 const selected = computed(() => formatPos(tools.selectedPos))
+/** ブラウザ版とデスクトップ版で違う */
+const notice = fileHandlingNotice()
 </script>
 
 <template>
@@ -23,7 +26,7 @@ const selected = computed(() => formatPos(tools.selectedPos))
     <span v-if="brush.message" data-status="message" role="status">{{ brush.message }}</span>
     <span class="spacer"></span>
     <span class="notice">
-      ファイルはブラウザ内だけで読み込み、外部に送信しません。非公式ツールです。Mojang Studios・Microsoft および各 Mod の作者とは関係ありません。
+      {{ notice }}非公式ツールです。Mojang Studios・Microsoft および各 Mod の作者とは関係ありません。
     </span>
   </footer>
 </template>

@@ -2,7 +2,7 @@
 // 取り出すのは Mod の情報、翻訳ファイル（ja_jp / en_us）、ブロック状態の定義だけ。Java のコードは読まない。
 // 時間がかかるので、画面では Web Worker の中で呼ぶ（workers/jarScan.worker.ts）。
 
-import { unzipSync, type UnzipFileInfo } from 'fflate'
+import { inflateSync, unzipSync, type UnzipFileInfo } from 'fflate'
 import {
   FABRIC_MOD_JSON,
   FORGE_MODS_TOML,
@@ -13,6 +13,7 @@ import {
   stripBom,
   type ModInfo,
 } from './modMetadata'
+import type { ExtractedZip } from './partialZip'
 
 /** JSON の値 */
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
@@ -54,7 +55,8 @@ const NAME_KEY = /^(block|item|entity|fluid)\.[^.]+\.[^.]+$/
 
 const METADATA_FILES = new Set([FORGE_MODS_TOML, NEOFORGE_MODS_TOML, FABRIC_MOD_JSON, MANIFEST])
 
-function isWanted(name: string): boolean {
+/** jar の中で読むファイルか（Mod の情報、翻訳、ブロック状態の定義、jar の中の jar） */
+export function isWantedJarEntry(name: string): boolean {
   return METADATA_FILES.has(name) || LANG_PATH.test(name) || BLOCKSTATE_PATH.test(name) || NESTED_JAR_PATH.test(name)
 }
 
@@ -132,10 +134,47 @@ function scan(jar: string, bytes: Uint8Array, depth: number): JarSummary {
     filter(file: UnzipFileInfo) {
       const ns = ASSETS_NAMESPACE.exec(file.name)
       if (ns) namespaces.add(ns[1])
-      return isWanted(file.name)
+      return isWantedJarEntry(file.name)
     },
   })
+  return summarize(jar, files, namespaces, depth)
+}
 
+/**
+ * jar の中身。ファイル全体（zip）か、必要な部分だけを読んで取り出したもの（partialZip.ts）。
+ * どちらも structured clone で Worker に送れる
+ */
+export type JarContent =
+  | { readonly kind: 'zip'; readonly bytes: Uint8Array }
+  | { readonly kind: 'entries'; readonly zip: ExtractedZip }
+
+/**
+ * readZipPartially で取り出した項目を展開する。結果は unzipSync に filter を付けたときと同じ。
+ * 圧縮の方式が分からない項目があればエラーを投げる（unzipSync と同じ）
+ */
+export function inflateExtractedZip(zip: ExtractedZip): Record<string, Uint8Array> {
+  const files: Record<string, Uint8Array> = {}
+  for (const entry of zip.entries) {
+    if (entry.compression === 0) files[entry.name] = entry.data.slice()
+    else if (entry.compression === 8) {
+      files[entry.name] = inflateSync(entry.data, { out: new Uint8Array(entry.originalSize) })
+    } else throw new Error(`unknown compression type ${entry.compression}`)
+  }
+  return files
+}
+
+/** jar を読む。中身がファイル全体でも、取り出した項目でも、結果は同じ */
+export function scanJarContent(jar: string, content: JarContent): JarSummary {
+  if (content.kind === 'zip') return scanJar(jar, content.bytes)
+  const namespaces = new Set<string>()
+  for (const name of content.zip.names) {
+    const ns = ASSETS_NAMESPACE.exec(name)
+    if (ns) namespaces.add(ns[1])
+  }
+  return summarize(jar, inflateExtractedZip(content.zip), namespaces, 0)
+}
+
+function summarize(jar: string, files: Record<string, Uint8Array>, namespaces: Set<string>, depth: number): JarSummary {
   const summary = emptySummary(jar)
   const problems = summary.problems
   const read = (name: string): string | null => (files[name] ? text(files[name]) : null)
