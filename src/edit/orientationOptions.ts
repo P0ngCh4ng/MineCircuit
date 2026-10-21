@@ -134,3 +134,35 @@ export function propertyValueOptionsFor(
   perSource.set(key, options)
   return options
 }
+
+/**
+ * ブロックを一覧から選んだときに使う、はじめの properties（#71）。
+ * - variants 形式：最初のキー（"facing=north,powered=false"）の値。ゲームの初期値とは限らないが、定義にある組み合わせになる
+ * - multipart 形式など：取りうる値の一覧の、それぞれ最初の値
+ * source が null か、定義がなければ空（properties なし）。
+ */
+export function initialPropertiesFor(
+  source: BlockStateDefinitionSource | null,
+  id: ResourceLocation,
+): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (!source) return out
+  const definition = source.blockStateDefinition(id)
+  if (isObject(definition) && isObject(definition.variants)) {
+    const first = Object.keys(definition.variants).find((key) => key.includes('='))
+    if (first !== undefined) {
+      for (const part of first.split(',')) {
+        const eq = part.indexOf('=')
+        const name = eq < 0 ? '' : part.slice(0, eq).trim()
+        const value = eq < 0 ? '' : part.slice(eq + 1).trim()
+        if (name !== '' && value !== '') out[name] = value
+      }
+      return out
+    }
+  }
+  const options = propertyValueOptionsFor(source, id)
+  for (const [name, values] of Object.entries(options ?? {})) {
+    if (values.length > 0) out[name] = values[0]
+  }
+  return out
+}

@@ -7,7 +7,7 @@ import { Modpack } from '../io/modpack/modpack'
 import { blueprintFixture } from '../../tests/fixtures/blueprintFixture'
 import { BlockBrush } from './blockBrush'
 import { rotateBlock } from './editCommand'
-import { parsePropertyValueOptions, propertyValueOptionsFor } from './orientationOptions'
+import { initialPropertiesFor, parsePropertyValueOptions, propertyValueOptionsFor } from './orientationOptions'
 
 const rl = (s: string) => ResourceLocation.parse(s)
 const state = (id: string, properties: Record<string, string> = {}) => new BlockState(rl(id), properties)
@@ -175,5 +175,43 @@ describe('Modpack の定義の範囲で回す', () => {
     expect(rotateBlock(bp, [0, 0, 0], true, null)).not.toBeNull()
     const cmd = rotateBlock(bp, [1, 0, 0], true, pack)
     expect(cmd?.changes[0]?.after.state?.properties.axis).toBe('y')
+  })
+})
+
+describe('initialPropertiesFor（一覧から選んだときの状態）', () => {
+  const pack = new Modpack(
+    [
+      scanJar(
+        'x.jar',
+        fakeJar({
+          blockStates: {
+            'x:motor': variantsFor({ facing: ['north', 'east', 'south', 'west', 'up', 'down'], powered: ['false', 'true'] }),
+            'x:plain': { variants: { '': { model: 'x:block/plain' } } },
+            'x:fence': {
+              multipart: [
+                { apply: { model: 'x:block/post' } },
+                { when: { north: 'true' }, apply: { model: 'x:block/side' } },
+                { when: { OR: [{ east: 'false' }, { east: 'true' }] }, apply: { model: 'x:block/side' } },
+              ],
+            },
+          },
+        }),
+      ),
+    ],
+    null,
+  )
+
+  it('variants 形式は最初のキーの値', () => {
+    expect(initialPropertiesFor(pack, rl('x:motor'))).toEqual({ facing: 'north', powered: 'false' })
+  })
+
+  it('multipart 形式は取りうる値のそれぞれ最初の値', () => {
+    expect(initialPropertiesFor(pack, rl('x:fence'))).toEqual({ north: 'true', east: 'false' })
+  })
+
+  it('properties のないブロック、定義のないブロック、Modpack がないときは空', () => {
+    expect(initialPropertiesFor(pack, rl('x:plain'))).toEqual({})
+    expect(initialPropertiesFor(pack, rl('x:none'))).toEqual({})
+    expect(initialPropertiesFor(null, rl('x:motor'))).toEqual({})
   })
 })

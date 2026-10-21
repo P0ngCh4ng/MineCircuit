@@ -110,6 +110,14 @@ export class Modpack {
   }
 
   /**
+   * ブロック状態の定義があるブロックの ID（`namespace:path`、名前順）。置けるブロックの一覧に使う（#71）。
+   * Minecraft 本体のブロックは mods/ にないので含まない。
+   */
+  blockIds(): string[] {
+    return [...this.blockStates.keys()].sort()
+  }
+
+  /**
    * 設定ファイルの中身（UTF-8 の文字列）。path は Modpack のフォルダからの相対パス
    * （`config/create-common.toml`、`defaultconfigs/create-server.toml` など）。なければ null。
    */

@@ -244,6 +244,7 @@ class Modpack {
   displayName(id: ResourceLocation, lang: 'ja_jp' | 'en_us'): string | null
   config(path: string): Promise<string | null>              // 設定ファイルの中身。なければ null
   blockStateDefinition(id: ResourceLocation): JsonValue | null   // blockstates/<path>.json。回転の候補に使う
+  blockIds(): string[]                                      // blockstates のあるブロックの ID（名前順）。置くブロックの検索に使う
 }
 ```
 
@@ -385,6 +386,13 @@ Modpackがないと、そのブロックが取りうる値が分からない。M
 - variants 形式：キー（`facing=north,powered=false`）に出てくる値を集める
 - multipart 形式：`when` の条件（`OR` / `AND` の中、`a|b` の区切りを含む）に出てくる値を集める
 - 定義に出てこない property は制限しない。multipart で否定の条件（`!north`）がある property も、値が足りないかもしれないので制限しない
+
+Modpackがあれば、置くブロックを jar のブロックから名前で探せる（`analysis/blockCatalog.ts`）。
+
+- 一覧は、ブロック状態の定義（blockstates）がある ID と、その日本語名・英語名。jar ごとの保存（IndexedDB）にブロック状態の定義が入っているので、jar を読み直さずに作れる。Modpack ごとに一度だけ作る
+- 探す言葉は、全角を半角に、ひらがなをカタカナに、小文字にそろえて比べる。空白で区切った言葉がすべて、ID・日本語名・英語名のどれかに含まれれば合う。名前や ID がそのまま同じもの、言葉で始まるものを先に並べ、30件までを出す
+- 一覧から選んだブロックの状態は、variants 形式なら最初のキーの値、multipart 形式などなら取りうる値のそれぞれ最初の値にする（`initialPropertiesFor`）。ゲームの初期値とは限らないので、画面で取りうる値から選び直せる
+- Minecraft 本体のブロックは mods/ にないので一覧に出ない。ID の入力で選ぶ
 
 ## 値の出どころ
 
