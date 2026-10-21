@@ -1,7 +1,9 @@
 import type { BlockState } from '../domain/blockState'
 import type { Blueprint } from '../domain/blueprint'
 import type { CellValue } from '../domain/blockVolume'
+import type { NbtTag, RawNbt } from '../domain/nbt'
 import type { Vec3 } from '../domain/vec3'
+import { nbtEquals } from '../io/nbt/nbtEquals'
 import { propertyValueOptionsFor, type BlockStateDefinitionSource } from './orientationOptions'
 import { rotateState } from './rotation'
 
@@ -76,5 +78,34 @@ export function rotateBlock(
   return {
     label: `${blockName(before.state)} を回す`,
     changes: [{ pos, before, after: { state: next, blockEntity: before.blockEntity } }],
+  }
+}
+
+/**
+ * pos のブロックの生データ（nbt）の項目 key を tag にする操作を作る。
+ * 生データは書き換えず、写しを作って key だけを差し替える（ほかの項目と並びはそのまま）。
+ * 元に戻すと、元の生データ（同じもの）を書き戻す。
+ * 生データがないブロック（アプリで置いたものなど）は、initial の写しに key を足して作る。
+ * initial に何を入れるか（ブロックエンティティの id など）は、呼ぶ側（Mod ごとの知識）が決める。
+ * 空き・範囲の外・すでに同じ値のときは null。label は元に戻すボタンのツールチップに出す。
+ */
+export function setBlockEntityTag(
+  bp: Blueprint,
+  pos: Vec3,
+  key: string,
+  tag: NbtTag,
+  initial: RawNbt | null = null,
+  label: string | null = null,
+): EditCommand | null {
+  const before = currentCell(bp, pos)
+  if (!before?.state) return null
+  const base = before.blockEntity ?? initial
+  const current = base?.value.get(key)
+  if (before.blockEntity && current && nbtEquals(current, tag)) return null
+  const value = new Map(base?.value ?? [])
+  value.set(key, tag)
+  return {
+    label: label ?? `${blockName(before.state)} の ${key} を変える`,
+    changes: [{ pos, before, after: { state: before.state, blockEntity: { type: 'compound', value } } }],
   }
 }
