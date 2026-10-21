@@ -8,7 +8,8 @@ const content = useModpackContentStore()
 const summary = computed(() => {
   const pack = content.pack
   if (!pack) return null
-  return `Mod ${pack.mods.length} 個（jar ${pack.jarCount} 個）を読みました。表示名は日本語 ${pack.displayNameCount('ja_jp')} 件、英語 ${pack.displayNameCount('en_us')} 件です。`
+  const packs = pack.langPacks.length > 0 ? `リソースパックなど ${pack.langPacks.length} 個の翻訳も読みました。` : ''
+  return `Mod ${pack.mods.length} 個（jar ${pack.jarCount} 個）を読みました。${packs}表示名は日本語 ${pack.displayNameCount('ja_jp')} 件、英語 ${pack.displayNameCount('en_us')} 件です。`
 })
 </script>
 
@@ -16,7 +17,7 @@ const summary = computed(() => {
   <section v-if="content.phase !== 'idle'" class="modpack-load" aria-label="Modpack の読み込み">
     <template v-if="content.phase === 'loading'">
       <p class="note" role="status">
-        Mod の jar を読んでいます
+        Mod の jar と翻訳を読んでいます
         <template v-if="content.progress">
           （{{ content.progress.done }} / {{ content.progress.total }}<template v-if="content.progress.current">：{{ content.progress.current }}</template>）
         </template>
