@@ -3,6 +3,7 @@
 // 各場所の中身はそれぞれの部品のファイルで作る（App.vue は並べるだけ）。
 import { watch } from 'vue'
 import { useProbeTool } from './calc/useProbeTool'
+import { usePortTool } from './calc/usePortTool'
 import { useDocumentSession } from './document/documentSession'
 import { useRotateAction } from './edit/rotateAction'
 import { useEditTools } from './edit/useEditTools'
@@ -24,6 +25,7 @@ const session = useDocumentSession()
 const rotate = useRotateAction()
 const edit = useEditTools()
 useProbeTool()
+usePortTool()
 
 // 設計図が入れ替わったら、前の設計図の選択を消し、計算の対象を変える
 watch(session.current, (doc) => {

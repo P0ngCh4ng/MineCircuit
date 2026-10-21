@@ -27,7 +27,7 @@ export const useCalcStore = defineStore('calc', () => {
   /** 計算の仕組みの失敗 */
   const error = ref<string | null>(null)
   const hasBlueprint = ref(false)
-  /** 仮の入出力。後の Issue で .mcircuit.json と画面の入力欄につなぐ */
+  /** 仮の入出力。画面からは portStore（#70）を通して変える。.mcircuit.json への保存は後の Issue */
   const ports = shallowRef<readonly VirtualPort[]>([])
 
   // 設計図・Modpack・計算の仕組みは画面の状態ではないので、リアクティブにしない
