@@ -151,4 +151,44 @@ describe('BlockDetail', () => {
     expect(tools.selectedPos).toBeNull()
     expect(wrapper.text()).toContain('選択ツール（V）でブロックをクリックすると')
   })
+  it('計算に使う設定（モーターの回転数）を変えると、元に戻せる操作として生データに書く', async () => {
+    const session = createDocumentSession()
+    const doc = session.setBlueprint(blueprint())
+    const wrapper = mountWith(session)
+    useToolStore().setSelected([0, 0, 0])
+    await wrapper.vm.$nextTick()
+
+    const input = wrapper.find('input[data-setting="ScrollValue"]')
+    expect((input.element as HTMLInputElement).value).toBe('16')
+    expect(wrapper.find('[data-testid="block-settings"] .source').text()).toBe('内蔵の初期値')
+
+    // 範囲の外はエラーを出し、操作を作らない
+    await input.setValue('300')
+    await input.trigger('change')
+    expect(wrapper.find('[data-testid="block-settings"] .error').text()).toBe('回転数は -256〜256 の範囲で入れてください。')
+    expect(session.canUndo.value).toBe(false)
+
+    await input.setValue('64')
+    await input.trigger('change')
+    await wrapper.vm.$nextTick()
+    expect(doc.blueprint.blockEntityAt([0, 0, 0])?.value.get('ScrollValue')).toEqual(nbt.int(64))
+    expect(wrapper.find('[data-testid="block-settings"] .source').text()).toBe('設計図')
+    expect(wrapper.find('[data-testid="block-settings"] .error').exists()).toBe(false)
+    expect(session.nextUndoLabel.value).toBe('creative_motor の回転数を 64 RPM にする')
+    expect(wrapper.find('li[data-label="ScrollValue"]').exists()).toBe(true)
+
+    session.undo()
+    await wrapper.vm.$nextTick()
+    expect(doc.blueprint.blockEntityAt([0, 0, 0])?.value.has('ScrollValue')).toBe(false)
+    expect((wrapper.find('input[data-setting="ScrollValue"]').element as HTMLInputElement).value).toBe('16')
+  })
+
+  it('設定のないブロックでは、設定の欄を出さない', async () => {
+    const session = createDocumentSession()
+    session.setBlueprint(blueprint())
+    const wrapper = mountWith(session)
+    useToolStore().setSelected([1, 1, 0])
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="block-settings"]').exists()).toBe(false)
+  })
 })
