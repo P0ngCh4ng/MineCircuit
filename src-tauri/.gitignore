@@ -1,0 +1,4 @@
+# Rust のビルド結果
+/target/
+# tauri build が作る capabilities の JSON Schema
+/gen/schemas

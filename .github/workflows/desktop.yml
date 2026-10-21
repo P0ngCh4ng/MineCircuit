@@ -1,0 +1,83 @@
+name: Desktop
+
+# デスクトップ版（Tauri）の Windows 用ビルド。ブラウザ版の CI（ci.yml）とは別に動く。
+# - プルリクエスト：src-tauri/ や package の変更があれば、ビルドできるかを確かめる。インストーラーは成果物として置く
+# - v* のタグ：インストーラー（.msi と .exe）を作り、下書きのリリースに置く。公開は手で行う
+# アプリの版は package.json の version から取る（src-tauri/tauri.conf.json）。タグの前に上げておく
+
+on:
+  pull_request:
+    paths:
+      - 'src-tauri/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - '.github/workflows/desktop.yml'
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      # Rust の版は src-tauri/rust-toolchain.toml で固定。rustup がその版を入れる
+      - name: Rust の準備
+        working-directory: src-tauri
+        run: cargo --version
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: src-tauri -> target
+      - run: npm ci
+      # Cargo.lock が Cargo.toml と合っていることを確かめる（合っていなければ失敗する）
+      - name: Cargo.lock の確認
+        working-directory: src-tauri
+        run: cargo fetch --locked
+      - uses: tauri-apps/tauri-action@v1.0.0
+        with:
+          uploadUpdaterJson: false
+          uploadWorkflowArtifacts: true
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      # 下書きのリリースを作り、インストーラーを置くため
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Rust の準備
+        working-directory: src-tauri
+        run: cargo --version
+      - run: npm ci
+      - name: Cargo.lock の確認
+        working-directory: src-tauri
+        run: cargo fetch --locked
+      - uses: tauri-apps/tauri-action@v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: MineCircuit ${{ github.ref_name }}（非公式）
+          releaseBody: |
+            Windows 用のインストーラー（.msi と .exe）。コード署名をしていないため、Windows が警告を出すことがあります。
+            MineCircuit は非公式のツールです。Mojang Studios・Microsoft、および各Modの作者とは関係がありません。
+          releaseDraft: true
+          prerelease: false
+          uploadUpdaterJson: false

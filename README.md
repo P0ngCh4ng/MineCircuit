@@ -12,6 +12,8 @@
 
 デスクトップ版のインストーラーはコード署名をしていないため、Windowsが警告を出すことがある。
 
+デスクトップ版は [GitHub のリリース](https://github.com/P0ngCh4ng/MineCircuit/releases) に置く（Windows 用の .msi と .exe）。自分でビルドするときは、Rust（rustup）と Visual Studio の C++ ビルドツールを入れて `npm install` のあと `npm run tauri:build` を実行する。
+
 ![MineCircuit の画面](docs/images/ui-edit-3d.png)
 
 - 仕様: [docs/spec.md](docs/spec.md)

@@ -33,8 +33,62 @@ ruleTester.run('layer-dependency', rule, {
     { filename: file('io/jar.ts'), code: "import { unzip } from 'fflate'", options },
     // src の外（入り口の main.ts）は対象外
     { filename: file('main.ts'), code: "import App from './view/App.vue'", options },
+    // Tauri の API は src/io/tauri/ と src/view/platform/ で使ってよい
+    { filename: file('io/tauri/tauriFileSource.ts'), code: "import { readFile } from '@tauri-apps/plugin-fs'", options },
+    { filename: file('view/platform/platform.ts'), code: "import { isTauri } from '@tauri-apps/api/core'", options },
+    { filename: file('view/platform/platform.ts'), code: "const m = import('@tauri-apps/plugin-dialog')", options },
+    // src/io/tauri/ の中は、ほかの io を使ってよい
+    { filename: file('io/tauri/tauriFileSource.ts'), code: "import { a } from '../fileSource'", options },
+    // Tauri 用の実装を選ぶのは view/platform/
+    { filename: file('view/platform/platform.ts'), code: "import { a } from '../../io/tauri/tauriFileSource'", options },
+    { filename: file('view/platform/platform.ts'), code: "const m = import('@/io/tauri/tauriFileSink')", options },
+    // 名前が似ているだけのフォルダは対象外
+    { filename: file('io/tauriLike.ts'), code: "import { a } from './fileSource'", options },
   ],
   invalid: [
+    {
+      filename: file('io/fileSource.ts'),
+      code: "import { readFile } from '@tauri-apps/plugin-fs'",
+      options,
+      errors: [{ messageId: 'tauriOnly' }],
+    },
+    {
+      filename: file('view/App.ts'),
+      code: "import { isTauri } from '@tauri-apps/api/core'",
+      options,
+      errors: [{ messageId: 'tauriOnly' }],
+    },
+    {
+      filename: file('view/platformHelper.ts'),
+      code: "const m = import('@tauri-apps/plugin-dialog')",
+      options,
+      errors: [{ messageId: 'tauriOnly' }],
+    },
+    {
+      filename: file('workers/a.ts'),
+      code: "export { invoke } from '@tauri-apps/api/core'",
+      options,
+      errors: [{ messageId: 'tauriOnly' }],
+    },
+    {
+      // 層の外（入り口の main.ts）でも使わない
+      filename: file('main.ts'),
+      code: "import { isTauri } from '@tauri-apps/api/core'",
+      options,
+      errors: [{ messageId: 'tauriOnly' }],
+    },
+    {
+      filename: file('io/modpack/modpackRegistry.ts'),
+      code: "import { a } from '../tauri/tauriFileSource'",
+      options,
+      errors: [{ messageId: 'tauriImpl' }],
+    },
+    {
+      filename: file('view/stores/modpackStore.ts'),
+      code: "import { a } from '@/io/tauri/tauriFileSource'",
+      options,
+      errors: [{ messageId: 'tauriImpl' }],
+    },
     {
       filename: file('domain/a.ts'),
       code: "import { a } from '../io/a'",
