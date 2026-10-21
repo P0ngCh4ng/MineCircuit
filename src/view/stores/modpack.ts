@@ -35,8 +35,9 @@ function errorMessage(e: unknown): string {
 }
 
 export const useModpackStore = defineStore('modpack', () => {
-  // registry と開いたフォルダは画面の状態ではないので、リアクティブにしない
-  let registry: ModpackRegistry<FileSystemDirectoryHandle> | null = null
+  // registry と開いたフォルダは画面の状態ではないので、リアクティブにしない。
+  // ハンドルの型はブラウザ版（フォルダのハンドル）とデスクトップ版（フォルダのパス）で違うので、ここでは問わない
+  let registry: ModpackRegistry<unknown> | null = null
   const source = shallowRef<FileSource | null>(null)
 
   const entries = ref<ModpackEntry[]>([])
@@ -79,7 +80,7 @@ export const useModpackStore = defineStore('modpack', () => {
   }
 
   /** 登録の一覧を読み、前回選んだ Modpack を開く（許可は求めない） */
-  async function init(r: ModpackRegistry<FileSystemDirectoryHandle>): Promise<void> {
+  async function init<H>(r: ModpackRegistry<H>): Promise<void> {
     registry = r
     await refresh()
     const last = loadSelectedId()
@@ -89,8 +90,8 @@ export const useModpackStore = defineStore('modpack', () => {
     }
   }
 
-  /** フォルダを登録して選ぶ */
-  async function register(name: string, folder: FileSource, handle: FileSystemDirectoryHandle | null): Promise<void> {
+  /** フォルダを登録して選ぶ。handle は init で渡した登録一覧のハンドルの型にする */
+  async function register(name: string, folder: FileSource, handle: unknown): Promise<void> {
     if (!registry) return
     message.value = null
     try {

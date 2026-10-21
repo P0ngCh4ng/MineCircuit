@@ -1,10 +1,13 @@
 <script setup lang="ts">
-// Modpack のフォルダを登録し、一覧から選ぶ部品
+// Modpack のフォルダを登録し、一覧から選ぶ部品。
+// ブラウザ版はフォルダのハンドル、デスクトップ版（Tauri）はフォルダのパスで登録する（view/platform/fileAccess.ts）
 import { onMounted, ref } from 'vue'
 import { pickDirectory, supportsDirectoryPicker, BrowserFileSource } from '../io/browserFileSource'
 import { fileSourceFromPickedFiles } from '../io/memoryFileSource'
 import { createBrowserModpackRegistry } from '../io/modpack/browserModpackRegistry'
 import type { ModpackRegistry } from '../io/modpack/modpackRegistry'
+import { loadDesktopModpackFolders, type DesktopModpackFolders } from './platform/fileAccess'
+import { isDesktop } from './platform/platform'
 import { useModpackStore } from './stores/modpack'
 
 const props = defineProps<{
@@ -12,18 +15,42 @@ const props = defineProps<{
   registry?: ModpackRegistry<FileSystemDirectoryHandle>
   /** テストで差し替える。省略するとブラウザが対応しているかで決める */
   pickerSupported?: boolean
+  /** テストで差し替える。省略すると動いている環境で決める */
+  desktopFolders?: DesktopModpackFolders
 }>()
 
 const store = useModpackStore()
-const canPick = props.pickerSupported ?? supportsDirectoryPicker()
+/** デスクトップ版か。デスクトップ版は Tauri のダイアログでフォルダを選び、次回も許可なしで読む */
+const desktop = props.desktopFolders !== undefined || (props.registry === undefined && isDesktop())
+const canPick = desktop || (props.pickerSupported ?? supportsDirectoryPicker())
 const fileInput = ref<HTMLInputElement | null>(null)
 const busy = ref(false)
+let desktopLoading: Promise<DesktopModpackFolders> | null = null
+
+function desktopAccess(): Promise<DesktopModpackFolders> {
+  desktopLoading ??= props.desktopFolders ? Promise.resolve(props.desktopFolders) : loadDesktopModpackFolders()
+  return desktopLoading
+}
 
 onMounted(() => {
+  if (desktop) {
+    void desktopAccess().then((d) => store.init(d.registry))
+    return
+  }
   void store.init(props.registry ?? createBrowserModpackRegistry())
 })
 
 async function registerFolder(): Promise<void> {
+  if (desktop) {
+    busy.value = true
+    try {
+      const picked = await (await desktopAccess()).pickFolder()
+      if (picked) await store.register(picked.name, picked.source, picked.handle)
+    } finally {
+      busy.value = false
+    }
+    return
+  }
   if (!canPick) {
     // Firefox / Safari：フォルダ内のファイルをまとめて選ぶ
     fileInput.value?.click()
@@ -85,14 +112,18 @@ function onSelect(event: Event): void {
       multiple
       @change="onFilesPicked"
     />
-    <p v-if="store.status === 'needs-permission'" class="note">
+    <p v-if="store.status === 'needs-permission' && desktop" class="note">
+      このフォルダを読む許可がありません。「フォルダを読む許可を出す」を押し、同じフォルダを選んでください。
+    </p>
+    <p v-else-if="store.status === 'needs-permission'" class="note">
       前回の許可が切れています。「フォルダを読む許可を出す」を押してください。
     </p>
     <p v-if="store.message" class="note" role="status">{{ store.message }}</p>
     <p class="note">
       mods フォルダが入っているフォルダを選びます。CurseForge では、Instances の中の Modpack 名のフォルダです。ファイルは外部に送信しません。
     </p>
-    <p v-if="!canPick" class="note">
+    <p v-if="desktop" class="note">登録したフォルダは、次回も選び直さずに読みます。</p>
+    <p v-else-if="!canPick" class="note">
       このブラウザ（Firefox / Safari など）では、登録したフォルダは次回開いたときに選び直しになります。Chrome / Edge では次回も同じフォルダを読みます。
     </p>
   </section>

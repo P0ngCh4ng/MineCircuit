@@ -65,6 +65,18 @@ describe('MemoryFileSource', () => {
     expect(new Uint8Array(await s.read('a.txt'))).toEqual(bytes(7))
     expect(calls).toBe(1)
   })
+
+  it('readRange はファイルの一部だけを返す。末尾を超えたら末尾まで', async () => {
+    const s = new MemoryFileSource([
+      ['a.bin', bytes(1, 2, 3, 4, 5)],
+      ['b.bin', async () => bytes(6, 7, 8).buffer],
+    ])
+    expect(new Uint8Array(await s.readRange('a.bin', 1, 3))).toEqual(bytes(2, 3))
+    expect(new Uint8Array(await s.readRange('a.bin', 4, 99))).toEqual(bytes(5))
+    expect(new Uint8Array(await s.readRange('b.bin', 1, 2))).toEqual(bytes(7))
+    await expect(s.readRange('none.bin', 0, 1)).rejects.toBeInstanceOf(FileNotFoundError)
+    await expect(s.readRange('a.bin', -1, 1)).rejects.toThrow(RangeError)
+  })
 })
 
 describe('fileSourceFromPickedFiles', () => {
@@ -95,5 +107,23 @@ describe('fileSourceFromPickedFiles', () => {
     expect(await result?.source.stat?.('mods/a.jar')).toEqual({ size: 10, lastModified: 20 })
     expect(await result?.source.stat?.('mods/b.jar')).toBeNull()
     await expect(result?.source.stat?.('mods/none.jar')).rejects.toThrow(FileNotFoundError)
+  })
+
+  it('File.slice があれば、readRange で全体を読まずに一部だけを読む', async () => {
+    let wholeReads = 0
+    const data = bytes(1, 2, 3, 4)
+    const file: PickedFile = {
+      webkitRelativePath: 'P/mods/a.jar',
+      arrayBuffer: async () => {
+        wholeReads++
+        return data.slice().buffer
+      },
+      slice: (start, end) => ({ arrayBuffer: async () => data.slice(start, end).buffer }),
+    }
+    const source = fileSourceFromPickedFiles([file])?.source
+    expect(new Uint8Array((await source?.readRange?.('mods/a.jar', 1, 3)) ?? new ArrayBuffer(0))).toEqual(bytes(2, 3))
+    expect(wholeReads).toBe(0)
+    expect(new Uint8Array((await source?.read('mods/a.jar')) ?? new ArrayBuffer(0))).toEqual(data)
+    expect(wholeReads).toBe(1)
   })
 })

@@ -1,6 +1,7 @@
 // jar を Worker で開く JarScanner を作る。Worker が使えなければ null（呼ぶ側がその場で開く）。
 
-import type { JarSummary } from '../io/modpack/jarScanner'
+import type { JarContent, JarSummary } from '../io/modpack/jarScanner'
+import { extractedZipTransfer } from '../io/modpack/partialZip'
 import type { JarScanner } from '../io/modpack/modpackLoader'
 import type { JarScanRequest, JarScanResponse } from './jarScanProtocol'
 
@@ -31,13 +32,13 @@ export function createWorkerJarScanner(): WorkerJarScanner | null {
   }
 
   return {
-    scan(jar, bytes) {
+    scan(jar, content) {
       return new Promise((resolve, reject) => {
         const id = nextId++
         pending.set(id, { resolve, reject })
-        const request: JarScanRequest = { id, jar, bytes }
+        const request: JarScanRequest = { id, jar, content }
         // バイト列は Worker へ移す（コピーしない）
-        worker.postMessage(request, [bytes.buffer])
+        worker.postMessage(request, jarContentTransfer(content))
       })
     },
     dispose() {
@@ -47,4 +48,10 @@ export function createWorkerJarScanner(): WorkerJarScanner | null {
       pending.clear()
     },
   }
+}
+
+/** Worker へ移すバッファ */
+export function jarContentTransfer(content: JarContent): ArrayBuffer[] {
+  if (content.kind === 'entries') return extractedZipTransfer(content.zip)
+  return content.bytes.buffer instanceof ArrayBuffer ? [content.bytes.buffer] : []
 }

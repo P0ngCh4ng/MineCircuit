@@ -5,7 +5,7 @@ import { fakeResourcePackFolder, fakeResourcePackZip } from '../../../tests/fixt
 import { ResourceLocation } from '../../domain/resourceLocation'
 import { FileNotFoundError } from '../fileSource'
 import { MemoryFileSource } from '../memoryFileSource'
-import { scanJar } from './jarScanner'
+import { scanJarContent } from './jarScanner'
 import {
   jarCacheKey,
   MemoryJarCache,
@@ -37,9 +37,9 @@ function countingScanner(): { scan: JarScanner; scanned: string[] } {
   const scanned: string[] = []
   return {
     scanned,
-    scan: async (jar, bytes) => {
+    scan: async (jar, content) => {
       scanned.push(jar)
-      return scanJar(jar, bytes)
+      return scanJarContent(jar, content)
     },
   }
 }
@@ -173,9 +173,9 @@ describe('ModpackLoader', () => {
     ])
     const loader = new ModpackLoader(source, {
       signal: controller.signal,
-      scan: async (jar, bytes) => {
+      scan: async (jar, content) => {
         controller.abort()
-        return scanJar(jar, bytes)
+        return scanJarContent(jar, content)
       },
     })
     await expect(loader.load()).rejects.toThrow(ModpackLoadAbortedError)

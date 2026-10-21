@@ -4,13 +4,17 @@
 // 読んだ結果は jar ごとに保存し（JarCache）、2回目からは変わった jar だけを読み直す。
 
 import { isDirectoryEntry, type FileSource, type FileStat } from '../fileSource'
-import { scanJar, type JarSummary } from './jarScanner'
+import { isWantedJarEntry, scanJarContent, type JarContent, type JarSummary } from './jarScanner'
 import { findLangPacks, hasNames, langPackFromSummary, readFolderLangPack, type LangPack, type LangPackLocation } from './langPacks'
 import { Modpack, type ModpackProblem } from './modpack'
 import { MODS_DIR } from './modpackFolder'
+import { readZipPartially, ZipLayoutError, type RangeReader } from './partialZip'
 
-/** jar を開いて読む関数。bytes は渡したあと使わない（Worker へ移してよい） */
-export type JarScanner = (jar: string, bytes: Uint8Array) => Promise<JarSummary>
+/**
+ * jar を開いて読む関数。content はファイル全体か、必要な部分だけを取り出したもの。
+ * content のバイト列は渡したあと使わない（Worker へ移してよい）
+ */
+export type JarScanner = (jar: string, content: JarContent) => Promise<JarSummary>
 
 /** jar ごとの読んだ結果の保存先。ブラウザでは IndexedDB（indexedDbJarCache.ts） */
 export interface JarCache {
@@ -98,7 +102,7 @@ export class ModpackLoader {
   constructor(source: FileSource, options: ModpackLoaderOptions = {}) {
     this.source = source
     this.cache = options.cache ?? null
-    this.scan = options.scan ?? (async (jar, bytes) => scanJar(jar, bytes))
+    this.scan = options.scan ?? (async (jar, content) => scanJarContent(jar, content))
     this.onProgress = options.onProgress ?? null
     this.signal = options.signal ?? null
   }
@@ -175,15 +179,23 @@ export class ModpackLoader {
       if (hit) return { summary: hit, cached: true }
     }
 
-    const bytes = new Uint8Array(await this.source.read(path))
-    this.throwIfAborted()
-    const key = this.cache ? jarCacheKey(jar, stat, bytes) : null
-    if (key !== null && !stat && this.cache) {
-      const hit = await this.cache.get(key)
-      if (hit) return { summary: hit, cached: true }
+    // ファイルの一部を読めれば、zip の一覧と必要な項目だけを読む（保存の鍵は stat から作れる）
+    let content: JarContent | null = stat ? await this.readPartially(path, stat.size) : null
+    let key: string | null
+    if (content) {
+      key = this.cache ? jarCacheKey(jar, stat, null) : null
+    } else {
+      const bytes = new Uint8Array(await this.source.read(path))
+      this.throwIfAborted()
+      key = this.cache ? jarCacheKey(jar, stat, bytes) : null
+      if (key !== null && !stat && this.cache) {
+        const hit = await this.cache.get(key)
+        if (hit) return { summary: hit, cached: true }
+      }
+      content = { kind: 'zip', bytes }
     }
 
-    const scanned = await this.scan(jar, bytes)
+    const scanned = await this.scan(jar, content)
     const summary = langOnly ? { ...scanned, mods: [], namespaces: [], blockStates: {} } : scanned
     if (key !== null && this.cache) {
       try {
@@ -193,6 +205,27 @@ export class ModpackLoader {
       }
     }
     return { summary, cached: false }
+  }
+
+  /**
+   * readRange があれば、zip の一覧と必要な項目だけを読む。readRange がないか、
+   * 想定と違う形の zip なら null（ファイル全体を読む。壊れた zip のエラーは全体を読む側で出す）
+   */
+  private async readPartially(path: string, size: number): Promise<JarContent | null> {
+    if (!this.source.readRange) return null
+    const readRange = this.source.readRange.bind(this.source)
+    const reader: RangeReader = {
+      size,
+      read: async (start, end) => new Uint8Array(await readRange(path, start, end)),
+    }
+    try {
+      const zip = await readZipPartially(reader, isWantedJarEntry)
+      this.throwIfAborted()
+      return { kind: 'entries', zip }
+    } catch (e) {
+      if (e instanceof ZipLayoutError) return null
+      throw e
+    }
   }
 
   private throwIfAborted(): void {

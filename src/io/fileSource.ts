@@ -21,6 +21,19 @@ export interface FileSource {
    * ファイルがなければ FileNotFoundError を投げる。
    */
   stat?(path: string): Promise<FileStat | null>
+  /**
+   * ファイルの一部（start 以上 end 未満のバイト）だけを返す。end がファイルの大きさを超えたら、末尾までを返す。
+   * jar（zip）の末尾のファイルの一覧と必要な項目だけを読むために使う（modpack/partialZip.ts）。
+   * この関数がない FileSource もある。ファイルがなければ FileNotFoundError を投げる。
+   */
+  readRange?(path: string, start: number, end: number): Promise<ArrayBuffer>
+}
+
+/** readRange の start と end を確かめる。おかしければエラーを投げる */
+export function checkRange(start: number, end: number): void {
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start) {
+    throw new RangeError(`読む範囲が正しくありません: ${start}〜${end}`)
+  }
 }
 
 /** ファイルの大きさと更新時刻 */

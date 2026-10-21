@@ -128,3 +128,62 @@ describe('ModpackPicker', () => {
     expect(store.items.size).toBe(0)
   })
 })
+
+describe('ModpackPicker（デスクトップ版）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  /** デスクトップ版の登録の代わり。フォルダのパスで保存する */
+  function desktopFolders(store: ModpackStore<string>, picked: string | null) {
+    const folders: Record<string, MemoryFileSource> = { 'C:\\Instances\\Create Astral': profile() }
+    const desktopRegistry = new ModpackRegistry<string>(store, {
+      async open(path) {
+        return folders[path] ?? null
+      },
+    })
+    return {
+      registry: desktopRegistry,
+      async pickFolder() {
+        if (picked === null) return null
+        return { name: 'Create Astral', source: folders[picked], handle: picked }
+      },
+    }
+  }
+
+  class PathStore implements ModpackStore<string> {
+    readonly items = new Map<string, StoredModpack<string>>()
+    async list() {
+      return [...this.items.values()]
+    }
+    async put(item: StoredModpack<string>) {
+      this.items.set(item.id, item)
+    }
+    async remove(id: string) {
+      this.items.delete(id)
+    }
+  }
+
+  it('フォルダのパスで登録し、開き直すと許可を求めずに前回のフォルダを開く', async () => {
+    const store = new PathStore()
+    const first = mount(ModpackPicker, { props: { desktopFolders: desktopFolders(store, 'C:\\Instances\\Create Astral') } })
+    await flushPromises()
+    expect(first.text()).toContain('次回も選び直さずに読みます')
+    expect(first.text()).not.toContain('Firefox')
+    await first.find('button').trigger('click')
+    await flushPromises()
+    expect([...store.items.values()].map((i) => i.handle)).toEqual(['C:\\Instances\\Create Astral'])
+    expect(useModpackStore().status).toBe('ready')
+    first.unmount()
+
+    setActivePinia(createPinia())
+    const second = mount(ModpackPicker, { props: { desktopFolders: desktopFolders(store, null) } })
+    await flushPromises()
+    const modpack = useModpackStore()
+    expect(modpack.status).toBe('ready')
+    expect(await modpack.source?.list('mods')).toEqual(['create.jar'])
+    expect(second.text()).toContain('Create Astral')
+    expect(second.text()).not.toContain('（今回だけ）')
+  })
+})

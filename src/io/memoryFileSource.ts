@@ -1,7 +1,16 @@
-import { FileNotFoundError, normalizePath, splitPath, type FileSource, type FileStat } from './fileSource'
+import { checkRange, FileNotFoundError, normalizePath, splitPath, type FileSource, type FileStat } from './fileSource'
 
-/** ファイルの中身。バイト列そのものか、呼ばれたときに読む関数 */
-export type FileContent = Uint8Array | (() => Promise<ArrayBuffer>)
+/** 呼ばれたときに読むファイル。一部だけを読む方法も持つ */
+export interface LazyFileContent {
+  read(): Promise<ArrayBuffer>
+  readRange(start: number, end: number): Promise<ArrayBuffer>
+}
+
+/**
+ * ファイルの中身。バイト列そのものか、呼ばれたときに読む関数か、一部だけも読めるもの。
+ * 関数のときは、readRange でも全体を読んでから切り出す
+ */
+export type FileContent = Uint8Array | (() => Promise<ArrayBuffer>) | LazyFileContent
 
 /**
  * ファイルの一覧から作る FileSource。
@@ -50,8 +59,19 @@ export class MemoryFileSource implements FileSource {
     const content = this.files.get(key)
     if (content === undefined) throw new FileNotFoundError(key)
     if (typeof content === 'function') return content()
+    if (!(content instanceof Uint8Array)) return content.read()
     // 呼び出し元が書き換えても元に影響しないよう、コピーを返す
     return content.slice().buffer
+  }
+
+  async readRange(path: string, start: number, end: number): Promise<ArrayBuffer> {
+    checkRange(start, end)
+    const key = normalizePath(path)
+    const content = this.files.get(key)
+    if (content === undefined) throw new FileNotFoundError(key)
+    if (typeof content === 'function') return (await content()).slice(start, end)
+    if (!(content instanceof Uint8Array)) return content.readRange(start, end)
+    return content.slice(start, end).buffer
   }
 
   /** add で stat を渡したファイルだけ、大きさと更新時刻を返す。渡していなければ null */
@@ -68,6 +88,8 @@ export interface PickedFile {
   readonly size?: number
   readonly lastModified?: number
   arrayBuffer(): Promise<ArrayBuffer>
+  /** 一部を切り出す（File.slice）。あれば jar の一部だけを読める */
+  slice?(start?: number, end?: number): { arrayBuffer(): Promise<ArrayBuffer> }
 }
 
 /**
@@ -87,7 +109,11 @@ export function fileSourceFromPickedFiles(files: ArrayLike<PickedFile>): { name:
       file.size !== undefined && file.lastModified !== undefined
         ? { size: file.size, lastModified: file.lastModified }
         : undefined
-    source.add(parts.slice(1).join('/'), () => file.arrayBuffer(), stat)
+    const slice = file.slice?.bind(file)
+    const content: FileContent = slice
+      ? { read: () => file.arrayBuffer(), readRange: (start, end) => slice(start, end).arrayBuffer() }
+      : () => file.arrayBuffer()
+    source.add(parts.slice(1).join('/'), content, stat)
   }
   return name === null ? null : { name, source }
 }
