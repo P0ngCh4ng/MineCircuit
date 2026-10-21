@@ -8,12 +8,14 @@ import { useCalcStore } from '../stores/calcStore'
 import { clampLayer, useLayerStore } from '../stores/layerStore'
 import { useProbeStore } from '../stores/probeStore'
 import { useMeasureStore } from '../stores/measureStore'
+import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
 import { pick2D, type GridLayout2D, type PickScene2D } from '../tools/picker'
 import type { PickTarget } from '../tools/tool'
 import { ANALYSIS_COLORS_2D, drawAnalysisOverlay2D } from './analysisOverlay2D'
 import { layoutGrid2D } from './layerGrid2D'
+import { drawPortOverlay2D } from './portOverlay2D'
 import { DARK_THEME_2D, drawLayer2D, LIGHT_THEME_2D } from './layerRenderer2D'
 
 const props = withDefaults(defineProps<{ showGrid?: boolean }>(), { showGrid: true })
@@ -27,6 +29,7 @@ const highlight = useSearchHighlight()
 const calc = useCalcStore()
 const probe = useProbeStore()
 const measures = useMeasureStore()
+const ports = usePortStore()
 
 const host = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -89,7 +92,16 @@ function draw(): void {
     { measurePoints: measures.measurePoints, connectGroup: measures.connectGroup?.positions ?? null },
     ANALYSIS_COLORS_2D[dark.value ? 'dark' : 'light'],
   )
+  // 仮の入出力（#70）
+  drawPortOverlay2D(ctx, grid, layer.value, ports.ports, ports.selectedId)
 }
+
+// 仮の入出力が変わったら描き直す（#70）
+watch(
+  () => [ports.ports, ports.selectedId],
+  () => draw(),
+  { flush: 'post' },
+)
 
 // 計算結果の印（ネットワークの強調と問題の位置。#31）が変わったら描き直す
 watch(

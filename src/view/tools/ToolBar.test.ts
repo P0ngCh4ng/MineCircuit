@@ -28,6 +28,7 @@ describe('ToolBar', () => {
       'measure',
       'connect',
       'probe',
+      'port',
       'place',
       'erase',
       'pick',

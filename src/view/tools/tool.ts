@@ -2,7 +2,7 @@ import type { Direction } from '../../domain/direction'
 import type { Vec3 } from '../../domain/vec3'
 
 /** ツールの種類。docs/design.md「view」の Tool と同じ */
-export type ToolId = 'select' | 'measure' | 'connect' | 'probe' | 'place' | 'erase' | 'pick'
+export type ToolId = 'select' | 'measure' | 'connect' | 'probe' | 'port' | 'place' | 'erase' | 'pick'
 
 /**
  * マウスの下にあるもの。3D表示と2D表示のどちらの Picker もこの形で返す。

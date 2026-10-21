@@ -9,11 +9,13 @@ import { useBrushStore } from '../stores/brushStore'
 import { useCalcStore } from '../stores/calcStore'
 import { useProbeStore } from '../stores/probeStore'
 import { useMeasureStore } from '../stores/measureStore'
+import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
 import { blockColor } from './blockColor'
 import { BlueprintScene } from './blueprintScene'
 import { CalcOverlay3D } from './calcOverlay3D'
+import { PortOverlay3D } from './portOverlay3D'
 import { createViewportRenderer, type SceneRenderer, type SceneRendererFactory } from './viewportRenderer'
 import { currentThemeName, viewportTheme, watchThemeName } from './viewportTheme'
 
@@ -38,6 +40,7 @@ const highlight = useSearchHighlight()
 const calc = useCalcStore()
 const probe = useProbeStore()
 const measures = useMeasureStore()
+const ports = usePortStore()
 
 const host = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -53,6 +56,9 @@ const scene = new BlueprintScene()
 // 計算結果の印（ネットワークの強調と問題の位置。#31）
 const calcOverlay = new CalcOverlay3D()
 scene.scene.add(calcOverlay.group)
+// 仮の入出力の印（#70）
+const portOverlay = new PortOverlay3D()
+scene.scene.add(portOverlay.group)
 let renderer: SceneRenderer | null = null
 let resizeObserver: ResizeObserver | null = null
 let stopTheme: (() => void) | null = null
@@ -199,6 +205,15 @@ onMounted(() => {
       },
       { immediate: true },
     ),
+    // 仮の入出力の印（#70）
+    watch(
+      () => [ports.ports, ports.selectedId, view.layerDisplay] as const,
+      ([list, selected, display]) => {
+        portOverlay.update(list, selected, display)
+        render()
+      },
+      { immediate: true },
+    ),
     // 計測とつながり（#16）
     watch(
       () => [measures.measurePoints, measures.connectGroup] as const,
@@ -220,10 +235,11 @@ onBeforeUnmount(() => {
   renderer = null
   scene.dispose()
   calcOverlay.dispose()
+  portOverlay.dispose()
   tools.hover(null)
 })
 
-defineExpose({ scene, calcOverlay })
+defineExpose({ scene, calcOverlay, portOverlay })
 </script>
 
 <template>

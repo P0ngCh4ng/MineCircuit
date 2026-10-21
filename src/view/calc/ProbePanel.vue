@@ -128,6 +128,11 @@ dd {
   opacity: 1;
 }
 
+.source[data-source='virtual'] {
+  color: #8a4fd8;
+  opacity: 1;
+}
+
 .network {
   margin: 8px 0 0;
   display: flex;

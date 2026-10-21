@@ -128,6 +128,11 @@ h4 {
   opacity: 1;
 }
 
+.source[data-source='virtual'] {
+  color: #8a4fd8;
+  opacity: 1;
+}
+
 ul {
   margin: 0;
   padding-left: 16px;

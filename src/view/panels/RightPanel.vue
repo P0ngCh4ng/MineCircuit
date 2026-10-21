@@ -3,6 +3,7 @@
 // 各 Issue の部品を、下の並び順でここに1行ずつ足す。
 import CalcPanel from '../CalcPanel.vue'
 import ProbePanel from '../calc/ProbePanel.vue'
+import PortPanel from '../calc/PortPanel.vue'
 import BlockDetail from '../selection/BlockDetail.vue'
 </script>
 
@@ -12,6 +13,8 @@ import BlockDetail from '../selection/BlockDetail.vue'
     <BlockDetail />
     <!-- プローブ：マウスの下のブロックの回転数・応力（#31。プローブのツールを使っている間と、強調している間だけ出す） -->
     <ProbePanel />
+    <!-- 仮の入出力：置く種類と一覧（#70。ツールを使っている間と、置いている間だけ出す） -->
+    <PortPanel />
     <!-- 計算結果（#29。プローブと問題の一覧は #31） -->
     <CalcPanel />
   </aside>
