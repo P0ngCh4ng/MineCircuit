@@ -8,6 +8,7 @@ import { useModpackContentStore } from '../stores/modpackContent'
 import { useToolStore } from '../stores/toolStore'
 import { nbtTreeNode } from './nbtTree'
 import NbtTreeItem from './NbtTreeItem.vue'
+import BlockSettingsEditor from './BlockSettingsEditor.vue'
 
 const session = useDocumentSession()
 const tools = useToolStore()
@@ -72,6 +73,8 @@ const posText = computed(() => {
         </template>
       </dl>
       <p v-if="detail.state && detail.properties.length === 0" class="note">ブロック状態の項目はありません。</p>
+
+      <BlockSettingsEditor v-if="detail.state" :pos="detail.pos" />
 
       <div v-if="detail.tree" class="nbt">
         <div class="nbt-head">
