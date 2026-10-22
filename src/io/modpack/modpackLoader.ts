@@ -3,6 +3,7 @@
 // jar を開く処理（scan）は差し替えられる。画面では Web Worker で開き、テストではその場で開く。
 // 読んだ結果は jar ごとに保存し（JarCache）、2回目からは変わった jar だけを読み直す。
 
+import type { AssetLocation } from '../assets/modpackAssetReader'
 import { isDirectoryEntry, type FileSource, type FileStat } from '../fileSource'
 import { isWantedJarEntry, scanJarContent, type JarContent, type JarSummary } from './jarScanner'
 import { findLangPacks, hasNames, langPackFromSummary, readFolderLangPack, type LangPack, type LangPackLocation } from './langPacks'
@@ -47,7 +48,7 @@ export interface ModpackLoaderOptions {
 /**
  * 保存した結果の形を変えたら上げる。上げると、保存した結果はすべて読み直しになる。
  */
-export const JAR_SUMMARY_FORMAT = 1
+export const JAR_SUMMARY_FORMAT = 2
 
 /** 読み込みを途中でやめたときのエラー */
 export class ModpackLoadAbortedError extends Error {
@@ -117,6 +118,7 @@ export class ModpackLoader {
     const total = jars.length + packLocations.length
     const summaries: JarSummary[] = []
     const langPacks: LangPack[] = []
+    const assetPacks: AssetLocation[] = []
     const problems: ModpackProblem[] = []
     let fromCache = 0
 
@@ -141,6 +143,7 @@ export class ModpackLoader {
       try {
         const result = await this.loadLangPack(location)
         if (hasNames(result.pack) || result.pack.problems.length > 0) langPacks.push(result.pack)
+        assetPacks.push(result.assets)
         if (result.cached) fromCache++
       } catch (e) {
         if (e instanceof ModpackLoadAbortedError) throw e
@@ -150,21 +153,32 @@ export class ModpackLoader {
 
     this.throwIfAborted()
     this.onProgress?.({ done: total, total, fromCache, current: null })
-    return new Modpack(summaries, this.source, problems, langPacks)
+    return new Modpack(summaries, this.source, problems, langPacks, assetPacks)
   }
 
-  private async loadLangPack(location: LangPackLocation): Promise<{ pack: LangPack; cached: boolean }> {
+  /** jar の外の翻訳を読む。見た目の資産を読む場所（zip なら資産の索引付き）も返す */
+  private async loadLangPack(
+    location: LangPackLocation,
+  ): Promise<{ pack: LangPack; assets: AssetLocation; cached: boolean }> {
     if (location.kind === 'folder') {
-      return { pack: await readFolderLangPack(this.source, location.path), cached: false }
+      return {
+        pack: await readFolderLangPack(this.source, location.path),
+        assets: { kind: 'folder', path: location.path },
+        cached: false,
+      }
     }
     // zip のリソースパックは jar と同じく開いて保存する。保存の鍵はパスで jar と分ける
     const result = await this.loadArchive(location.path, location.path, true)
-    return { pack: langPackFromSummary(location.path, result.summary), cached: result.cached }
+    return {
+      pack: langPackFromSummary(location.path, result.summary),
+      assets: { kind: 'zip', path: location.path, assets: result.summary.assets },
+      cached: result.cached,
+    }
   }
 
   /**
    * zip（jar またはリソースパック）を開いて読む。jar は保存の鍵と結果に使う名前。
-   * langOnly なら、保存する前に翻訳以外（Mod の情報、namespace、ブロック状態の定義）を捨てる。
+   * langOnly なら、保存する前に翻訳と資産の索引以外（Mod の情報、namespace、ブロック状態の定義）を捨てる。
    */
   private async loadArchive(
     path: string,

@@ -1,5 +1,5 @@
 // jar ごとの読んだ結果を IndexedDB に保存する（2回目からの読み込みを速くする）。
-// 保存するのは Mod の情報・表示名・ブロック状態の定義だけで、jar そのものは保存しない。外部にも送らない。
+// 保存するのは Mod の情報・表示名・ブロック状態の定義・資産のパスの索引だけで、jar そのものは保存しない。外部にも送らない。
 
 import type { JarSummary } from './jarScanner'
 import type { JarCache } from './modpackLoader'
@@ -37,6 +37,16 @@ export function jarKeyPrefix(key: string): string {
   return second < 0 ? key : key.slice(0, second + 1)
 }
 
+/** 同じ jar の、前の形式（`v1|<jar>|` など）で保存した結果の鍵の前半。形式を上げたあとに残らないよう消す */
+export function olderFormatPrefixes(prefix: string): string[] {
+  const m = /^v(\d+)\|/.exec(prefix)
+  if (!m) return []
+  const rest = prefix.slice(m[0].length)
+  const out: string[] = []
+  for (let v = 1; v < Number(m[1]); v++) out.push(`v${v}|${rest}`)
+  return out
+}
+
 export class IndexedDbJarCache implements JarCache {
   private db: Promise<IDBDatabase> | null = null
 
@@ -71,8 +81,9 @@ export class IndexedDbJarCache implements JarCache {
     const db = await this.open()
     const tx = db.transaction(STORE_NAME, 'readwrite')
     const store = tx.objectStore(STORE_NAME)
-    const prefix = jarKeyPrefix(key)
-    store.delete(IDBKeyRange.bound(prefix, `${prefix}￿`))
+    for (const prefix of [jarKeyPrefix(key), ...olderFormatPrefixes(jarKeyPrefix(key))]) {
+      store.delete(IDBKeyRange.bound(prefix, `${prefix}￿`))
+    }
     const item: StoredJar = { key, summary }
     store.put(item)
     await transactionDone(tx)

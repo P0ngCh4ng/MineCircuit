@@ -6,7 +6,7 @@ import { Modpack } from './modpack'
 import { MemoryFileSource } from '../memoryFileSource'
 
 function summary(jar: string, partial: Partial<JarSummary>): JarSummary {
-  return { jar, mods: [], namespaces: [], lang: { ja_jp: {}, en_us: {} }, blockStates: {}, problems: [], ...partial }
+  return { jar, mods: [], namespaces: [], lang: { ja_jp: {}, en_us: {} }, blockStates: {}, problems: [], assets: [], ...partial }
 }
 
 describe('Modpack', () => {
