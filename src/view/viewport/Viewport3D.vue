@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Blueprint } from '../../domain/blueprint'
 import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
+import { useAppearanceStore } from '../stores/appearanceStore'
 import { useBrushStore } from '../stores/brushStore'
 import { useCalcStore } from '../stores/calcStore'
 import { useProbeStore } from '../stores/probeStore'
@@ -41,6 +42,7 @@ const calc = useCalcStore()
 const probe = useProbeStore()
 const measures = useMeasureStore()
 const ports = usePortStore()
+const appearance = useAppearanceStore()
 
 const host = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -131,6 +133,15 @@ onMounted(() => {
   }
 
   stops.push(
+    // モデルとテクスチャで描くときの見た目（#84）。設計図より先に入れて、最初から1回で作る
+    watch(
+      () => appearance.active,
+      (set) => {
+        scene.setAppearances(set)
+        render()
+      },
+      { immediate: true },
+    ),
     watch(
       blueprintVersion,
       ({ blueprint: bp }) => {

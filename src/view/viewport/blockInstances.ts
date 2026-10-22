@@ -5,15 +5,28 @@
 // メッシュを作り直さずに切り替える（#10）。そのため、ここではすべての段のブロックを集め、
 // 段ごとの数（layerCounts）を一緒に持っておく。
 
+import type { AppearanceSet, BlockAppearance } from '../../domain/blockModel'
+import type { BlockState } from '../../domain/blockState'
 import type { Blueprint } from '../../domain/blueprint'
+import { directionVector, HORIZONTAL_DIRECTIONS, type Direction } from '../../domain/direction'
 import type { LayerVisibility } from '../layers/layerDisplay'
 import { blockColor } from './blockColor'
+import { cullBit, OpaqueCubeCache } from './modelGeometry'
 
 /** 1種類のブロックの置き場所。座標は設計図全体の座標で [x, y, z, x, y, z, …] と並べる */
 export interface BlockInstanceGroup {
-  /** ブロックの ID（"create:shaft"）。同じ ID は向きなどの状態が違っても同じ色なので1つにまとめる */
+  /** ブロックの ID（"create:shaft"）。色付きの箱では、同じ ID は向きなどの状態が違っても同じ色なので1つにまとめる */
   readonly id: string
   readonly color: number
+  /**
+   * モデルとテクスチャで描くときの見た目（#84）。null なら色付きの箱で描く。
+   * 同じ見た目（オブジェクトが同じ）で、隠す面（cullMask）も同じブロックを1つにまとめる
+   */
+  readonly appearance: BlockAppearance | null
+  /** 見た目を選んだブロック状態の key（名前に使う）。色付きの箱なら null */
+  readonly stateKey: string | null
+  /** 隣の不透明な立方体に隠れて描かない面の向き（modelGeometry.ts の cullBit の和）。色付きの箱なら 0 */
+  readonly cullMask: number
   /** 検索の強調で薄くするブロックのまとまりなら true（#15）。普通に描く段でも半透明で描く */
   readonly dimmed: boolean
   /** すべての段のブロックの位置 */
@@ -33,14 +46,41 @@ interface GroupBuilder {
   layerCounts: Map<number, number>
 }
 
+interface GroupEntry {
+  readonly sortKey: string
+  readonly id: string
+  readonly appearance: BlockAppearance | null
+  readonly stateKey: string | null
+  readonly cullMask: number
+  normal: GroupBuilder | null
+  dimmed: GroupBuilder | null
+}
+
+/**
+ * 面を隠し合う向き。水平の4方向だけにする。
+ * 上下の面は、段の表示方法（上を消す・この段だけ）や段ごとの非表示で、隣の段が消えると見えるようになるため。
+ * 同じ段のブロックは、いつも同じように見える・隠れるので、水平の向きは隠してよい
+ */
+const CULL_DIRECTIONS: readonly Direction[] = HORIZONTAL_DIRECTIONS
+
 /**
  * 設計図のブロックを ID ごとにまとめる。空きは入れない。
  * dimmed を渡すと、dimmed が true のブロックを別のまとまり（dimmed: true）に分ける（検索の強調、#15）。
+ * appearances を渡すと、見た目が分かるブロックは見た目と隠す面ごとにまとめる（#84）。見た目が null のブロックは今までどおり ID ごと。
  * 並びは ID の文字列順で、同じ ID なら普通のまとまりが先（毎回同じ順にして、描き直しで色や順番が揺れないようにする）。
  */
-export function collectBlockInstances(blueprint: Blueprint, dimmed: DimmedOf | null = null): BlockInstanceGroup[] {
-  const groups = new Map<string, { normal: GroupBuilder | null; dimmed: GroupBuilder | null }>()
+export function collectBlockInstances(
+  blueprint: Blueprint,
+  dimmed: DimmedOf | null = null,
+  appearances: AppearanceSet | null = null,
+): BlockInstanceGroup[] {
+  const groups = new Map<string, GroupEntry>()
   const multiRegion = blueprint.regions.length > 1
+  const opaque = appearances ? new OpaqueCubeCache(appearances) : null
+  const appearanceIds = new Map<BlockAppearance, number>()
+
+  const appearanceOf = (state: BlockState): BlockAppearance | null => appearances?.appearances[state.key] ?? null
+  const isDimmed = (x: number, y: number, z: number): boolean => dimmed !== null && dimmed(x, y, z)
 
   blueprint.regions.forEach((region, ri) => {
     const [ox, oy, oz] = region.offset
@@ -51,12 +91,46 @@ export function collectBlockInstances(blueprint: Blueprint, dimmed: DimmedOf | n
       // リージョンが重なる位置は、先のリージョンだけを描く（Blueprint.get と同じ）
       if (multiRegion && ri > 0 && blueprint.locate([x, y, z])?.region !== region) return
       const id = state.id.toString()
-      let entry = groups.get(id)
-      if (!entry) {
-        entry = { normal: null, dimmed: null }
-        groups.set(id, entry)
+      const dim = isDimmed(x, y, z)
+      const appearance = appearanceOf(state)
+      let key = id
+      let cullMask = 0
+      if (appearance) {
+        // 中身のない見た目（見えないブロック）は描かない
+        if (appearance.parts.length === 0) return
+        // 隣が不透明な立方体なら、その向きの面を隠す。薄くしたブロック（半透明）は、自分も薄いときだけ隠す側になる
+        // 隠せる面のない向きは調べない（同じ形のブロックを1つのまとまりにするため）
+        const cullable = opaque!.cullableMask(appearance)
+        for (const d of CULL_DIRECTIONS) {
+          if ((cullable & cullBit(d)) === 0) continue
+          const [dx, dy, dz] = directionVector(d)
+          const neighbor = blueprint.get([x + dx, y + dy, z + dz])
+          if (!neighbor) continue
+          const na = appearanceOf(neighbor)
+          if (!na || !opaque!.isOpaqueCube(na)) continue
+          if (!dim && isDimmed(x + dx, y + dy, z + dz)) continue
+          cullMask |= cullBit(d)
+        }
+        let n = appearanceIds.get(appearance)
+        if (n === undefined) {
+          n = appearanceIds.size
+          appearanceIds.set(appearance, n)
+        }
+        key = `${id}|${n}|${cullMask}`
       }
-      const dim = dimmed !== null && dimmed(x, y, z)
+      let entry = groups.get(key)
+      if (!entry) {
+        entry = {
+          sortKey: appearance ? `${id}|${state.key}|${cullMask}` : id,
+          id,
+          appearance,
+          stateKey: appearance ? state.key : null,
+          cullMask,
+          normal: null,
+          dimmed: null,
+        }
+        groups.set(key, entry)
+      }
       let group = dim ? entry.dimmed : entry.normal
       if (!group) {
         group = { positions: [], layerCounts: new Map() }
@@ -69,11 +143,12 @@ export function collectBlockInstances(blueprint: Blueprint, dimmed: DimmedOf | n
   })
 
   const result: BlockInstanceGroup[] = []
-  for (const id of [...groups.keys()].sort()) {
-    const entry = groups.get(id)!
-    const color = blockColor(id)
-    if (entry.normal) result.push({ id, color, dimmed: false, ...entry.normal })
-    if (entry.dimmed) result.push({ id, color, dimmed: true, ...entry.dimmed })
+  const entries = [...groups.values()].sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0))
+  for (const entry of entries) {
+    const { id, appearance, stateKey, cullMask } = entry
+    const base = { id, color: blockColor(id), appearance, stateKey, cullMask }
+    if (entry.normal) result.push({ ...base, dimmed: false, ...entry.normal })
+    if (entry.dimmed) result.push({ ...base, dimmed: true, ...entry.dimmed })
   }
   return result
 }

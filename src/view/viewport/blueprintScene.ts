@@ -5,6 +5,7 @@
 // こうすると、カメラのレイをそのまま picker.ts の pick3D に渡せる。
 
 import * as THREE from 'three'
+import type { AppearanceSet } from '../../domain/blockModel'
 import type { Blueprint } from '../../domain/blueprint'
 import { cellIndex } from '../../domain/blockVolume'
 import { equalsVec3, type Vec3 } from '../../domain/vec3'
@@ -56,6 +57,8 @@ export class BlueprintScene {
   private readonly ghostBox = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.ghostMaterial)
 
   private blueprint: Blueprint | null = null
+  /** モデルとテクスチャで描くときの見た目（#84）。null なら色付きの箱だけで描く */
+  private appearances: AppearanceSet | null = null
   private display: LayerDisplay = SHOW_ALL_LAYERS
   private blocks: THREE.Group | null = null
   private groups: readonly BlockInstanceGroup[] = []
@@ -118,6 +121,24 @@ export class BlueprintScene {
     this.rebuildBlocks()
     if (sizeChanged) this.rebuildHelpers()
     this.updateMarkers()
+  }
+
+  /**
+   * ブロックの見た目（モデルとテクスチャ）を入れ替える（#84）。null なら、すべて色付きの箱で描く。
+   * 見た目が null のブロックは、見た目があっても色付きの箱で描く
+   */
+  setAppearances(appearances: AppearanceSet | null): void {
+    if (appearances === this.appearances) return
+    this.appearances = appearances
+    // 古い材質を使うメッシュを先に捨ててから、アトラスを入れ替える
+    this.clearBlocks()
+    this.builder.setAtlas(appearances?.atlas ?? null)
+    this.rebuildBlocks()
+  }
+
+  /** 今の見た目。なければ null */
+  get appearanceSet(): AppearanceSet | null {
+    return this.appearances
   }
 
   /**
@@ -245,12 +266,16 @@ export class BlueprintScene {
     this.analysisOverlay.setConnectGroup(group)
   }
 
-  private rebuildBlocks(): void {
+  private clearBlocks(): void {
     if (this.blocks) {
       this.builder.disposeMeshes(this.blocks)
       this.blocks.removeFromParent()
       this.blocks = null
     }
+  }
+
+  private rebuildBlocks(): void {
+    this.clearBlocks()
     this.groups = []
     this.pairs = []
     this.writtenHidden = new Set()
@@ -259,7 +284,7 @@ export class BlueprintScene {
       const highlight = this.highlight
       const size = bp.size
       const dimmed = highlight ? (x: number, y: number, z: number) => !highlight.has(cellIndex(size, x, y, z)) : null
-      this.groups = collectBlockInstances(bp, dimmed)
+      this.groups = collectBlockInstances(bp, dimmed, this.appearances)
       const built = this.builder.build(this.groups)
       this.blocks = built.root
       this.pairs = built.pairs
