@@ -10,6 +10,7 @@ import { LANG_CODES, type JarSummary, type JsonValue, type LangCode, type LangTa
 import type { LangPack } from './langPacks'
 import type { ModInfo } from './modMetadata'
 import { MODS_DIR } from './modpackFolder'
+import type { VanillaLoadResult, VanillaStatus } from './vanillaAssets'
 
 /** jar の中にないが、いつもある namespace（Minecraft 本体） */
 export const BUILTIN_NAMESPACES: readonly string[] = ['minecraft']
@@ -35,6 +36,8 @@ export class Modpack {
   readonly jarCount: number
   /** 翻訳を読んだ jar の外の置き場所（`resourcepacks/foo.zip`、`ModTranslations`）。優先度の低い順 */
   readonly langPacks: readonly string[]
+  /** Minecraft 本体の資産を探した結果。探していなければ null */
+  readonly vanilla: VanillaStatus | null
 
   private readonly namespaceSet: ReadonlySet<string>
   private readonly lang: Record<LangCode, LangTable>
@@ -51,6 +54,8 @@ export class Modpack {
    * langPacks は jar の外の翻訳（リソースパックなど）で、優先度の低い順に渡す。jar の翻訳より優先し、後ろのものほど優先する。
    * assetPacks は見た目の資産を読む jar の外の場所（リソースパックと ModTranslations/）で、langPacks と同じく優先度の低い順。
    * jar の資産は summaries の索引（JarSummary.assets）から読む。
+   * vanilla は Minecraft 本体の jar を読んだ結果。翻訳・ブロック状態の定義・資産を、どの jar よりも優先度の低いものとして足す
+   * （Mod の一覧と namespace には足さない）。
    */
   constructor(
     summaries: readonly JarSummary[],
@@ -58,12 +63,21 @@ export class Modpack {
     problems: readonly ModpackProblem[] = [],
     langPacks: readonly LangPack[] = [],
     assetPacks: readonly AssetLocation[] = [],
+    vanilla: VanillaLoadResult | null = null,
   ) {
     const mods: ModInfo[] = []
     const namespaces = new Set<string>()
     const lang: Record<LangCode, LangTable> = { ja_jp: {}, en_us: {} }
     const blockStates = new Map<string, JsonValue>()
     const allProblems: ModpackProblem[] = [...problems]
+    const base = vanilla?.assets ?? null
+    if (base) {
+      Object.assign(lang.ja_jp, base.jaJp, base.summary.lang.ja_jp)
+      Object.assign(lang.en_us, base.summary.lang.en_us)
+      for (const [id, def] of Object.entries(base.summary.blockStates)) blockStates.set(id, def)
+      for (const message of base.summary.problems) allProblems.push({ jar: base.jarPath, message })
+    }
+    this.vanilla = vanilla?.status ?? null
     for (const s of summaries) {
       mods.push(...s.mods)
       for (const ns of s.namespaces) namespaces.add(ns)
@@ -85,6 +99,7 @@ export class Modpack {
     this.jarCount = summaries.length
     this.source = source
     this.assetLocations = [
+      ...(base ? [{ kind: 'zip', path: base.jarPath, assets: base.summary.assets, source: base.source } as const] : []),
       ...summaries.map((s): AssetLocation => ({ kind: 'zip', path: `${MODS_DIR}/${s.jar}`, assets: s.assets })),
       ...assetPacks,
     ]
@@ -92,7 +107,7 @@ export class Modpack {
 
   /**
    * 見た目の資産（`assets/<ns>/models/`・`blockstates/`・`textures/`）を読む AssetReader。
-   * 同じパスがあれば、リソースパック（options.txt の順）> ModTranslations/ > jar（名前の後ろのもの）の順で選ぶ。
+   * 同じパスがあれば、リソースパック（options.txt の順）> ModTranslations/ > jar（名前の後ろのもの）> Minecraft 本体の jar の順で選ぶ。
    * 開いた jar の一覧は覚えておくので、同じものを使い続ける。source がなければ常に null を返す
    */
   assets(): AssetReader {
@@ -108,7 +123,8 @@ export class Modpack {
   /**
    * 表示名。`block.<ns>.<path>`、`item.<ns>.<path>` の順に探す。その言語の翻訳がなければ null。
    * リソースパック・ModTranslations の翻訳があれば jar の翻訳より優先する。
-   * Minecraft 本体の翻訳は mods/ にないので、リソースパックが足していなければ `minecraft:` のブロックは null になる。
+   * Minecraft 本体の翻訳は、本体の jar（en_us）とランチャーの資産の索引（ja_jp）から読む。見つからなければ、
+   * リソースパックが足していない限り `minecraft:` のブロックは null になる。
    */
   displayName(id: ResourceLocation, lang: LangCode): string | null {
     const table = this.lang[lang]
@@ -134,7 +150,7 @@ export class Modpack {
 
   /**
    * ブロック状態の定義があるブロックの ID（`namespace:path`、名前順）。置けるブロックの一覧に使う（#71）。
-   * Minecraft 本体のブロックは mods/ にないので含まない。
+   * Minecraft 本体のブロックは、本体の jar を読めたときだけ含む。
    */
   blockIds(): string[] {
     return [...this.blockStates.keys()].sort()

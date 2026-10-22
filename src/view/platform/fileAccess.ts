@@ -5,6 +5,7 @@
 import { BrowserFileSink } from '../../io/browserFileSink'
 import type { FileSink } from '../../io/fileSink'
 import type { FileSource } from '../../io/fileSource'
+import type { GameFolderRegistry } from '../../io/modpack/gameFolderRegistry'
 import type { ModpackRegistry } from '../../io/modpack/modpackRegistry'
 import { isDesktop } from './platform'
 
@@ -62,6 +63,25 @@ export async function loadDesktopModpackFolders(): Promise<DesktopModpackFolders
     registry: registry.createTauriModpackRegistry(),
     async pickFolder() {
       const picked = await registry.pickTauriFolder()
+      return picked ? { name: picked.name, source: picked.source, handle: picked.path } : null
+    },
+  }
+}
+
+/** デスクトップ版のゲームのフォルダ（Minecraft 本体の jar があるフォルダ）の一覧と選び方 */
+export interface DesktopGameFolders {
+  readonly registry: GameFolderRegistry<string>
+  /** フォルダを選ぶ画面を出す。取り消したら null */
+  pickFolder(): Promise<PickedDesktopFolder | null>
+}
+
+/** デスクトップ版のゲームのフォルダの一覧と選び方を読み込む。ブラウザ版では呼ばない */
+export async function loadDesktopGameFolders(): Promise<DesktopGameFolders> {
+  const { registry } = await loadDesktop()
+  return {
+    registry: registry.createTauriGameFolderRegistry(),
+    async pickFolder() {
+      const picked = await registry.pickTauriGameFolder()
       return picked ? { name: picked.name, source: picked.source, handle: picked.path } : null
     },
   }

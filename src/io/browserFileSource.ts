@@ -29,13 +29,14 @@ export function supportsDirectoryPicker(): boolean {
 /**
  * フォルダを選ぶ画面を出す。利用者が取り消したら null。
  * 画面が使えないブラウザでは呼ばない（supportsDirectoryPicker を先に確かめる）。
+ * id は、次に開いたときに同じ場所から始めるための名前（選ぶものの種類ごとに分ける）。
  */
-export async function pickDirectory(): Promise<FileSystemDirectoryHandle | null> {
+export async function pickDirectory(id = 'minecircuit-modpack'): Promise<FileSystemDirectoryHandle | null> {
   const picker = directoryPicker()
   if (!picker) throw new Error('このブラウザでは、フォルダを選ぶ画面を使えません。')
   try {
     // id を付けると、次に開いたときも同じ場所から始まる
-    return await picker({ id: 'minecircuit-modpack', mode: 'read' })
+    return await picker({ id, mode: 'read' })
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') return null
     throw e

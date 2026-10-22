@@ -24,7 +24,8 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: (o: unknown) => dialog().open(o),
 }))
 
-const { createTauriModpackRegistry, pickTauriFolder, samePath } = await import('./tauriModpackRegistry')
+const { createTauriGameFolderRegistry, createTauriModpackRegistry, pickTauriFolder, pickTauriGameFolder, samePath } =
+  await import('./tauriModpackRegistry')
 
 /** IndexedDB の代わり。アプリを閉じて開き直すのは、同じ store で registry を作り直すことにあたる */
 class MemoryStore implements ModpackStore<string> {
@@ -131,5 +132,35 @@ describe('デスクトップ版の Modpack の登録', () => {
     const picked = await pickTauriFolder()
     if (!picked) throw new Error('選べませんでした')
     expect(await registry.register(picked.name, picked.source, picked.path)).toMatchObject({ kind: 'invalid' })
+  })
+})
+
+describe('デスクトップ版のゲームのフォルダ（Minecraft 本体の jar）', () => {
+  const INSTALL = 'C:\\Users\\me\\curseforge\\minecraft\\Install'
+
+  it('本体のフォルダを選ぶ画面で選び、パスを保存して次回も読む', async () => {
+    fs().add(`${INSTALL}\\versions\\1.20.1\\1.20.1.jar`, new Uint8Array([1]))
+    const store = new MemoryStore()
+    dialog().nextOpen = INSTALL
+    const picked = await pickTauriGameFolder()
+    if (!picked) throw new Error('選べませんでした')
+    expect(dialog().openOptions[0]).toMatchObject({ title: 'Minecraft 本体のフォルダを選ぶ', directory: true, recursive: true })
+    const registry = createTauriGameFolderRegistry(store)
+    expect(await registry.add(picked.name, picked.source, picked.path)).toMatchObject({
+      kind: 'added',
+      entry: { name: 'Install', persistent: true },
+    })
+    const [entry] = await createTauriGameFolderRegistry(store).list()
+    const opened = await createTauriGameFolderRegistry(store).open(entry.id, false)
+    expect(opened.kind).toBe('opened')
+  })
+
+  it('許可の範囲が消えていたら、本体のフォルダを選ぶ画面で選び直してもらう', async () => {
+    const store = new MemoryStore()
+    await store.put({ id: 'g', name: 'Install', addedAt: 1, handle: INSTALL })
+    fs().allowed = []
+    const registry = createTauriGameFolderRegistry(store)
+    expect(await registry.open('g', true)).toEqual({ kind: 'needs-permission' })
+    expect(dialog().openOptions[0]).toMatchObject({ title: 'Minecraft 本体のフォルダを選ぶ', defaultPath: INSTALL })
   })
 })

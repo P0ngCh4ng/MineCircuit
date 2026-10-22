@@ -6,11 +6,18 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import { FileNotFoundError, type FileSource } from '../fileSource'
 import { IndexedDbModpackStore } from '../modpack/indexedDbModpackStore'
+import { GameFolderRegistry } from '../modpack/gameFolderRegistry'
 import { ModpackRegistry, type ModpackHandleOpener, type ModpackStore } from '../modpack/modpackRegistry'
 import { baseName, TauriFileSource, TauriForbiddenError } from './tauriFileSource'
 
 /** デスクトップ版の保存先の名前。ブラウザ版（ハンドルを保存する）と分ける */
 export const DESKTOP_MODPACK_DB = 'minecircuit-modpacks-desktop'
+
+/** デスクトップ版のゲームのフォルダ（Minecraft 本体の jar があるフォルダ）の保存先の名前 */
+export const DESKTOP_GAME_FOLDER_DB = 'minecircuit-game-folders-desktop'
+
+const MODPACK_PICK_TITLE = 'Modpack のフォルダを選ぶ'
+const GAME_FOLDER_PICK_TITLE = 'Minecraft 本体のフォルダを選ぶ'
 
 /** 選んだ Modpack のフォルダ */
 export interface PickedTauriFolder {
@@ -25,9 +32,12 @@ export interface PickedTauriFolder {
  * Modpack のフォルダを選ぶ画面を出す。取り消したら null。
  * recursive: true で、選んだフォルダの中まで読めるようにする（persisted-scope が次回も残す）
  */
-export async function pickTauriFolder(defaultPath?: string): Promise<PickedTauriFolder | null> {
+export async function pickTauriFolder(
+  defaultPath?: string,
+  title: string = MODPACK_PICK_TITLE,
+): Promise<PickedTauriFolder | null> {
   const path = await open({
-    title: 'Modpack のフォルダを選ぶ',
+    title,
     directory: true,
     multiple: false,
     recursive: true,
@@ -43,23 +53,41 @@ export function samePath(a: string, b: string): boolean {
   return norm(a) === norm(b)
 }
 
-/** 保存したパスからフォルダを開く */
-export const tauriHandleOpener: ModpackHandleOpener<string> = {
-  async open(path, requestPermission): Promise<FileSource | null> {
-    const source = new TauriFileSource(path)
-    try {
-      // 読めるか確かめる（範囲の外なら TauriForbiddenError）
-      await source.list('')
-      return source
-    } catch (e) {
-      if (e instanceof FileNotFoundError) throw new FileNotFoundError(path)
-      if (!(e instanceof TauriForbiddenError)) throw e
-    }
-    if (!requestPermission) return null
-    // 範囲が消えていた。同じフォルダを選び直してもらい、範囲を足し直す
-    const picked = await pickTauriFolder(path)
-    return picked && samePath(picked.path, path) ? picked.source : null
-  },
+/** 保存したパスからフォルダを開く。範囲が消えていたら、title の画面で同じフォルダを選び直してもらう */
+function tauriOpener(title: string): ModpackHandleOpener<string> {
+  return {
+    async open(path, requestPermission): Promise<FileSource | null> {
+      const source = new TauriFileSource(path)
+      try {
+        // 読めるか確かめる（範囲の外なら TauriForbiddenError）
+        await source.list('')
+        return source
+      } catch (e) {
+        if (e instanceof FileNotFoundError) throw new FileNotFoundError(path)
+        if (!(e instanceof TauriForbiddenError)) throw e
+      }
+      if (!requestPermission) return null
+      // 範囲が消えていた。同じフォルダを選び直してもらい、範囲を足し直す
+      const picked = await pickTauriFolder(path, title)
+      return picked && samePath(picked.path, path) ? picked.source : null
+    },
+  }
+}
+
+/** 保存したパスから Modpack のフォルダを開く */
+export const tauriHandleOpener: ModpackHandleOpener<string> = tauriOpener(MODPACK_PICK_TITLE)
+
+/** Minecraft 本体のフォルダ（ゲームのフォルダ）を選ぶ画面を出す。取り消したら null */
+export function pickTauriGameFolder(): Promise<PickedTauriFolder | null> {
+  return pickTauriFolder(undefined, GAME_FOLDER_PICK_TITLE)
+}
+
+/** デスクトップ版のゲームのフォルダの一覧。store を省略すると IndexedDB に保存する */
+export function createTauriGameFolderRegistry(store?: ModpackStore<string>): GameFolderRegistry<string> {
+  return new GameFolderRegistry(
+    store ?? new IndexedDbModpackStore<string>(DESKTOP_GAME_FOLDER_DB),
+    tauriOpener(GAME_FOLDER_PICK_TITLE),
+  )
 }
 
 /** デスクトップ版の登録一覧。store を省略すると IndexedDB に保存する */

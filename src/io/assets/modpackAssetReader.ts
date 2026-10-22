@@ -25,10 +25,17 @@ import type { AssetReader } from './assetTypes'
 
 /**
  * 資産を読む場所1つ。path は Modpack のフォルダからの相対パス（`mods/create.jar`、`resourcepacks/foo.zip`、`ModTranslations`）。
- * zip は索引（assets）にあるファイルだけを読む。フォルダは索引を持たず、頼まれたときにそのパスを読んでみる
+ * zip は索引（assets）にあるファイルだけを読む。フォルダは索引を持たず、頼まれたときにそのパスを読んでみる。
+ * zip の source は、Modpack のフォルダの外にあるもの（Minecraft 本体の jar を選んだゲームのフォルダ）を読むときだけ渡す。
+ * そのとき path は source からの相対パス
  */
 export type AssetLocation =
-  | { readonly kind: 'zip'; readonly path: string; readonly assets: readonly string[] }
+  | {
+      readonly kind: 'zip'
+      readonly path: string
+      readonly assets: readonly string[]
+      readonly source?: FileSource
+    }
   | { readonly kind: 'folder'; readonly path: string }
 
 /** 開いた zip。一部を読めるときは一覧だけを持ち、読めないときはファイル全体を持つ */
@@ -155,16 +162,21 @@ export class ModpackAssetReader implements AssetReader {
   private readonly broken = new Set<string>()
 
   /**
-   * source は Modpack のフォルダ。null なら何も読めない（常に null を返す）。
+   * source は Modpack のフォルダ。null なら、自分の source を持つ場所（本体の jar）しか読めない。
    * locations は優先度の低い順に渡す（後ろのものほど優先）
    */
   constructor(source: FileSource | null, locations: readonly AssetLocation[]) {
     this.source = source
-    this.locations = source
-      ? locations
-          .map((l) => (l.kind === 'zip' ? new ZipArchive(l.path, l.assets, source) : l))
-          .reverse()
-      : []
+    const usable: (ZipArchive | { readonly kind: 'folder'; readonly path: string })[] = []
+    for (const l of locations) {
+      if (l.kind === 'zip') {
+        const from = l.source ?? source
+        if (from) usable.push(new ZipArchive(l.path, l.assets, from))
+      } else if (source) {
+        usable.push(l)
+      }
+    }
+    this.locations = usable.reverse()
   }
 
   async readText(path: string): Promise<string | null> {

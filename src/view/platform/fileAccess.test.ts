@@ -21,11 +21,12 @@ vi.mock('../../io/tauri/tauriBlueprintFiles', () => ({
 vi.mock('../../io/tauri/tauriModpackRegistry', () => ({
   createTauriModpackRegistry: () => ({ kind: 'tauri-registry' }),
   pickTauriFolder: async () => ({ name: 'ATM10', path: 'C:\\ATM10', source: { kind: 'tauri-source' } }),
+  createTauriGameFolderRegistry: () => ({ kind: 'tauri-game-registry' }),
+  pickTauriGameFolder: async () => ({ name: 'Install', path: 'C:\\Install', source: { kind: 'tauri-source' } }),
 }))
 
-const { createBlueprintSink, fileHandlingNotice, loadDesktopModpackFolders, pickDesktopBlueprintFile } = await import(
-  './fileAccess'
-)
+const { createBlueprintSink, fileHandlingNotice, loadDesktopGameFolders, loadDesktopModpackFolders, pickDesktopBlueprintFile } =
+  await import('./fileAccess')
 
 type TauriMarker = { isTauri?: boolean }
 
@@ -54,6 +55,12 @@ describe('fileAccess', () => {
     const folders = await loadDesktopModpackFolders()
     expect(folders.registry).toEqual({ kind: 'tauri-registry' })
     expect(await folders.pickFolder()).toMatchObject({ name: 'ATM10', handle: 'C:\\ATM10' })
+  })
+
+  it('デスクトップ版の Minecraft 本体のフォルダも、パスを保存に使う', async () => {
+    const folders = await loadDesktopGameFolders()
+    expect(folders.registry).toEqual({ kind: 'tauri-game-registry' })
+    expect(await folders.pickFolder()).toMatchObject({ name: 'Install', handle: 'C:\\Install' })
   })
 
   it('デスクトップ版の設計図を開く画面', async () => {

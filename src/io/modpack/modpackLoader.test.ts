@@ -102,9 +102,10 @@ describe('ModpackLoader', () => {
     const seen: ModpackLoadProgress[] = []
     await new ModpackLoader(source, { onProgress: (p) => seen.push(p) }).load()
     expect(seen).toEqual([
-      { done: 0, total: 2, fromCache: 0, current: 'a.jar' },
-      { done: 1, total: 2, fromCache: 0, current: 'b.jar' },
-      { done: 2, total: 2, fromCache: 0, current: null },
+      { done: 0, total: 3, fromCache: 0, current: 'a.jar' },
+      { done: 1, total: 3, fromCache: 0, current: 'b.jar' },
+      { done: 2, total: 3, fromCache: 0, current: 'Minecraft 本体' },
+      { done: 3, total: 3, fromCache: 0, current: null },
     ])
   })
 
@@ -141,7 +142,7 @@ describe('ModpackLoader', () => {
     }).load()
     expect(second.scanned).toEqual([])
     expect(reads).toEqual([])
-    expect(progress.at(-1)).toEqual({ done: 2, total: 2, fromCache: 2, current: null })
+    expect(progress.at(-1)).toEqual({ done: 3, total: 3, fromCache: 2, current: null })
     expect(pack2.displayName(rl('gears:gear'), 'ja_jp')).toBe('歯車1')
 
     // a.jar だけ更新した
@@ -244,9 +245,10 @@ describe('ModpackLoader（jar の外の翻訳）', () => {
     const pack = await new ModpackLoader(make(), { cache, scan: second.scan, onProgress: (p) => progress.push(p) }).load()
     expect(second.scanned).toEqual([])
     expect(progress).toEqual([
-      { done: 0, total: 2, fromCache: 0, current: 'a.jar' },
-      { done: 1, total: 2, fromCache: 1, current: 'resourcepacks/ja.zip' },
-      { done: 2, total: 2, fromCache: 2, current: null },
+      { done: 0, total: 3, fromCache: 0, current: 'a.jar' },
+      { done: 1, total: 3, fromCache: 1, current: 'resourcepacks/ja.zip' },
+      { done: 2, total: 3, fromCache: 2, current: 'Minecraft 本体' },
+      { done: 3, total: 3, fromCache: 2, current: null },
     ])
     expect(pack.displayName(rl('gears:gear'), 'ja_jp')).toBe('パック')
   })
