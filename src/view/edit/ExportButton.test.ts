@@ -25,6 +25,30 @@ function mountWith(session: DocumentSession, sink: FileSink) {
 
 const motorNbt = () => nbt.compound({ Speed: nbt.int(16) })
 
+/**
+ * sink.save が終わると解決する Promise を付ける。
+ * 書き出しは gzip の圧縮と、確かめのための展開（CompressionStream / DecompressionStream）を挟み、
+ * これは Node の別スレッドで動くので、決まった時間を待つと重いときに間に合わない。保存が終わるのを待つ。
+ */
+function watchSave(sink: FileSink): { sink: FileSink; saved: Promise<void> } {
+  let done: () => void = () => {}
+  const saved = new Promise<void>((resolve) => {
+    done = resolve
+  })
+  return {
+    sink: {
+      save: async (name, data) => {
+        try {
+          return await sink.save(name, data)
+        } finally {
+          done()
+        }
+      },
+    },
+    saved,
+  }
+}
+
 describe('ExportButton', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -45,12 +69,12 @@ describe('ExportButton', () => {
     const session = createDocumentSession()
     session.setBlueprint(blueprintFixture({ size: [2, 1, 1], name: 'mill.nbt' }).place([0, 0, 0], 'minecraft:stone').toBlueprint())
     const sink = new MemoryFileSink()
-    const wrapper = mountWith(session, sink)
+    const { sink: watched, saved } = watchSave(sink)
+    const wrapper = mountWith(session, watched)
 
     await wrapper.find('[data-action="export"]').trigger('click')
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
-    await flushPromises()
-    await new Promise((r) => setTimeout(r, 50))
+    await saved
     await flushPromises()
 
     const bytes = sink.files.get('mill.nbt')
@@ -70,7 +94,8 @@ describe('ExportButton', () => {
         .toBlueprint(),
     )
     const sink = new MemoryFileSink()
-    const wrapper = mountWith(session, sink)
+    const { sink: watched, saved } = watchSave(sink)
+    const wrapper = mountWith(session, watched)
 
     await wrapper.find('[data-action="export"]').trigger('click')
     const dialog = wrapper.find('[role="dialog"]')
@@ -84,8 +109,7 @@ describe('ExportButton', () => {
 
     await wrapper.find('[data-action="export"]').trigger('click')
     await wrapper.find('[data-action="confirm-export"]').trigger('click')
-    await flushPromises()
-    await new Promise((r) => setTimeout(r, 50))
+    await saved
     await flushPromises()
     expect(sink.files.has('m.nbt')).toBe(true)
   })
@@ -93,15 +117,14 @@ describe('ExportButton', () => {
   it('保存できなければ、何が起きたかを出す', async () => {
     const session = createDocumentSession()
     session.setBlueprint(blueprintFixture({ size: [1, 1, 1] }).toBlueprint())
-    const failing: FileSink = {
+    const { sink: failing, saved } = watchSave({
       save: async () => {
         throw new Error('ディスクがいっぱいです')
       },
-    }
+    })
     const wrapper = mountWith(session, failing)
     await wrapper.find('[data-action="export"]').trigger('click')
-    await flushPromises()
-    await new Promise((r) => setTimeout(r, 50))
+    await saved
     await flushPromises()
     const msg = wrapper.find('[data-testid="export-message"]')
     expect(msg.attributes('role')).toBe('alert')
