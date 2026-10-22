@@ -537,6 +537,41 @@ interface ProjectFile {
 
 今の作り（#70）：仮の入出力は、開いている設計図1つ分をメモリ（`calcStore.ports`）に持つだけで、ファイルには保存しない。別の設計図を開くと消える。`.mcircuit.json` の読み書きを作るときに、ここへつなぐ。
 
+## 見た目（モデルとテクスチャ）
+
+色付きの箱の代わりに、利用者の jar にあるモデルとテクスチャで描く。テクスチャとモデルは各 Mod の権利物なので、アプリにもリポジトリにも入れず、その場で読むだけにする。表示名の保存と同じく、読んだ結果をこの PC の中（IndexedDB）に保存するのはよい。
+
+読む側と描く側は、`src/domain/blockModel.ts` の型だけで約束する。画面は `AppearanceSet` だけを受け取って描くので、jar の読み込みができる前から、偽のデータ（`tests/fixtures/fakeAppearance.ts`）で作れる。
+
+```mermaid
+flowchart LR
+    jar["jar・リソースパック"] --> reader["AssetReader<br/>資産のファイルを読む"]
+    reader --> resolver["ModelResolver<br/>blockstates → モデル → 親の継承"]
+    reader --> atlas["TextureAtlasBuilder<br/>PNG を読んで1枚にまとめる"]
+    resolver --> set["AppearanceSet<br/>（domain/blockModel.ts）"]
+    atlas --> set
+    set --> view3d["3D：モデルを描く"]
+    set --> view2d["2D：上の面を描く"]
+```
+
+| 部分 | 場所 | 中身 |
+| --- | --- | --- |
+| 型 | `domain/blockModel.ts` | `ResolvedModel`・`BlockAppearance`・`TextureAtlas`・`AppearanceSet` |
+| 約束 | `io/assets/assetTypes.ts` | `AssetReader`（パスで資産を読む）、`AppearanceProvider`（状態の一覧 → `AppearanceSet`） |
+| 資産を読む | `io/assets/`（jar 側） | Modpack の jar とリソースパックから、`assets/<ns>/models/`・`textures/` を必要なときに読む。部分読み（`readRange`）を使う。同じパスは優先度の高いものを使う |
+| モデルの解決 | `io/assets/`（モデル側） | blockstates の variants / multipart から使うモデルを選び、`parent` をたどって要素とテクスチャの変数（`#side`）を確定する |
+| テクスチャ | `io/assets/`（テクスチャ側） | PNG を RGBA にし、`.png.mcmeta` のアニメーションは1枚目だけ使い、アトラスにまとめる |
+| 3D の描画 | `view/viewport/` | `AppearanceSet` からモデルのメッシュを作り、モデルごとに InstancedMesh で描く。`cullface` で隣のブロックに隠れる面を省く。見た目が `null` のブロックは今の色付きの箱 |
+| 2D の描画 | `view/viewport/` | 各ブロックの上の面のテクスチャを、マス目に描く |
+
+決まり：
+
+- 重い処理（PNG の展開、アトラス作り、モデルの解決）は Web Worker で行う。`AppearanceSet` は構造化複製できる素のデータにする。
+- Modpack がない、または見た目が分からないブロックは、今の色付きの箱で描く。テクスチャだけ見つからないときは `missing`（紫と黒）で描く。
+- 色付け（`tintIndex`。草や葉）は、最初は決まった色（草の緑）を掛ける。バイオームの色は扱わない。
+- 表示は「テクスチャ／色」で切り替えられるようにし、Modpack がないときは色にする。
+- バニラ（`minecraft:`）のモデルとテクスチャは mods/ にない。Minecraft 本体の jar（`versions/<版>/<版>.jar`）を読めるようにするまでは、バニラのブロックは色付きの箱で描く。
+
 ## view：画面
 
 - `ViewState`（Piniaのストア）：今の段、段の表示方法（上を消す・半透明・この段だけ）、段ごとの表示・非表示、3D/2D の切り替え、強調するブロック、今のツール
