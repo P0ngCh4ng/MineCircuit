@@ -41,6 +41,11 @@ export interface JarSummary {
   readonly blockStates: Record<string, JsonValue>
   /** 読めなかったファイル（壊れた JSON など）。読み込みは続ける */
   readonly problems: string[]
+  /**
+   * 見た目の資産の索引。jar にある `assets/<namespace>/` の models/・blockstates/・textures/ の下のファイルのパス（zip の一覧の順）。
+   * 中身は持たず、必要なときに jar から読む（io/assets/modpackAssetReader.ts）。jar の中の jar の分は含まない
+   */
+  readonly assets: string[]
 }
 
 /** jar の中の jar（Forge の JarJar、Fabric の jars）を読む深さ */
@@ -50,6 +55,7 @@ const LANG_PATH = /^assets\/([^/]+)\/lang\/(ja_jp|en_us)\.json$/i
 const BLOCKSTATE_PATH = /^assets\/([^/]+)\/blockstates\/(.+)\.json$/
 const NESTED_JAR_PATH = /^META-INF\/(jarjar|jars)\/[^/]+\.jar$/
 const ASSETS_NAMESPACE = /^assets\/([^/]+)\//
+const ASSET_INDEX_PATH = /^assets\/[^/]+\/(models|blockstates|textures)\/.*[^/]$/
 /** 残す翻訳のキー。`種類.namespace.path` の3つに分かれるものだけ（説明文などは捨てる） */
 const NAME_KEY = /^(block|item|entity|fluid)\.[^.]+\.[^.]+$/
 
@@ -58,6 +64,11 @@ const METADATA_FILES = new Set([FORGE_MODS_TOML, NEOFORGE_MODS_TOML, FABRIC_MOD_
 /** jar の中で読むファイルか（Mod の情報、翻訳、ブロック状態の定義、jar の中の jar） */
 export function isWantedJarEntry(name: string): boolean {
   return METADATA_FILES.has(name) || LANG_PATH.test(name) || BLOCKSTATE_PATH.test(name) || NESTED_JAR_PATH.test(name)
+}
+
+/** 見た目の資産の索引に入れるファイルか（`assets/<namespace>/` の models/・blockstates/・textures/ の下。フォルダは除く） */
+export function isAssetIndexEntry(name: string): boolean {
+  return ASSET_INDEX_PATH.test(name)
 }
 
 const decoder = new TextDecoder('utf-8')
@@ -107,7 +118,7 @@ export function parseLenientJson(source: string): unknown {
 }
 
 function emptySummary(jar: string): JarSummary {
-  return { jar, mods: [], namespaces: [], lang: { ja_jp: {}, en_us: {} }, blockStates: {}, problems: [] }
+  return { jar, mods: [], namespaces: [], lang: { ja_jp: {}, en_us: {} }, blockStates: {}, problems: [], assets: [] }
 }
 
 /** 翻訳ファイルの JSON から、名前のキーだけを取り出す */
@@ -130,14 +141,18 @@ export function scanJar(jar: string, bytes: Uint8Array): JarSummary {
 
 function scan(jar: string, bytes: Uint8Array, depth: number): JarSummary {
   const namespaces = new Set<string>()
+  const assets: string[] = []
   const files = unzipSync(bytes, {
     filter(file: UnzipFileInfo) {
       const ns = ASSETS_NAMESPACE.exec(file.name)
       if (ns) namespaces.add(ns[1])
+      if (depth === 0 && isAssetIndexEntry(file.name)) assets.push(file.name)
       return isWantedJarEntry(file.name)
     },
   })
-  return summarize(jar, files, namespaces, depth)
+  const summary = summarize(jar, files, namespaces, depth)
+  summary.assets.push(...assets)
+  return summary
 }
 
 /**
@@ -171,7 +186,9 @@ export function scanJarContent(jar: string, content: JarContent): JarSummary {
     const ns = ASSETS_NAMESPACE.exec(name)
     if (ns) namespaces.add(ns[1])
   }
-  return summarize(jar, inflateExtractedZip(content.zip), namespaces, 0)
+  const summary = summarize(jar, inflateExtractedZip(content.zip), namespaces, 0)
+  summary.assets.push(...content.zip.names.filter(isAssetIndexEntry))
+  return summary
 }
 
 function summarize(jar: string, files: Record<string, Uint8Array>, namespaces: Set<string>, depth: number): JarSummary {

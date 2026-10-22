@@ -245,6 +245,7 @@ class Modpack {
   config(path: string): Promise<string | null>              // 設定ファイルの中身。なければ null
   blockStateDefinition(id: ResourceLocation): JsonValue | null   // blockstates/<path>.json。回転の候補に使う
   blockIds(): string[]                                      // blockstates のあるブロックの ID（名前順）。置くブロックの検索に使う
+  assets(): AssetReader                                     // 見た目の資産（models・blockstates・textures）を読む。下の「見た目」
 }
 ```
 
@@ -558,11 +559,18 @@ flowchart LR
 | --- | --- | --- |
 | 型 | `domain/blockModel.ts` | `ResolvedModel`・`BlockAppearance`・`TextureAtlas`・`AppearanceSet` |
 | 約束 | `io/assets/assetTypes.ts` | `AssetReader`（パスで資産を読む）、`AppearanceProvider`（状態の一覧 → `AppearanceSet`） |
-| 資産を読む | `io/assets/`（jar 側） | Modpack の jar とリソースパックから、`assets/<ns>/models/`・`textures/` を必要なときに読む。部分読み（`readRange`）を使う。同じパスは優先度の高いものを使う |
+| 資産を読む | `io/assets/modpackAssetReader.ts`（`Modpack.assets()`） | Modpack の jar とリソースパックから、`assets/<ns>/models/`・`blockstates/`・`textures/` を必要なときに読む。部分読み（`readRange`）を使う。同じパスは優先度の高いものを使う |
 | モデルの解決 | `io/assets/`（モデル側） | blockstates の variants / multipart から使うモデルを選び、`parent` をたどって要素とテクスチャの変数（`#side`）を確定する |
 | テクスチャ | `io/assets/`（テクスチャ側） | PNG を RGBA にし、`.png.mcmeta` のアニメーションは1枚目だけ使い、アトラスにまとめる |
 | 3D の描画 | `view/viewport/` | `AppearanceSet` からモデルのメッシュを作り、モデルごとに InstancedMesh で描く。`cullface` で隣のブロックに隠れる面を省く。見た目が `null` のブロックは今の色付きの箱 |
 | 2D の描画 | `view/viewport/` | 各ブロックの上の面のテクスチャを、マス目に描く |
+
+資産の読み方（`ModpackAssetReader`）：
+
+- どの jar・zip のリソースパックにどのファイルがあるかの索引（`JarSummary.assets`。`models/`・`blockstates/`・`textures/` の下のパス。`.png.mcmeta` も含む）を、jar の読み込みのときに作り、jar ごとの保存（IndexedDB）に入れる。形式を変えたので保存の版を 2 にした（前の版の結果は読み直し、保存のときに消す）。jar の中の jar の資産は索引に入れない。
+- 中身は頼まれたときに読む。索引にない jar は開かない。zip のファイルの一覧は jar ごとに最初の1回だけ読んで覚え、項目だけを部分読みする。同じ時に頼まれた同じ jar の項目はまとめて読む。`readRange` か `stat` がない、または想定と違う形の zip は、ファイル全体を読んで持っておく。
+- 同じパスは「jar の外の翻訳」と同じ順で選ぶ：jar（名前順。後ろが優先） < `ModTranslations/` < `resourcepacks/` のうち `options.txt` にないもの < `options.txt` にあるもの。翻訳を持たないリソースパックの資産も読む。フォルダのパックは索引を持たず、そのパスを読んでみる。
+- 1つのファイルは小さいので、展開（inflate）はその場で行う。読めない jar やファイルは `ModpackAssetReader.problems` に書き、次に優先度の高い場所を探す。
 
 決まり：
 

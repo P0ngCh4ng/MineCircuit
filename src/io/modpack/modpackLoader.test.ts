@@ -7,6 +7,7 @@ import { FileNotFoundError } from '../fileSource'
 import { MemoryFileSource } from '../memoryFileSource'
 import { scanJarContent } from './jarScanner'
 import {
+  JAR_SUMMARY_FORMAT,
   jarCacheKey,
   MemoryJarCache,
   ModpackLoadAbortedError,
@@ -267,10 +268,10 @@ describe('ModpackLoader（jar の外の翻訳）', () => {
 
 describe('jarCacheKey', () => {
   it('大きさと更新時刻、または中身から作る', () => {
-    expect(jarCacheKey('a.jar', { size: 10, lastModified: 5 }, null)).toBe('v1|a.jar|10|5')
+    expect(jarCacheKey('a.jar', { size: 10, lastModified: 5 }, null)).toBe(`v${JAR_SUMMARY_FORMAT}|a.jar|10|5`)
     const k1 = jarCacheKey('a.jar', null, new Uint8Array([1, 2, 3]))
     const k2 = jarCacheKey('a.jar', null, new Uint8Array([1, 2, 4]))
     expect(k1).not.toBe(k2)
-    expect(k1.startsWith('v1|a.jar|3|h')).toBe(true)
+    expect(k1.startsWith(`v${JAR_SUMMARY_FORMAT}|a.jar|3|h`)).toBe(true)
   })
 })

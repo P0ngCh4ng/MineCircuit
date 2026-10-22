@@ -3,10 +3,13 @@
 // Modpack がないときは、使う側が `Modpack | null` の null を扱う。
 
 import type { ResourceLocation } from '../../domain/resourceLocation'
+import type { AssetReader } from '../assets/assetTypes'
+import { ModpackAssetReader, type AssetLocation } from '../assets/modpackAssetReader'
 import { FileNotFoundError, normalizePath, type FileSource } from '../fileSource'
 import { LANG_CODES, type JarSummary, type JsonValue, type LangCode, type LangTable } from './jarScanner'
 import type { LangPack } from './langPacks'
 import type { ModInfo } from './modMetadata'
+import { MODS_DIR } from './modpackFolder'
 
 /** jar の中にないが、いつもある namespace（Minecraft 本体） */
 export const BUILTIN_NAMESPACES: readonly string[] = ['minecraft']
@@ -37,18 +40,24 @@ export class Modpack {
   private readonly lang: Record<LangCode, LangTable>
   private readonly blockStates: ReadonlyMap<string, JsonValue>
   private readonly source: FileSource | null
+  /** 見た目の資産を読む場所（優先度の低い順） */
+  private readonly assetLocations: readonly AssetLocation[]
+  private assetReader: ModpackAssetReader | null = null
 
   /**
    * jar ごとの結果からまとめる。summaries は jar の名前順に渡す。
    * 同じキーの表示名やブロック状態の定義が複数の jar にあれば、後の jar のものを使う。
    * source は設定ファイルを読むための Modpack のフォルダ。null なら config() は常に null。
    * langPacks は jar の外の翻訳（リソースパックなど）で、優先度の低い順に渡す。jar の翻訳より優先し、後ろのものほど優先する。
+   * assetPacks は見た目の資産を読む jar の外の場所（リソースパックと ModTranslations/）で、langPacks と同じく優先度の低い順。
+   * jar の資産は summaries の索引（JarSummary.assets）から読む。
    */
   constructor(
     summaries: readonly JarSummary[],
     source: FileSource | null,
     problems: readonly ModpackProblem[] = [],
     langPacks: readonly LangPack[] = [],
+    assetPacks: readonly AssetLocation[] = [],
   ) {
     const mods: ModInfo[] = []
     const namespaces = new Set<string>()
@@ -75,6 +84,20 @@ export class Modpack {
     this.problems = allProblems
     this.jarCount = summaries.length
     this.source = source
+    this.assetLocations = [
+      ...summaries.map((s): AssetLocation => ({ kind: 'zip', path: `${MODS_DIR}/${s.jar}`, assets: s.assets })),
+      ...assetPacks,
+    ]
+  }
+
+  /**
+   * 見た目の資産（`assets/<ns>/models/`・`blockstates/`・`textures/`）を読む AssetReader。
+   * 同じパスがあれば、リソースパック（options.txt の順）> ModTranslations/ > jar（名前の後ろのもの）の順で選ぶ。
+   * 開いた jar の一覧は覚えておくので、同じものを使い続ける。source がなければ常に null を返す
+   */
+  assets(): AssetReader {
+    this.assetReader ??= new ModpackAssetReader(this.source, this.assetLocations)
+    return this.assetReader
   }
 
   /** namespace の Mod が入っているか。jar の `assets/<namespace>/` で判定する。`minecraft` は常に true */

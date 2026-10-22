@@ -117,14 +117,6 @@ async function chunkFor(reader: RangeReader, have: Chunk, pos: number, length: n
   return readChunk(reader, pos, pos + length)
 }
 
-interface WantedEntry {
-  readonly name: string
-  readonly compression: number
-  readonly compressedSize: number
-  readonly originalSize: number
-  readonly offset: number
-}
-
 /** 一覧の中の項目1つ分。fflate の zh と同じ読み方 */
 interface DirectoryRecord {
   readonly compression: number
@@ -184,12 +176,37 @@ function mergeSpans(spans: { start: number; end: number }[]): { start: number; e
   return merged
 }
 
+/** zip の一覧の中の項目1つ分の場所（中身は読んでいない） */
+export interface ZipDirectoryEntry {
+  readonly name: string
+  /** 圧縮の方式。0 は無圧縮、8 は deflate */
+  readonly compression: number
+  readonly compressedSize: number
+  readonly originalSize: number
+  /** 項目の見出し（local file header）の位置 */
+  readonly offset: number
+}
+
 /**
- * zip の一覧を読み、wanted が true を返す項目の中身（圧縮されたまま）を集める。
- * 読むのは、末尾の目印・ファイルの一覧・欲しい項目だけ。
- * 想定と違う形なら ZipLayoutError を投げる（呼ぶ側はファイル全体を読む方法に戻す）。
+ * zip のファイルの一覧を読んだもの。項目の中身は readZipEntries で、必要なときに読む。
+ * 一度読んでおけば、同じ zip の項目を何度読んでも一覧は読み直さない（io/assets/modpackAssetReader.ts）
  */
-export async function readZipPartially(reader: RangeReader, wanted: (name: string) => boolean): Promise<ExtractedZip> {
+export interface ZipDirectory {
+  /** zip にあるすべての項目の名前（一覧の順） */
+  readonly names: string[]
+  /** keep が true を返した項目（一覧の順） */
+  readonly entries: ZipDirectoryEntry[]
+  /** すべての項目の見出しの位置（小さい順、重なりなし）。項目の終わりを決めるのに使う */
+  readonly offsets: readonly number[]
+  /** ファイルの一覧の始まり */
+  readonly directoryStart: number
+}
+
+/**
+ * zip の末尾の目印とファイルの一覧だけを読む。keep が true を返す項目の場所を entries に入れる。
+ * 想定と違う形なら ZipLayoutError を投げる。
+ */
+export async function readZipDirectory(reader: RangeReader, keep: (name: string) => boolean): Promise<ZipDirectory> {
   const size = reader.size
   if (!Number.isSafeInteger(size) || size < EOCD_SIZE) throw new ZipLayoutError('zip として小さすぎます')
 
@@ -203,7 +220,7 @@ export async function readZipPartially(reader: RangeReader, wanted: (name: strin
   }
 
   let count = tail.b2(e + 8)
-  if (count === 0) return { names: [], entries: [] }
+  if (count === 0) return { names: [], entries: [], offsets: [], directoryStart: e }
   let cdStart = tail.b4(e + 16)
   let cdEnd = e
   let zip64 = cdStart === 4294967295 || count === 65535
@@ -223,7 +240,7 @@ export async function readZipPartially(reader: RangeReader, wanted: (name: strin
   // ファイルの一覧を読む
   const cd = await chunkFor(reader, tail, cdStart, cdEnd - cdStart)
   const names: string[] = []
-  const wantedEntries: WantedEntry[] = []
+  const entries: ZipDirectoryEntry[] = []
   const offsets: number[] = []
   let pos = cdStart
   for (let i = 0; i < count; i++) {
@@ -231,8 +248,8 @@ export async function readZipPartially(reader: RangeReader, wanted: (name: strin
     pos = r.next
     names.push(r.name)
     offsets.push(r.offset)
-    if (wanted(r.name)) {
-      wantedEntries.push({
+    if (keep(r.name)) {
+      entries.push({
         name: r.name,
         compression: r.compression,
         compressedSize: r.compressedSize,
@@ -241,10 +258,21 @@ export async function readZipPartially(reader: RangeReader, wanted: (name: strin
       })
     }
   }
-  if (wantedEntries.length === 0) return { names, entries: [] }
+  return { names, entries, offsets: [...new Set(offsets)].sort((a, b) => a - b), directoryStart: cdStart }
+}
 
-  // 欲しい項目の範囲。項目は並んで入っているので、次の項目の始まり（なければ一覧の始まり）までを読む
-  const sortedOffsets = [...new Set(offsets)].sort((a, b) => a - b)
+/**
+ * readZipDirectory で読んだ一覧から、targets の項目の中身（圧縮されたまま）を読む。
+ * 項目は並んで入っているので、次の項目の始まり（なければ一覧の始まり）までを読む。間の狭い項目はまとめて読む。
+ */
+export async function readZipEntries(
+  reader: RangeReader,
+  directory: ZipDirectory,
+  targets: readonly ZipDirectoryEntry[],
+): Promise<CompressedZipEntry[]> {
+  if (targets.length === 0) return []
+  const size = reader.size
+  const sortedOffsets = directory.offsets
   const nextOffset = (offset: number): number => {
     let lo = 0
     let hi = sortedOffsets.length
@@ -253,10 +281,10 @@ export async function readZipPartially(reader: RangeReader, wanted: (name: strin
       if (sortedOffsets[mid] <= offset) lo = mid + 1
       else hi = mid
     }
-    const next = lo < sortedOffsets.length ? sortedOffsets[lo] : cdStart
+    const next = lo < sortedOffsets.length ? sortedOffsets[lo] : directory.directoryStart
     return next > offset ? next : size
   }
-  const spans = wantedEntries.map((w) => {
+  const spans = targets.map((w) => {
     // 見出しの名前と追加情報は最大 65535 バイトずつ。それより先は読まない
     const limit = w.offset + LOCAL_HEADER_SIZE + 2 * 65535 + w.compressedSize
     return { start: w.offset, end: Math.min(nextOffset(w.offset), limit, size) }
@@ -268,7 +296,7 @@ export async function readZipPartially(reader: RangeReader, wanted: (name: strin
   const chunkAt = (pos: number, length: number): Chunk | null => chunks.find((c) => c.contains(pos, length)) ?? null
 
   const entries: CompressedZipEntry[] = []
-  for (const w of wantedEntries) {
+  for (const w of targets) {
     if (w.offset + LOCAL_HEADER_SIZE > size) throw new ZipLayoutError(`${w.name}: 項目の見出しがファイルの外です`)
     const header = chunkAt(w.offset, LOCAL_HEADER_SIZE) ?? (await readChunk(reader, w.offset, w.offset + LOCAL_HEADER_SIZE))
     // 中身の始まり。fflate の slzh と同じく、見出しの名前と追加情報の長さを足す
@@ -284,7 +312,17 @@ export async function readZipPartially(reader: RangeReader, wanted: (name: strin
       data: body.bytes.subarray(from, from + available),
     })
   }
-  return { names, entries }
+  return entries
+}
+
+/**
+ * zip の一覧を読み、wanted が true を返す項目の中身（圧縮されたまま）を集める。
+ * 読むのは、末尾の目印・ファイルの一覧・欲しい項目だけ。
+ * 想定と違う形なら ZipLayoutError を投げる（呼ぶ側はファイル全体を読む方法に戻す）。
+ */
+export async function readZipPartially(reader: RangeReader, wanted: (name: string) => boolean): Promise<ExtractedZip> {
+  const directory = await readZipDirectory(reader, wanted)
+  return { names: directory.names, entries: await readZipEntries(reader, directory, directory.entries) }
 }
 
 /** Worker へ移せるバッファの一覧（重なりなし）。entries の data は同じバッファを共有していることがある */
