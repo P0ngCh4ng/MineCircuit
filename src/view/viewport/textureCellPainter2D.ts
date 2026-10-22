@@ -4,10 +4,11 @@
 
 import type { AppearanceSet, AtlasRegion, TextureAtlas } from '../../domain/blockModel'
 import type { BlockState } from '../../domain/blockState'
+import { GRASS_TINT } from './modelGeometry'
 import { topFaces, type TopFace2D } from './topFace2D'
 
-/** 色付け（tintIndex。草や葉）に掛ける色。バイオームの色は扱わず、草の緑（平原の草）に決める */
-export const DEFAULT_TINT_RGB: readonly [number, number, number] = [0x91, 0xbd, 0x59]
+/** 色付け（tintIndex。草や葉）に掛ける色。3D表示と同じ草の緑（GRASS_TINT）。バイオームの色は扱わない */
+export const DEFAULT_TINT_RGB: readonly [number, number, number] = [(GRASS_TINT >> 16) & 0xff, (GRASS_TINT >> 8) & 0xff, GRASS_TINT & 0xff]
 
 /** drawImage に渡せる画像。テストでは偽物を渡せる */
 export type AtlasImage = CanvasImageSource
