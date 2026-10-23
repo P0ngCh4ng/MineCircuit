@@ -616,6 +616,18 @@ flowchart LR
 
 **バニラの親モデル。** Mod のモデルの多くは `block/cube_all` などのバニラの親を使うが、これは Mod の jar にない。バニラのモデルファイルはアプリに入れないので、よく使う親だけを、コードで同じ形に組み立てる（`builtinParentModels.ts`）。組み立てるのは「0〜16 の立方体の各面が `#down`・`#up`… を指す」という一般的な形と、変数名の対応（`all`、`end`/`side`、`top`/`bottom`/`side`、`front`）だけで、ファイルの写しではない。対象は `block/block`・`block/cube`・`block/cube_all`・`block/cube_column`・`block/cube_bottom_top`・`block/orientable`・`block/orientable_with_bottom`。利用者の資産（リソースパックや本体の jar）に同じ ID のモデルがあれば、そちらを先に使う。これ以外のバニラの親（階段、ハーフブロック、柵など）は見つからないとして扱い、色付きの箱で描く。
 
+### つなぎ込み（Modpack → Worker → 画面）
+
+| 部分 | 場所 | 中身 |
+| --- | --- | --- |
+| 本物の provider | `io/assets/assetAppearanceProvider.ts` | `AssetAppearanceProvider`：`ModelResolver` で状態を解決し、出てきたテクスチャで `TextureAtlasBuilder` がアトラスを作る。problems はモデル・テクスチャ・reader の分を重なりなくまとめる。読んだファイルは `CachingAssetReader` で覚え、作り直しでも2度読まない |
+| 覚えておく | 同上 `CachedAppearanceProvider` | Modpack ごとに1つ。頼まれた状態をすべて覚え、知らない状態が来たときだけ全部の状態で作り直す。知っている状態だけなら前の結果を返す（開き直し、状態の少ない設計図） |
+| Worker | `workers/appearance.worker.ts`・`appearanceWorkerHost.ts`・`appearanceProtocol.ts` | モデルの解決・PNG の展開・アトラス作りを Worker で行う。ファイルは Worker から読まず、`read` で画面側に頼む（デスクトップ版の Tauri のファイルの API は Worker から呼べないため）。同じ時に頼むものは1つのメッセージにまとめ、画面側の jar の部分読みがまとまるようにする。読んだバイト列とアトラスの画素は移す（transfer） |
+| 画面側 | `workers/appearanceWorkerClient.ts` | `createAppearanceProvider(pack.assets())`。Worker が使えなければ同じスレッドで用意する（`InlineAppearanceProvider`）。jar の項目の展開は画面側で行うが、1つのファイルは小さい |
+| つなぎ込み | `view/stores/appearanceSync.ts`（App.vue で1回呼ぶ） | Modpack（`modpackContent.pack`）が変わったら provider を作り直し（前のものは Worker ごと止める）、なければ null（色）。設計図を開いたらすぐ、編集でパレットの状態が増えたら少し待ってから、全リージョンのパレットの状態で `refresh` する。頼んだことのある状態だけなら何もしない |
+
+読み込み中と problems の件数は「描き方」の切り替え（`AppearanceModeSwitch`）に出す。
+
 ## view：画面
 
 - `ViewState`（Piniaのストア）：今の段、段の表示方法（上を消す・半透明・この段だけ）、段ごとの表示・非表示、3D/2D の切り替え、強調するブロック、今のツール

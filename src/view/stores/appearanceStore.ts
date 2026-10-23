@@ -17,7 +17,7 @@ function errorMessage(e: unknown): string {
  * - set：用意できた見た目。Modpack がない、まだ読んでいないときは null（色付きの箱で描く）
  * - mode：「テクスチャ／色」の切り替え（利用者が選んだもの）
  * - active：描画が使う見た目。色にしているか、見た目がなければ null
- * - 中身は AppearanceProvider から受け取る（setProvider → refresh。#85）。本物の provider はつなぎ込みの Issue で渡す
+ * - 中身は AppearanceProvider から受け取る（setProvider → refresh。#85）。本物の provider は view/stores/appearanceSync.ts が Modpack から作って渡す（#86）
  * AppearanceSet は大きな素のデータなので、リアクティブにしない（markRaw）
  */
 export const useAppearanceStore = defineStore('appearance', () => {

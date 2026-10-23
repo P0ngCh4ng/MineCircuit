@@ -4,12 +4,17 @@
 //   __mineCircuitDev.showFakeAppearances()      偽の見た目と、それを並べた設計図を開く
 //   __mineCircuitDev.showFakeAppearances(22)    約 1 万ブロックの設計図で重さを確かめる（22×20×22）
 //   __mineCircuitDev.setAppearanceMode('color') 色付きの箱に戻す
+//   __mineCircuitDev.loadFakeModpack()          偽の jar（tests/fixtures/fakeAssets.ts）の Modpack を読み込み、そのブロックの設計図を開く。
+//                                               Modpack → Worker → 画面のつなぎ込み（#86）を確かめる
 
 import { blueprintFixture } from '../../../tests/fixtures/blueprintFixture'
 import { fakeAppearanceSet } from '../../../tests/fixtures/fakeAppearance'
+import { fakeAssetJar } from '../../../tests/fixtures/fakeAssets'
 import type { Blueprint } from '../../domain/blueprint'
+import { MemoryFileSource } from '../../io/memoryFileSource'
 import { useDocumentSession } from '../document/documentSession'
 import { useAppearanceStore, type AppearanceMode } from '../stores/appearanceStore'
+import { useModpackStore } from '../stores/modpack'
 
 /** 偽の見た目にあるブロックを並べる順 */
 const SAMPLES = [
@@ -42,12 +47,33 @@ function largeBlueprint(n: number): Blueprint {
   return f.toBlueprint()
 }
 
+/** 偽の jar のブロックを並べた設計図。test:broken と test:unknown は色付きの箱、test:nopng は紫と黒 */
+function fakeModpackBlueprint(): Blueprint {
+  const f = blueprintFixture({ name: 'fake-modpack.nbt', size: [12, 3, 4] })
+  f.place([0, 0, 0], 'test:gear')
+  f.place([2, 0, 0], 'test:casing[axis=y]')
+  f.place([4, 0, 0], 'test:casing[axis=x]')
+  f.place([6, 0, 0], 'test:casing[axis=z]')
+  f.place([8, 0, 0], 'test:nopng')
+  f.place([10, 0, 0], 'test:broken')
+  f.place([10, 0, 2], 'test:unknown')
+  f.fill([0, 0, 2], [8, 0, 3], 'test:gear')
+  f.fill([0, 1, 3], [3, 2, 3], 'test:casing[axis=y]')
+  return f.toBlueprint()
+}
+
 export function installDevAppearance(): void {
   const api = {
     showFakeAppearances(size?: number): void {
       useAppearanceStore().setAppearanceSet(fakeAppearanceSet())
       useAppearanceStore().setMode('texture')
       const bp = size ? largeBlueprint(size) : sampleBlueprint()
+      useDocumentSession().setBlueprint(bp, bp.name)
+    },
+    loadFakeModpack(): void {
+      useModpackStore().source = new MemoryFileSource([['mods/test-assets.jar', fakeAssetJar()]])
+      useAppearanceStore().setMode('texture')
+      const bp = fakeModpackBlueprint()
       useDocumentSession().setBlueprint(bp, bp.name)
     },
     setAppearanceMode(mode: AppearanceMode): void {

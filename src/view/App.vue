@@ -12,6 +12,7 @@ import LeftPanel from './panels/LeftPanel.vue'
 import RightPanel from './panels/RightPanel.vue'
 import StatusBar from './shell/StatusBar.vue'
 import TopBar from './shell/TopBar.vue'
+import { useAppearanceSync } from './stores/appearanceSync'
 import { useCalcStore } from './stores/calcStore'
 import { useToolStore } from './stores/toolStore'
 import { useViewStore } from './stores/viewStore'
@@ -26,6 +27,8 @@ const rotate = useRotateAction()
 const edit = useEditTools()
 useProbeTool()
 usePortTool()
+// Modpack と設計図に合わせて、ブロックの見た目（テクスチャ）を用意する
+useAppearanceSync()
 
 // 設計図が入れ替わったら、前の設計図の選択を消し、計算の対象を変える
 watch(session.current, (doc) => {

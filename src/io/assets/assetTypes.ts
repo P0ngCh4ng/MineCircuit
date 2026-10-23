@@ -14,6 +14,8 @@ import type { AppearanceSet } from '../../domain/blockModel'
 export interface AssetReader {
   readText(path: string): Promise<string | null>
   readBytes(path: string): Promise<Uint8Array | null>
+  /** 読めなかった jar やファイル（日本語。そのまま画面に出せる）。持たない実装もある */
+  readonly problems?: readonly string[]
 }
 
 /** 設計図に出てくるブロック状態の見た目を用意する。画面はこれを通して AppearanceSet を受け取る */
