@@ -4,6 +4,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
+import { useAppearanceStore } from '../stores/appearanceStore'
 import { useCalcStore } from '../stores/calcStore'
 import { clampLayer, useLayerStore } from '../stores/layerStore'
 import { useProbeStore } from '../stores/probeStore'
@@ -17,6 +18,7 @@ import { ANALYSIS_COLORS_2D, drawAnalysisOverlay2D } from './analysisOverlay2D'
 import { layoutGrid2D } from './layerGrid2D'
 import { drawPortOverlay2D } from './portOverlay2D'
 import { DARK_THEME_2D, drawLayer2D, LIGHT_THEME_2D } from './layerRenderer2D'
+import { createTextureCellPainter } from './textureCellPainter2D'
 
 const props = withDefaults(defineProps<{ showGrid?: boolean }>(), { showGrid: true })
 
@@ -30,6 +32,9 @@ const calc = useCalcStore()
 const probe = useProbeStore()
 const measures = useMeasureStore()
 const ports = usePortStore()
+const appearance = useAppearanceStore()
+/** テクスチャで描く（#85）。色で描くとき、見た目がないときは null */
+const cellPainter = computed(() => createTextureCellPainter(appearance.active))
 
 const host = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -83,6 +88,7 @@ function draw(): void {
     fontFamily: getComputedStyle(el).fontFamily || 'sans-serif',
     highlighted: highlight.value,
     calcMarks: { network: probe.networkPositions, issues: calc.issuePositions },
+    cellPainter: cellPainter.value,
   })
   // 計測とつながり（#16）
   drawAnalysisOverlay2D(
@@ -95,6 +101,9 @@ function draw(): void {
   // 仮の入出力（#70）
   drawPortOverlay2D(ctx, grid, layer.value, ports.ports, ports.selectedId)
 }
+
+// 見た目と「テクスチャ／色」が変わったら描き直す（#85）
+watch(cellPainter, () => draw(), { flush: 'post' })
 
 // 仮の入出力が変わったら描き直す（#70）
 watch(

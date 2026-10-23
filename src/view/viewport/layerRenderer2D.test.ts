@@ -3,7 +3,16 @@ import { blueprintFixture } from '../../../tests/fixtures/blueprintFixture'
 import type { Vec3 } from '../../domain/vec3'
 import { blockColorCss } from './blockColor'
 import { layoutGrid2D } from './layerGrid2D'
-import { drawLayer2D, ISSUE_MARK_CSS, LIGHT_THEME_2D, NETWORK_MARK_CSS, type Canvas2DLike } from './layerRenderer2D'
+import type { BlockState } from '../../domain/blockState'
+import {
+  drawLayer2D,
+  ISSUE_MARK_CSS,
+  LIGHT_THEME_2D,
+  NETWORK_MARK_CSS,
+  TEXTURE_BACKDROP_ALPHA,
+  type Canvas2DLike,
+} from './layerRenderer2D'
+import type { CellPainter2D } from './textureCellPainter2D'
 
 interface FillCall {
   readonly x: number
@@ -40,6 +49,7 @@ function fakeContext() {
     fillText(text: string) {
       texts.push(text)
     },
+    strokeText() {},
     save() {
       stack.push(ctx.globalAlpha)
     },
@@ -140,5 +150,39 @@ describe('drawLayer2D', () => {
     const issues = fake.fills.filter((f) => f.style === ISSUE_MARK_CSS)
     expect(issues).toHaveLength(1)
     expect(fake.strokes.filter((s) => s.style === ISSUE_MARK_CSS)).toHaveLength(1)
+  })
+
+  it('painter があれば、描けたブロックはテクスチャで描き、下にブロックの色を薄く敷く', () => {
+    const bp = sample()
+    const fake = fakeContext()
+    const layout = layoutGrid2D(400, 400, bp.size)
+    const painted: { id: string; alpha: number }[] = []
+    // シャフトだけ描ける painter
+    const painter: CellPainter2D = {
+      paint(ctx, state: BlockState) {
+        painted.push({ id: state.id.toString(), alpha: (ctx as unknown as { globalAlpha: number }).globalAlpha })
+        return state.id.toString() === 'create:shaft'
+      },
+    }
+    drawLayer2D(fake.ctx, 400, 400, {
+      blueprint: bp,
+      layer: 0,
+      layout,
+      theme: LIGHT_THEME_2D,
+      showGrid: false,
+      showLabels: true,
+      hovered: null,
+      selected: null,
+      fontFamily: 'sans-serif',
+      cellPainter: painter,
+    })
+    expect(painted.map((p) => p.id).sort()).toEqual(['create:shaft', 'minecraft:stone'])
+    expect(painted.every((p) => p.alpha === 1)).toBe(true)
+    const shaft = fake.fills.filter((f) => f.style === blockColorCss('create:shaft'))
+    expect(shaft.map((f) => f.alpha)).toEqual([TEXTURE_BACKDROP_ALPHA])
+    // 描けなかった石は、敷いた色の上に色で塗る
+    const stone = fake.fills.filter((f) => f.style === blockColorCss('minecraft:stone'))
+    expect(stone.map((f) => f.alpha)).toEqual([TEXTURE_BACKDROP_ALPHA, 1])
+    expect(fake.texts).toEqual(expect.arrayContaining(['SH', 'ST']))
   })
 })

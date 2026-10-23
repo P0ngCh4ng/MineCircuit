@@ -5,7 +5,8 @@ import type { Blueprint } from '../../domain/blueprint'
 import type { Vec3 } from '../../domain/vec3'
 import type { GridLayout2D } from '../tools/picker'
 import { blockColor, blockColorCss } from './blockColor'
-import { axisLabelStep, blockAbbreviation, LABEL_MIN_CELL_SIZE, layerCells } from './layerGrid2D'
+import type { CellPainter2D, TextureCanvasLike } from './textureCellPainter2D'
+import { axisLabelStep, blockAbbreviation, LABEL_MIN_CELL_SIZE, layerCells, type LayerCell2D } from './layerGrid2D'
 
 /** 2D表示の色。画面のテーマ（明るい・暗い）に合わせる */
 export interface LayerTheme2D {
@@ -72,7 +73,14 @@ export interface LayerScene2D {
   readonly highlighted?: readonly Vec3[] | null
   /** 計算結果の印（#31）。今の段にあるものだけ描く。なければ省略 */
   readonly calcMarks?: CalcMarks2D
+  /**
+   * テクスチャで描く（#85）。描けないブロックと、null か省略のときは色で塗る
+   */
+  readonly cellPainter?: CellPainter2D | null
 }
+
+/** テクスチャで描くマスの下に敷く、ブロックの色の濃さ（0〜1）。シャフトのような細いブロックでも、マスにあることが分かるようにする */
+export const TEXTURE_BACKDROP_ALPHA = 0.3
 
 /** 強調しているときの、強調しないブロックの濃さ（0〜1） */
 export const HIGHLIGHT_DIM_ALPHA = 0.18
@@ -110,6 +118,8 @@ export type Canvas2DLike = Pick<
   | 'font'
   | 'textAlign'
   | 'textBaseline'
+  | 'strokeText'
+  | keyof TextureCanvasLike
 >
 
 /** 色（0xRRGGBB）の明るさ（0〜1）。略称の文字色を決めるのに使う */
@@ -139,13 +149,32 @@ export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, sc
 
   ctx.clearRect(0, 0, width, height)
 
+  const painter = scene.cellPainter ?? null
+  /**
+   * マス1つを塗る。テクスチャで描けたら true。
+   * テクスチャのときは、下にブロックの色を薄く敷いてから面を描く。今の globalAlpha を掛ける
+   */
+  const fillCell = (c: LayerCell2D, x: number, y: number, size: number): boolean => {
+    const alpha = ctx.globalAlpha
+    ctx.fillStyle = blockColorCss(c.id)
+    if (painter) {
+      ctx.globalAlpha = alpha * TEXTURE_BACKDROP_ALPHA
+      ctx.fillRect(x, y, size, size)
+      ctx.globalAlpha = alpha
+      if (painter.paint(ctx, c.state, x, y, size)) return true
+      ctx.fillStyle = blockColorCss(c.id)
+    }
+    ctx.fillRect(x, y, size, size)
+    return false
+  }
+
   // 1つ下の段を薄く出す。今の段にブロックがあるマスは、上から塗るので気にしない
   if (layer > 0) {
     ctx.save()
     ctx.globalAlpha = theme.ghostAlpha
     for (const c of layerCells(blueprint, layer - 1)) {
-      ctx.fillStyle = blockColorCss(c.id)
-      ctx.fillRect(ox + c.x * cs, oy + c.z * cs, cs, cs)
+      if (painter) ctx.clearRect(ox + c.x * cs, oy + c.z * cs, cs, cs)
+      fillCell(c, ox + c.x * cs, oy + c.z * cs, cs)
     }
     ctx.restore()
   }
@@ -155,12 +184,13 @@ export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, sc
   const highlight = scene.highlighted ? highlightedOnLayer(scene.highlighted, layer, w) : null
   const dimmed = (c: { x: number; z: number }): boolean => highlight !== null && !highlight.has(c.x + c.z * w)
   const gap = cs >= 8 ? 1 : 0
+  /** テクスチャで描いたマス（x + z × 幅）。略称の文字の色を変える */
+  const textured = new Set<number>()
   for (const c of cells) {
-    ctx.fillStyle = blockColorCss(c.id)
     // 下の段の薄い色を消してから塗る
     ctx.clearRect(ox + c.x * cs, oy + c.z * cs, cs, cs)
     if (dimmed(c)) ctx.globalAlpha = HIGHLIGHT_DIM_ALPHA
-    ctx.fillRect(ox + c.x * cs + gap, oy + c.z * cs + gap, cs - gap * 2, cs - gap * 2)
+    if (fillCell(c, ox + c.x * cs + gap, oy + c.z * cs + gap, cs - gap * 2)) textured.add(c.x + c.z * w)
     ctx.globalAlpha = 1
   }
 
@@ -190,8 +220,19 @@ export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, sc
     ctx.textBaseline = 'middle'
     for (const c of cells) {
       if (dimmed(c)) continue
-      ctx.fillStyle = luminance(blockColor(c.id)) > 0.55 ? '#1b1b18' : '#f4f2ec'
-      ctx.fillText(blockAbbreviation(c.id), ox + c.x * cs + cs / 2, oy + c.z * cs + cs / 2)
+      const text = blockAbbreviation(c.id)
+      const tx = ox + c.x * cs + cs / 2
+      const ty = oy + c.z * cs + cs / 2
+      if (textured.has(c.x + c.z * w)) {
+        // テクスチャの上では、明るい文字に暗い縁を付けて読めるようにする
+        ctx.strokeStyle = 'rgb(0 0 0 / 70%)'
+        ctx.lineWidth = 3
+        ctx.strokeText(text, tx, ty)
+        ctx.fillStyle = '#f4f2ec'
+      } else {
+        ctx.fillStyle = luminance(blockColor(c.id)) > 0.55 ? '#1b1b18' : '#f4f2ec'
+      }
+      ctx.fillText(text, tx, ty)
     }
   }
 
