@@ -9,6 +9,7 @@ import { useLayerNavigation } from '../layers/useLayerNavigation'
 import { useSearchStore } from '../stores/searchStore'
 import { useViewStore } from '../stores/viewStore'
 import { CAMERA_VIEWS } from '../viewport/cameraViews'
+import AppearanceModeSwitch from './AppearanceModeSwitch.vue'
 import ViewModeSwitch from './ViewModeSwitch.vue'
 
 const session = useDocumentSession()
@@ -28,6 +29,7 @@ function onModeChange(e: Event): void {
 <template>
   <div role="toolbar" aria-label="表示の操作">
     <ViewModeSwitch />
+    <AppearanceModeSwitch />
     <div class="bar-group" role="group" aria-label="視点">
       <span class="bar-label">視点</span>
       <button
