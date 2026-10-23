@@ -7,6 +7,7 @@ import ModpackLoadStatus from '../ModpackLoadStatus.vue'
 import ModpackPicker from '../ModpackPicker.vue'
 import { useModpackStore } from '../stores/modpack'
 import { useModpackContentStore } from '../stores/modpackContent'
+import VanillaAssetsStatus from '../VanillaAssetsStatus.vue'
 import ViewControls from './ViewControls.vue'
 
 const modpack = useModpackStore()
@@ -32,6 +33,7 @@ const content = useModpackContentStore()
         <div class="modpack-body">
           <ModpackPicker />
           <ModpackLoadStatus />
+          <VanillaAssetsStatus />
         </div>
       </details>
       <div class="spacer"></div>

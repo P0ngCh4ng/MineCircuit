@@ -1,5 +1,5 @@
 // 選んだ Modpack の中身（Mod の一覧と表示名）の読み込みの状態。
-// useModpackStore().source が変わるたびに mods/*.jar を読み直す。jar は Web Worker で開き、結果は IndexedDB に保存する。
+// useModpackStore().source か、選んだゲームのフォルダ（Minecraft 本体の jar を探す場所）が変わるたびに読み直す。jar は Web Worker で開き、結果は IndexedDB に保存する。
 // Modpack そのものは画面の状態ではないので、リアクティブにしない（shallowRef + markRaw）。
 
 import { defineStore } from 'pinia'
@@ -13,9 +13,11 @@ import {
   ModpackLoadAbortedError,
   type JarCache,
   type JarScanner,
+  type GameFolder,
   type ModpackLoadProgress,
 } from '../../io/modpack/modpackLoader'
 import { createWorkerJarScanner } from '../../workers/jarScanClient'
+import { useGameFolderStore } from './gameFolders'
 import { useModpackStore } from './modpack'
 
 export type ModpackLoadPhase = 'idle' | 'loading' | 'loaded' | 'error'
@@ -48,6 +50,7 @@ function errorMessage(e: unknown): string {
 
 export const useModpackContentStore = defineStore('modpackContent', () => {
   const modpackStore = useModpackStore()
+  const gameFolderStore = useGameFolderStore()
 
   /** 読み込んだ Modpack。読んでいない・選んでいないときは null */
   const pack = shallowRef<Modpack | null>(null)
@@ -57,7 +60,7 @@ export const useModpackContentStore = defineStore('modpackContent', () => {
 
   let controller: AbortController | null = null
 
-  async function load(source: FileSource | null): Promise<void> {
+  async function load(source: FileSource | null, gameFolders: readonly GameFolder[]): Promise<void> {
     controller?.abort()
     controller = null
     pack.value = null
@@ -75,6 +78,7 @@ export const useModpackContentStore = defineStore('modpackContent', () => {
       cache: environment.cache,
       scan: environment.scan ?? undefined,
       signal: own.signal,
+      gameFolders,
       onProgress: (p) => {
         if (controller === own) progress.value = p
       },
@@ -94,8 +98,8 @@ export const useModpackContentStore = defineStore('modpackContent', () => {
   }
 
   watch(
-    () => modpackStore.source,
-    (source) => void load(source),
+    () => [modpackStore.source, gameFolderStore.opened] as const,
+    ([source, gameFolders]) => void load(source, gameFolders),
     { immediate: true },
   )
 
@@ -122,6 +126,6 @@ export const useModpackContentStore = defineStore('modpackContent', () => {
     message,
     displayName,
     /** 選んでいる Modpack を読み直す */
-    reload: () => load(modpackStore.source),
+    reload: () => load(modpackStore.source, gameFolderStore.opened),
   }
 })

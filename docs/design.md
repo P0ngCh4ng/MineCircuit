@@ -246,6 +246,7 @@ class Modpack {
   blockStateDefinition(id: ResourceLocation): JsonValue | null   // blockstates/<path>.json。回転の候補に使う
   blockIds(): string[]                                      // blockstates のあるブロックの ID（名前順）。置くブロックの検索に使う
   assets(): AssetReader                                     // 見た目の資産（models・blockstates・textures）を読む。下の「見た目」
+  readonly vanilla: VanillaStatus | null                    // Minecraft 本体の jar を見つけたか。下の「Minecraft 本体の資産」
 }
 ```
 
@@ -258,7 +259,28 @@ class Modpack {
   - ファイルを読むのは画面側（Tauri のファイルの読み書きは Worker から呼べない）。読んだものは圧縮されたまま（`ExtractedZip`：すべての項目の名前と、欲しい項目の圧縮されたバイト列）Worker へ移し（コピーしない）、Worker で展開と JSON の解釈を行う。Worker へ渡すものは `JarContent`（ファイル全体の `zip` か、取り出した `entries`）。
   - 結果は fflate の `unzipSync` で丸ごと読んだときと同じになるよう、fflate と同じ読み方をする（zip64、名前の文字コード、末尾のコメントを含む）。想定と違う形（zip でない、zip の前に余計なデータがある、読めたバイト数が足りない、など）なら、丸ごと読む方法に戻す。壊れた jar のお知らせは、丸ごと読んだときと同じ文になる。
   - 保存の鍵（大きさと更新時刻）と IndexedDB への保存は、丸ごと読むときと同じ。
-- `minecraft` の namespace は jar になくても、常にあるとみなす。本体の翻訳は mods/ にないので、リソースパックが足していなければ本体のブロックの表示名は出ない。
+- `minecraft` の namespace は jar になくても、常にあるとみなす。本体の翻訳・ブロック状態の定義・資産は、Minecraft 本体の jar を見つけたときだけ読む（下の「Minecraft 本体の資産」）。見つからなければ、リソースパックが足していない限り本体のブロックの表示名は出ない。
+
+#### Minecraft 本体の資産
+
+バニラ（`minecraft:`）のブロックは mods/ にないので、Minecraft 本体の jar（クライアントの jar）を読む（`io/modpack/vanillaAssets.ts`）。本体の jar はアプリにもリポジトリにも入れず、利用者の PC にあるものをその場で読む。
+
+本体の jar は、ランチャーごとに置き場所が違い、多くは Modpack のフォルダの外にある。ここでは versions/・libraries/・assets/ のあるフォルダを「ゲームのフォルダ」と呼ぶ。
+
+| ランチャー | Modpack のフォルダ | ゲームのフォルダ | 本体の jar | 資産の索引の id |
+| --- | --- | --- | --- | --- |
+| 公式ランチャー | `.minecraft`（起動の構成でゲームのフォルダを分けたときはそのフォルダ） | `.minecraft` | `versions/<版>/<版>.jar` | `versions/<版>/<版>.json` の `assetIndex.id` |
+| CurseForge | `curseforge/minecraft/Instances/<名前>` | `curseforge/minecraft/Install`（すべてのプロファイルで共有） | 同上 | 同上 |
+| Modrinth App | `ModrinthApp/profiles/<名前>` | `ModrinthApp/meta` | 同上。Mod ローダーを使う版は `versions/<版>-<ローダー>/<同じ名前>.jar` | 同上 |
+| Prism Launcher / MultiMC | `instances/<名前>/.minecraft` | ランチャーのフォルダ | `libraries/com/mojang/minecraft/<版>/minecraft-<版>-client.jar` | `meta/net.minecraft/<版>.json` の `assetIndex.id` |
+
+- **版を決める。** Modpack のフォルダのランチャーの情報（CurseForge の `minecraftinstance.json` の `gameVersion`、Modrinth App の古い `profile.json` の `metadata.game_version`）→ Mod の jar の名前とバージョンからの推定（`minecraftVersionGuess.ts`）の順。どちらでも分からなければ、ゲームのフォルダにある版が1つだけのときにそれを使う。
+- **探す順。** Modpack のフォルダ（公式ランチャーで `.minecraft` を選んだとき）→ 利用者が選んだゲームのフォルダ（選んだ順）。各フォルダで、上の表の jar の場所と、フォルダの一番上の `<版>.jar`・`minecraft-<版>-client.jar`（版のフォルダそのものを選んだとき）を探す。FileSource は選んだフォルダの外を読めないので、Modpack のフォルダから `../../Install` のようにたどることはしない。
+- **ゲームのフォルダを選んでもらう。** 見つからなければ、Modpack の画面に「Minecraft 本体のフォルダを選ぶ」を出す。選んだフォルダは Modpack の登録と同じ方法で保存する（ブラウザ版はフォルダのハンドルを IndexedDB の `minecircuit-game-folders`、デスクトップ版はパスを `minecircuit-game-folders-desktop`。`io/modpack/gameFolderRegistry.ts`）。1つのフォルダをすべての Modpack で使う。versions/・libraries/・assets/ も jar もないフォルダは足さない。ブラウザ版で許可が切れていたら「本体のフォルダを読む許可を出す」で出し直す。デスクトップ版は選んだときに読む範囲が足され、persisted-scope が次回も残す（許可の設定は変えない）。
+- **読み方。** 本体の jar は Mod の jar と同じ読み方（部分読み、Worker の `scanJar`、IndexedDB の保存。鍵は `minecraft|<jar のパス>` と大きさ・更新時刻）。見た目の資産を持たない jar（中身の違うもの）は使わず、次の場所を探す。読めない jar は `Modpack.problems` に書いて次の場所を探す。見つからなくてもエラーにはせず、本体のブロックを色付きの箱で描き、名前を出さない。
+- **優先度。** 本体の翻訳・ブロック状態の定義・資産は、どの jar よりも優先度が低い（Mod やリソースパックが本体のテクスチャを差し替えていれば、そちらを使う）。Mod の一覧・namespace・jar の数には足さない。`hasNamespace('minecraft')` はこれまでどおり常に true。ブロック状態の定義を足すので、置くブロックの検索（`blockIds()`）にも本体のブロックが出る。
+- **日本語の名前。** 本体の jar の翻訳は `en_us.json` だけで、ほかの言語はランチャーが資産としてダウンロードし、ハッシュの名前で置く。ゲームのフォルダの `assets/indexes/<id>.json`（id は上の表。版の情報がなければ `<版>.json`・`<1.xx>.json` を試す）の `objects["minecraft/lang/ja_jp.json"].hash` から、`assets/objects/<ハッシュの先頭2文字>/<ハッシュ>` を読む。中身はハッシュで決まるので、ハッシュを鍵にして名前だけを IndexedDB に保存する。ランチャーは索引にある資産（全言語の翻訳を含む）をまとめてダウンロードするので、日本語を選んだことがなくても多くはある。なければ英語の名前だけになり、画面にそう書く。1.12 以前の `.lang` 形式の翻訳は読まない。
+- 画面（`view/VanillaAssetsStatus.vue`、`view/stores/gameFolders.ts`）は、見つけた版と場所、日本語の名前を読めたか、選んだフォルダの一覧を出す。選んだフォルダが変わると、Modpack を読み直す。
 
 #### jar の外の翻訳
 
@@ -393,7 +415,7 @@ Modpackがあれば、置くブロックを jar のブロックから名前で�
 - 一覧は、ブロック状態の定義（blockstates）がある ID と、その日本語名・英語名。jar ごとの保存（IndexedDB）にブロック状態の定義が入っているので、jar を読み直さずに作れる。Modpack ごとに一度だけ作る
 - 探す言葉は、全角を半角に、ひらがなをカタカナに、小文字にそろえて比べる。空白で区切った言葉がすべて、ID・日本語名・英語名のどれかに含まれれば合う。名前や ID がそのまま同じもの、言葉で始まるものを先に並べ、30件までを出す
 - 一覧から選んだブロックの状態は、variants 形式なら最初のキーの値、multipart 形式などなら取りうる値のそれぞれ最初の値にする（`initialPropertiesFor`）。ゲームの初期値とは限らないので、画面で取りうる値から選び直せる
-- Minecraft 本体のブロックは mods/ にないので一覧に出ない。ID の入力で選ぶ
+- Minecraft 本体のブロックは、本体の jar を見つけたときだけ一覧に出る（上の「Minecraft 本体の資産」）。見つからなければ ID の入力で選ぶ
 
 ## 値の出どころ
 
@@ -569,7 +591,7 @@ flowchart LR
 
 - どの jar・zip のリソースパックにどのファイルがあるかの索引（`JarSummary.assets`。`models/`・`blockstates/`・`textures/` の下のパス。`.png.mcmeta` も含む）を、jar の読み込みのときに作り、jar ごとの保存（IndexedDB）に入れる。形式を変えたので保存の版を 2 にした（前の版の結果は読み直し、保存のときに消す）。jar の中の jar の資産は索引に入れない。
 - 中身は頼まれたときに読む。索引にない jar は開かない。zip のファイルの一覧は jar ごとに最初の1回だけ読んで覚え、項目だけを部分読みする。同じ時に頼まれた同じ jar の項目はまとめて読む。`readRange` か `stat` がない、または想定と違う形の zip は、ファイル全体を読んで持っておく。
-- 同じパスは「jar の外の翻訳」と同じ順で選ぶ：jar（名前順。後ろが優先） < `ModTranslations/` < `resourcepacks/` のうち `options.txt` にないもの < `options.txt` にあるもの。翻訳を持たないリソースパックの資産も読む。フォルダのパックは索引を持たず、そのパスを読んでみる。
+- 同じパスは「jar の外の翻訳」と同じ順で選ぶ：Minecraft 本体の jar < jar（名前順。後ろが優先） < `ModTranslations/` < `resourcepacks/` のうち `options.txt` にないもの < `options.txt` にあるもの。翻訳を持たないリソースパックの資産も読む。フォルダのパックは索引を持たず、そのパスを読んでみる。
 - 1つのファイルは小さいので、展開（inflate）はその場で行う。読めない jar やファイルは `ModpackAssetReader.problems` に書き、次に優先度の高い場所を探す。
 
 決まり：
@@ -578,7 +600,7 @@ flowchart LR
 - Modpack がない、または見た目が分からないブロックは、今の色付きの箱で描く。テクスチャだけ見つからないときは `missing`（紫と黒）で描く。
 - 色付け（`tintIndex`。草や葉）は、最初は決まった色（草の緑）を掛ける。バイオームの色は扱わない。
 - 表示は「テクスチャ／色」で切り替えられるようにし、Modpack がないときは色にする。
-- バニラ（`minecraft:`）のモデルとテクスチャは mods/ にない。Minecraft 本体の jar（`versions/<版>/<版>.jar`）を読めるようにするまでは、バニラのブロックは色付きの箱で描く。
+- バニラ（`minecraft:`）のモデルとテクスチャは mods/ にないので、Minecraft 本体の jar から読む（「Minecraft 本体の資産」）。見つからなければ、バニラのブロックは色付きの箱で描く。
 
 ### モデルの解決（`io/assets/modelResolver.ts`）
 
@@ -592,7 +614,7 @@ flowchart LR
 | 描けないもの | 同上 | `builtin/generated`・`builtin/entity` まで親をたどったら null。要素が1つもない見た目（BlockEntityRenderer で描くブロック）も null にして箱で描く。空気は何もない見た目 |
 | 覚えておく | 同上 | ブロック状態の key ごと、モデルの ID ごと、ファイルのパスごとに結果を1つ持つ。同じ問題は1回だけ書く |
 
-**バニラの親モデル。** Mod のモデルの多くは `block/cube_all` などのバニラの親を使うが、これは Mod の jar にない。バニラのモデルファイルはアプリに入れないので、よく使う親だけを、コードで同じ形に組み立てる（`builtinParentModels.ts`）。組み立てるのは「0〜16 の立方体の各面が `#down`・`#up`… を指す」という一般的な形と、変数名の対応（`all`、`end`/`side`、`top`/`bottom`/`side`、`front`）だけで、ファイルの写しではない。対象は `block/block`・`block/cube`・`block/cube_all`・`block/cube_column`・`block/cube_bottom_top`・`block/orientable`・`block/orientable_with_bottom`。利用者の資産（リソースパックや、後で読めるようにする本体の jar）に同じ ID のモデルがあれば、そちらを先に使う。これ以外のバニラの親（階段、ハーフブロック、柵など）は見つからないとして扱い、色付きの箱で描く。
+**バニラの親モデル。** Mod のモデルの多くは `block/cube_all` などのバニラの親を使うが、これは Mod の jar にない。バニラのモデルファイルはアプリに入れないので、よく使う親だけを、コードで同じ形に組み立てる（`builtinParentModels.ts`）。組み立てるのは「0〜16 の立方体の各面が `#down`・`#up`… を指す」という一般的な形と、変数名の対応（`all`、`end`/`side`、`top`/`bottom`/`side`、`front`）だけで、ファイルの写しではない。対象は `block/block`・`block/cube`・`block/cube_all`・`block/cube_column`・`block/cube_bottom_top`・`block/orientable`・`block/orientable_with_bottom`。利用者の資産（リソースパックや本体の jar）に同じ ID のモデルがあれば、そちらを先に使う。これ以外のバニラの親（階段、ハーフブロック、柵など）は見つからないとして扱い、色付きの箱で描く。
 
 ## view：画面
 

@@ -2,6 +2,7 @@
 // jar の外の翻訳（resourcepacks/ と ModTranslations/）も読み、jar の翻訳の上に重ねる（langPacks.ts）。
 // jar を開く処理（scan）は差し替えられる。画面では Web Worker で開き、テストではその場で開く。
 // 読んだ結果は jar ごとに保存し（JarCache）、2回目からは変わった jar だけを読み直す。
+// 最後に Minecraft 本体の jar を、Modpack のフォルダと利用者が選んだゲームのフォルダから探して読む（vanillaAssets.ts）。
 
 import type { AssetLocation } from '../assets/modpackAssetReader'
 import { isDirectoryEntry, type FileSource, type FileStat } from '../fileSource'
@@ -10,6 +11,26 @@ import { findLangPacks, hasNames, langPackFromSummary, readFolderLangPack, type 
 import { Modpack, type ModpackProblem } from './modpack'
 import { MODS_DIR } from './modpackFolder'
 import { readZipPartially, ZipLayoutError, type RangeReader } from './partialZip'
+import {
+  findAssetIndex,
+  findClientJar,
+  findJaJpObject,
+  modpackMinecraftVersion,
+  readJaJpObject,
+  soleInstalledVersion,
+  type ClientJarLocation,
+  type VanillaLoadResult,
+} from './vanillaAssets'
+
+/** Minecraft 本体の jar を探すフォルダ（利用者が選んだ、ランチャーのゲームのフォルダ） */
+export interface GameFolder {
+  /** 画面に出す名前 */
+  readonly name: string
+  readonly source: FileSource
+}
+
+/** Modpack のフォルダで本体の jar を見つけたときの、場所の名前 */
+export const MODPACK_FOLDER_LABEL = 'Modpack のフォルダ'
 
 /**
  * jar を開いて読む関数。content はファイル全体か、必要な部分だけを取り出したもの。
@@ -27,9 +48,9 @@ export interface JarCache {
 export interface ModpackLoadProgress {
   /** 終わった jar とリソースパックの数 */
   readonly done: number
-  /** jar とリソースパック（ModTranslations/ を含む）の数 */
+  /** jar とリソースパック（ModTranslations/ を含む）の数と、Minecraft 本体の 1 */
   readonly total: number
-  /** 保存した結果を使った jar と zip のリソースパックの数 */
+  /** 保存した結果を使った jar と zip のリソースパック（と Minecraft 本体の jar）の数 */
   readonly fromCache: number
   /** いま読んでいる jar のファイル名、またはリソースパックのパス。終わったら null */
   readonly current: string | null
@@ -43,6 +64,8 @@ export interface ModpackLoaderOptions {
   onProgress?: (progress: ModpackLoadProgress) => void
   /** 途中でやめる合図。やめたら load は AbortError を投げる */
   signal?: AbortSignal
+  /** Minecraft 本体の jar を探すフォルダ。Modpack のフォルダのあとに、この順で探す */
+  gameFolders?: readonly GameFolder[]
 }
 
 /**
@@ -99,6 +122,7 @@ export class ModpackLoader {
   private readonly scan: JarScanner
   private readonly onProgress: ((progress: ModpackLoadProgress) => void) | null
   private readonly signal: AbortSignal | null
+  private readonly gameFolders: readonly GameFolder[]
 
   constructor(source: FileSource, options: ModpackLoaderOptions = {}) {
     this.source = source
@@ -106,6 +130,7 @@ export class ModpackLoader {
     this.scan = options.scan ?? (async (jar, content) => scanJarContent(jar, content))
     this.onProgress = options.onProgress ?? null
     this.signal = options.signal ?? null
+    this.gameFolders = options.gameFolders ?? []
   }
 
   /**
@@ -115,7 +140,8 @@ export class ModpackLoader {
   async load(): Promise<Modpack> {
     const jars = (await this.source.list(MODS_DIR)).filter(isJar).sort()
     const packLocations = await findLangPacks(this.source)
-    const total = jars.length + packLocations.length
+    // 最後の 1 は Minecraft 本体
+    const total = jars.length + packLocations.length + 1
     const summaries: JarSummary[] = []
     const langPacks: LangPack[] = []
     const assetPacks: AssetLocation[] = []
@@ -152,8 +178,109 @@ export class ModpackLoader {
     }
 
     this.throwIfAborted()
+    this.onProgress?.({ done: total - 1, total, fromCache, current: 'Minecraft 本体' })
+    const vanilla = await this.loadVanilla(summaries, problems)
+    if (vanilla.cached) fromCache++
+
+    this.throwIfAborted()
     this.onProgress?.({ done: total, total, fromCache, current: null })
-    return new Modpack(summaries, this.source, problems, langPacks, assetPacks)
+    return new Modpack(summaries, this.source, problems, langPacks, assetPacks, vanilla.result)
+  }
+
+  /**
+   * Minecraft 本体の jar を、Modpack のフォルダ → 選んだゲームのフォルダの順に探して読む。
+   * 版は Modpack のランチャーの情報か Mod の jar から決め、分からなければフォルダにある版が1つだけのときにそれを使う。
+   * 見つからなくてもエラーにはしない（本体のブロックが色付きの箱で描かれ、名前が出ないだけ）
+   */
+  private async loadVanilla(
+    summaries: readonly JarSummary[],
+    problems: ModpackProblem[],
+  ): Promise<{ result: VanillaLoadResult; cached: boolean }> {
+    let version: string | null = null
+    try {
+      version = await modpackMinecraftVersion(this.source, summaries.flatMap((s) => s.mods))
+    } catch {
+      // 版が分からなくても、下でフォルダにある版を探す
+    }
+    const folders: GameFolder[] = [{ name: MODPACK_FOLDER_LABEL, source: this.source }, ...this.gameFolders]
+    for (const folder of folders) {
+      this.throwIfAborted()
+      let jarPath: string | null = null
+      try {
+        const v = version ?? (await soleInstalledVersion(folder.source))
+        if (!v) continue
+        const jar = await findClientJar(folder.source, v)
+        if (!jar) continue
+        jarPath = jar.path
+        const archive = await this.loadArchive(jar.path, `minecraft|${jar.path}`, false, folder.source)
+        if (archive.summary.assets.length === 0) {
+          problems.push({ jar: jar.path, message: 'Minecraft 本体の jar に見た目の資産がありません' })
+          continue
+        }
+        const jaJp = await this.loadVanillaJaJp(folder.source, v, jar)
+        return {
+          result: {
+            status: {
+              kind: 'found',
+              version: v,
+              where: folder.name,
+              jarPath: jar.path,
+              jaJp: jaJp !== null,
+            },
+            assets: { version: v, source: folder.source, jarPath: jar.path, summary: archive.summary, jaJp: jaJp ?? {} },
+          },
+          cached: archive.cached,
+        }
+      } catch (e) {
+        if (e instanceof ModpackLoadAbortedError) throw e
+        problems.push({
+          jar: jarPath ?? folder.name,
+          message: `Minecraft 本体の jar を読めませんでした（${errorText(e)}）`,
+        })
+      }
+    }
+    return { result: { status: { kind: 'missing', version }, assets: null }, cached: false }
+  }
+
+  /**
+   * 日本語の表示名を、ランチャーの資産の索引（assets/indexes/）から読む。本体の jar には en_us しかないため。
+   * 中身はハッシュで決まるので、ハッシュを鍵にして保存する。見つからなければ null
+   */
+  private async loadVanillaJaJp(
+    source: FileSource,
+    version: string,
+    jar: ClientJarLocation,
+  ): Promise<Record<string, string> | null> {
+    try {
+      const index = await findAssetIndex(source, version, jar)
+      if (!index) return null
+      const object = await findJaJpObject(source, index)
+      if (!object) return null
+      const key = `v${JAR_SUMMARY_FORMAT}|assets/objects|${object.hash}`
+      const hit = this.cache ? await this.cache.get(key) : null
+      if (hit) return hit.lang.ja_jp
+      const names = await readJaJpObject(source, object.path)
+      if (!names) return null
+      if (this.cache) {
+        const summary: JarSummary = {
+          jar: object.path,
+          mods: [],
+          namespaces: [],
+          lang: { ja_jp: names, en_us: {} },
+          blockStates: {},
+          problems: [],
+          assets: [],
+        }
+        try {
+          await this.cache.put(key, summary)
+        } catch {
+          // 保存できなくても、次回また読むだけで済む
+        }
+      }
+      return names
+    } catch {
+      return null
+    }
   }
 
   /** jar の外の翻訳を読む。見た目の資産を読む場所（zip なら資産の索引付き）も返す */
@@ -184,8 +311,9 @@ export class ModpackLoader {
     path: string,
     jar: string,
     langOnly = false,
+    source: FileSource = this.source,
   ): Promise<{ summary: JarSummary; cached: boolean }> {
-    const stat = this.source.stat ? await this.source.stat(path) : null
+    const stat = source.stat ? await source.stat(path) : null
 
     // 大きさと更新時刻が分かれば、中身を読む前に保存した結果を探す
     if (stat && this.cache) {
@@ -194,12 +322,12 @@ export class ModpackLoader {
     }
 
     // ファイルの一部を読めれば、zip の一覧と必要な項目だけを読む（保存の鍵は stat から作れる）
-    let content: JarContent | null = stat ? await this.readPartially(path, stat.size) : null
+    let content: JarContent | null = stat ? await this.readPartially(source, path, stat.size) : null
     let key: string | null
     if (content) {
       key = this.cache ? jarCacheKey(jar, stat, null) : null
     } else {
-      const bytes = new Uint8Array(await this.source.read(path))
+      const bytes = new Uint8Array(await source.read(path))
       this.throwIfAborted()
       key = this.cache ? jarCacheKey(jar, stat, bytes) : null
       if (key !== null && !stat && this.cache) {
@@ -225,9 +353,9 @@ export class ModpackLoader {
    * readRange があれば、zip の一覧と必要な項目だけを読む。readRange がないか、
    * 想定と違う形の zip なら null（ファイル全体を読む。壊れた zip のエラーは全体を読む側で出す）
    */
-  private async readPartially(path: string, size: number): Promise<JarContent | null> {
-    if (!this.source.readRange) return null
-    const readRange = this.source.readRange.bind(this.source)
+  private async readPartially(source: FileSource, path: string, size: number): Promise<JarContent | null> {
+    if (!source.readRange) return null
+    const readRange = source.readRange.bind(source)
     const reader: RangeReader = {
       size,
       read: async (start, end) => new Uint8Array(await readRange(path, start, end)),
