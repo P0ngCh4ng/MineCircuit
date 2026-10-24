@@ -35,6 +35,23 @@ export interface TextureAtlasOptions {
   readonly maxSize?: number
 }
 
+/** 色を掛けたテクスチャの ID の印。`minecraft:block/water_still#tint=3f76e4` */
+const TINT_SUFFIX = /#tint=([0-9a-f]{6})$/
+
+/**
+ * もとのテクスチャに決まった色（0xRRGGBB）を掛けたテクスチャの ID。水の青のように、
+ * 面の色付け（tintIndex。草の緑）とは別の色を掛けたいときに使う。アトラスでは別のテクスチャとして持つ
+ */
+export function tintedTextureId(base: TextureId, rgb: number): TextureId {
+  return `${base}#tint=${rgb.toString(16).padStart(6, '0')}`
+}
+
+/** 色を掛けたテクスチャの ID を、もとの ID と色に分ける。色がなければ tint は null */
+export function splitTintedTextureId(id: TextureId): { base: TextureId; tint: number | null } {
+  const m = TINT_SUFFIX.exec(id)
+  return m ? { base: id.slice(0, m.index), tint: parseInt(m[1]!, 16) } : { base: id, tint: null }
+}
+
 /** テクスチャの ID から PNG のパス。"create:block/shaft" → "assets/create/textures/block/shaft.png" */
 export function texturePath(id: TextureId): string | null {
   const colon = id.indexOf(':')
@@ -104,8 +121,14 @@ export class TextureAtlasBuilder {
     return { atlas: { width, height, pixels, regions, missing }, problems }
   }
 
-  /** 1つのテクスチャを読む。読めなければ problems に書いて null */
+  /** 1つのテクスチャを読む。色を掛けた ID なら、もとのテクスチャに色を掛ける。読めなければ problems に書いて null */
   private async load(id: TextureId, problems: string[]): Promise<RgbaImage | null> {
+    const { base, tint } = splitTintedTextureId(id)
+    const image = await this.loadPlain(base, problems)
+    return image && tint !== null ? multiplyColor(image, tint) : image
+  }
+
+  private async loadPlain(id: TextureId, problems: string[]): Promise<RgbaImage | null> {
     const path = texturePath(id)
     if (path === null) {
       problems.push(`テクスチャの ID ${id} が正しくありません。紫と黒で表示します。`)
@@ -128,6 +151,20 @@ export class TextureAtlasBuilder {
     if (meta === null) return image
     return firstFrame(image, meta, id, problems)
   }
+}
+
+/** 画素の RGB に色（0xRRGGBB）を掛ける。透明度はそのまま */
+function multiplyColor(image: RgbaImage, rgb: number): RgbaImage {
+  const r = (rgb >> 16) & 0xff
+  const g = (rgb >> 8) & 0xff
+  const b = rgb & 0xff
+  const pixels = new Uint8ClampedArray(image.pixels)
+  for (let i = 0; i < pixels.length; i += 4) {
+    pixels[i] = Math.round((pixels[i]! * r) / 255)
+    pixels[i + 1] = Math.round((pixels[i + 1]! * g) / 255)
+    pixels[i + 2] = Math.round((pixels[i + 2]! * b) / 255)
+  }
+  return { width: image.width, height: image.height, pixels }
 }
 
 /** .png.mcmeta にアニメーションがあれば、1枚目の絵を切り出す */

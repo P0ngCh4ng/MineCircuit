@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AtlasRegion, TextureAtlas } from '../../domain/blockModel'
-import { MAX_ATLAS_SIZE, TextureAtlasBuilder, texturePath } from './textureAtlas'
+import { MAX_ATLAS_SIZE, splitTintedTextureId, TextureAtlasBuilder, texturePath, tintedTextureId } from './textureAtlas'
 import { MemoryAssetReader } from '../../../tests/fixtures/fakeAppearance'
 import { pixelAt, rgbaPng, solidPng } from '../../../tests/fixtures/pngFixture'
 
@@ -188,5 +188,21 @@ describe('TextureAtlasBuilder', () => {
     const copy = structuredClone(atlas)
     expect(copy.regions).toEqual(atlas.regions)
     expect(copy.pixels).toEqual(atlas.pixels)
+  })
+})
+
+describe('色を掛けたテクスチャ', () => {
+  it('ID に色を付け、アトラスでは、もとのテクスチャに色を掛けた別のテクスチャにする', async () => {
+    const id = tintedTextureId('test:block/gray', 0x3f76e4)
+    expect(id).toBe('test:block/gray#tint=3f76e4')
+    expect(splitTintedTextureId(id)).toEqual({ base: 'test:block/gray', tint: 0x3f76e4 })
+    expect(splitTintedTextureId('test:block/gray')).toEqual({ base: 'test:block/gray', tint: null })
+
+    const reader = new MemoryAssetReader({ 'assets/test/textures/block/gray.png': solidPng(16, 16, [255, 128, 0, 200]) })
+    const { atlas, problems } = await new TextureAtlasBuilder(reader).build(['test:block/gray', id])
+    expect(problems).toEqual([])
+    expect(texel(atlas, atlas.regions['test:block/gray']!, 3, 3)).toEqual([255, 128, 0, 200])
+    // 0x3f = 63、0x76 = 118 → 128 * 118 / 255 = 59、0xe4 = 228 → 0。透明度はそのまま
+    expect(texel(atlas, atlas.regions[id]!, 3, 3)).toEqual([63, 59, 0, 200])
   })
 })

@@ -21,11 +21,22 @@ export interface PngSpec {
   readonly trns?: readonly number[]
   /** 行ごとのフィルター（0〜4）。足りない行は繰り返す。省略時は 0 */
   readonly filters?: readonly number[]
-  /** IHDR のインターレースの値。省略時は 0 */
+  /** IHDR のインターレースの値。省略時は 0。1 なら画素を Adam7 の順に並べる */
   readonly interlace?: number
 }
 
 const CHANNELS: Readonly<Record<PngColorType, number>> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }
+
+/** Adam7 の7つの縮小画像の、始まりの位置と間隔（x0, y0, dx, dy） */
+const ADAM7_PASSES = [
+  [0, 0, 8, 8],
+  [4, 0, 8, 8],
+  [0, 4, 4, 8],
+  [2, 0, 4, 4],
+  [0, 2, 2, 4],
+  [1, 0, 2, 2],
+  [0, 1, 1, 2],
+] as const
 
 export function encodePng(spec: PngSpec): Uint8Array {
   const colorType = spec.colorType ?? 6
@@ -33,41 +44,58 @@ export function encodePng(spec: PngSpec): Uint8Array {
   const channels = CHANNELS[colorType]
   const bitsPerPixel = channels * bitDepth
   const bpp = Math.max(1, bitsPerPixel >> 3)
-  const stride = Math.ceil((spec.width * bitsPerPixel) / 8)
+  const filters = spec.filters ?? [0]
+  const sampleAt = (x: number, y: number, i: number): number => spec.samples[(y * spec.width + x) * channels + i] ?? 0
 
-  // 行のバイト列（フィルター前）を作る
-  const rows: Uint8Array[] = []
-  for (let y = 0; y < spec.height; y++) {
-    const row = new Uint8Array(stride)
-    for (let i = 0; i < spec.width * channels; i++) {
-      const v = spec.samples[y * spec.width * channels + i] ?? 0
-      if (bitDepth === 8) row[i] = v
-      else if (bitDepth === 16) {
-        row[i * 2] = v >> 8
-        row[i * 2 + 1] = v & 0xff
-      } else {
-        const bit = i * bitDepth
-        row[bit >> 3]! |= v << (8 - bitDepth - (bit & 7))
+  // 縮小画像1つ（インターレースなしなら画像全体）を、行ごとにフィルターを掛けたバイト列にする
+  const filteredRows = (width: number, height: number, sample: (x: number, y: number, i: number) => number): Uint8Array => {
+    const stride = Math.ceil((width * bitsPerPixel) / 8)
+    const rows: Uint8Array[] = []
+    for (let y = 0; y < height; y++) {
+      const row = new Uint8Array(stride)
+      for (let i = 0; i < width * channels; i++) {
+        const v = sample(Math.floor(i / channels), y, i % channels)
+        if (bitDepth === 8) row[i] = v
+        else if (bitDepth === 16) {
+          row[i * 2] = v >> 8
+          row[i * 2 + 1] = v & 0xff
+        } else {
+          const bit = i * bitDepth
+          row[bit >> 3]! |= v << (8 - bitDepth - (bit & 7))
+        }
+      }
+      rows.push(row)
+    }
+    const out = new Uint8Array((stride + 1) * height)
+    for (let y = 0; y < height; y++) {
+      const f = filters[y % filters.length]!
+      const cur = rows[y]!
+      const prev = y > 0 ? rows[y - 1]! : new Uint8Array(stride)
+      const o = y * (stride + 1)
+      out[o] = f
+      for (let i = 0; i < stride; i++) {
+        const a = i >= bpp ? cur[i - bpp]! : 0
+        const b = prev[i]!
+        const c = i >= bpp ? prev[i - bpp]! : 0
+        const pred = f === 0 ? 0 : f === 1 ? a : f === 2 ? b : f === 3 ? (a + b) >> 1 : paeth(a, b, c)
+        out[o + 1 + i] = (cur[i]! - pred) & 0xff
       }
     }
-    rows.push(row)
+    return out
   }
 
-  const filters = spec.filters ?? [0]
-  const raw = new Uint8Array((stride + 1) * spec.height)
-  for (let y = 0; y < spec.height; y++) {
-    const f = filters[y % filters.length]!
-    const cur = rows[y]!
-    const prev = y > 0 ? rows[y - 1]! : new Uint8Array(stride)
-    const o = y * (stride + 1)
-    raw[o] = f
-    for (let i = 0; i < stride; i++) {
-      const a = i >= bpp ? cur[i - bpp]! : 0
-      const b = prev[i]!
-      const c = i >= bpp ? prev[i - bpp]! : 0
-      const pred = f === 0 ? 0 : f === 1 ? a : f === 2 ? b : f === 3 ? (a + b) >> 1 : paeth(a, b, c)
-      raw[o + 1 + i] = (cur[i]! - pred) & 0xff
-    }
+  // interlace が 1 なら Adam7 の7つの縮小画像を順に並べる
+  const parts: Uint8Array[] = []
+  for (const [x0, y0, dx, dy] of spec.interlace === 1 ? ADAM7_PASSES : [[0, 0, 1, 1] as const]) {
+    const w = Math.ceil((spec.width - x0) / dx)
+    const h = Math.ceil((spec.height - y0) / dy)
+    if (w > 0 && h > 0) parts.push(filteredRows(w, h, (x, y, i) => sampleAt(x0 + x * dx, y0 + y * dy, i)))
+  }
+  const raw = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
+  let rawOff = 0
+  for (const p of parts) {
+    raw.set(p, rawOff)
+    rawOff += p.length
   }
 
   const ihdr = new Uint8Array(13)

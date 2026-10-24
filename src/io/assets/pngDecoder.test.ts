@@ -62,8 +62,29 @@ describe('decodePng', () => {
     expect(pixelAt(img.pixels, 1, 0, 0)).toEqual([0x12, 0xab, 0xff, 0xff])
   })
 
-  it('インターレース・PNG でないもの・壊れたものは PngDecodeError', () => {
-    expect(() => decodePng(encodePng({ width: 1, height: 1, samples: [0, 0, 0, 0], interlace: 1 }))).toThrow(PngDecodeError)
+  it('Adam7 のインターレースを読む。インターレースなしと同じ画素になる', () => {
+    // 7つの縮小画像がすべて出てくる大きさと、空の縮小画像が出る小さな大きさ。フィルターも混ぜる
+    for (const [w, h] of [
+      [11, 9],
+      [3, 2],
+      [1, 1],
+    ] as const) {
+      const samples: number[] = []
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) samples.push(x * 20, y * 25, (x + y) * 7, 255 - x)
+      const plain = decodePng(encodePng({ width: w, height: h, samples, filters: [0, 1, 2, 3, 4] }))
+      const interlaced = decodePng(encodePng({ width: w, height: h, samples, filters: [0, 1, 2, 3, 4], interlace: 1 }))
+      expect(interlaced).toEqual(plain)
+    }
+    // パレットの 2 ビット（1 バイトに4画素）も
+    const palette = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [9, 9, 9]] as const
+    const idx = Array.from({ length: 5 * 4 }, (_, i) => i % 4)
+    const p1 = decodePng(encodePng({ width: 5, height: 4, colorType: 3, bitDepth: 2, palette, samples: idx }))
+    const p2 = decodePng(encodePng({ width: 5, height: 4, colorType: 3, bitDepth: 2, palette, samples: idx, interlace: 1 }))
+    expect(p2).toEqual(p1)
+  })
+
+  it('知らないインターレース・PNG でないもの・壊れたものは PngDecodeError', () => {
+    expect(() => decodePng(encodePng({ width: 1, height: 1, samples: [0, 0, 0, 0], interlace: 2 }))).toThrow(PngDecodeError)
     expect(() => decodePng(new TextEncoder().encode('not a png'))).toThrow(PngDecodeError)
     const broken = rgbaPng(2, 2, () => [1, 2, 3, 4])
     broken[40] = broken[40]! ^ 0xff

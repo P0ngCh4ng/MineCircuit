@@ -116,7 +116,7 @@ export function decodePng(data: Uint8Array): RgbaImage {
   if (channels === undefined || !ALLOWED_DEPTHS[colorType]!.includes(bitDepth)) {
     throw new PngDecodeError(`対応していない PNG の形式です（色の種類 ${colorType}、ビット深度 ${bitDepth}）。`)
   }
-  if (interlace !== 0) throw new PngDecodeError('インターレースの PNG には対応していません。インターレースなしで保存し直してください。')
+  if (interlace !== 0 && interlace !== 1) throw new PngDecodeError(`対応していないインターレースの方式です（${interlace}）。`)
   if (colorType === 3 && palette === null) throw new PngDecodeError('PNG にパレット（PLTE）がありません。')
 
   const compressed = new Uint8Array(idatLength)
@@ -134,24 +134,32 @@ export function decodePng(data: Uint8Array): RgbaImage {
 
   const bitsPerPixel = channels * bitDepth
   const bpp = Math.max(1, bitsPerPixel >> 3)
-  const stride = Math.ceil((width * bitsPerPixel) / 8)
-  if (raw.length < (stride + 1) * height) throw new PngDecodeError('PNG の画素データが足りません。')
-
   const pixels = new Uint8ClampedArray(width * height * 4)
-  let prev = new Uint8Array(stride)
-  let line = new Uint8Array(stride)
-  for (let y = 0; y < height; y++) {
-    const rowStart = y * (stride + 1)
-    const filter = raw[rowStart]!
-    unfilter(filter, raw.subarray(rowStart + 1, rowStart + 1 + stride), prev, line, bpp)
-    writeRow(line, y)
-    const t = prev
-    prev = line
-    line = t
+  // インターレースなしは画像全体が1つの縮小画像。Adam7 は7つの縮小画像を順に並べたもの
+  let rawPos = 0
+  for (const [x0, y0, dx, dy] of interlace === 1 ? ADAM7_PASSES : NO_INTERLACE) {
+    const passWidth = Math.ceil((width - x0) / dx)
+    const passHeight = Math.ceil((height - y0) / dy)
+    if (passWidth <= 0 || passHeight <= 0) continue
+    const stride = Math.ceil((passWidth * bitsPerPixel) / 8)
+    if (raw.length < rawPos + (stride + 1) * passHeight) throw new PngDecodeError('PNG の画素データが足りません。')
+    let prev = new Uint8Array(stride)
+    let line = new Uint8Array(stride)
+    for (let py = 0; py < passHeight; py++) {
+      const filter = raw[rawPos]!
+      unfilter(filter, raw.subarray(rawPos + 1, rawPos + 1 + stride), prev, line, bpp)
+      rawPos += stride + 1
+      const y = y0 + py * dy
+      writeRow(line, passWidth, (x) => (y * width + x0 + x * dx) * 4)
+      const t = prev
+      prev = line
+      line = t
+    }
   }
   return { width, height, pixels }
 
-  function writeRow(row: Uint8Array, y: number): void {
+  /** 縮小画像の1行を書く。at は行の中の番号 → 画像の画素の位置（pixels の番号） */
+  function writeRow(row: Uint8Array, rowWidth: number, at: (x: number) => number): void {
     const maxSample = (1 << Math.min(bitDepth, 8)) - 1
     // 8 ビット未満のサンプルを 0〜255 に広げる
     const scale = bitDepth < 8 ? 255 / maxSample : 1
@@ -167,8 +175,8 @@ export function decodePng(data: Uint8Array): RgbaImage {
       if (bitDepth === 16) return (row[(x * channels + c) * 2]! << 8) | row[(x * channels + c) * 2 + 1]!
       return sample(x, c)
     }
-    for (let x = 0; x < width; x++) {
-      const o = (y * width + x) * 4
+    for (let x = 0; x < rowWidth; x++) {
+      const o = at(x)
       let r: number
       let g: number
       let b: number
@@ -222,6 +230,20 @@ export function decodePng(data: Uint8Array): RgbaImage {
     }
   }
 }
+
+/** インターレースなし：画像全体を1回で読む（x0, y0, dx, dy） */
+const NO_INTERLACE: readonly (readonly [number, number, number, number])[] = [[0, 0, 1, 1]]
+
+/** Adam7 の7つの縮小画像の、始まりの位置と間隔（x0, y0, dx, dy） */
+const ADAM7_PASSES: readonly (readonly [number, number, number, number])[] = [
+  [0, 0, 8, 8],
+  [4, 0, 8, 8],
+  [0, 4, 4, 8],
+  [2, 0, 4, 4],
+  [0, 2, 2, 4],
+  [1, 0, 2, 2],
+  [0, 1, 1, 2],
+]
 
 function unfilter(filter: number, src: Uint8Array, prev: Uint8Array, out: Uint8Array, bpp: number): void {
   const n = src.length
