@@ -21,7 +21,7 @@ function fullCube(): UnbakedElement {
 }
 
 function model(parent: string | null, textures: Record<string, string>, elements: UnbakedElement[] | null = null): UnbakedModel {
-  return { parent, textures, elements, ambientOcclusion: null }
+  return { parent, textures, elements, ambientOcclusion: null, obj: null }
 }
 
 // 6面の変数を、上・下・北・南・西・東の順に別の変数へ向ける

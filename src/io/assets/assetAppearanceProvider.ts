@@ -51,6 +51,7 @@ export function textureIdsOf(appearances: Iterable<BlockAppearance | null>): Set
       for (const element of part.model.elements) {
         for (const face of Object.values(element.faces)) if (face) ids.add(face.texture)
       }
+      for (const mesh of part.model.meshes) ids.add(mesh.texture)
     }
   }
   return ids

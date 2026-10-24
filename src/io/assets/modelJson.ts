@@ -37,7 +37,20 @@ export interface UnbakedModel {
   readonly elements: readonly UnbakedElement[] | null
   /** ambientocclusion。書いてなければ null（親のものを使う） */
   readonly ambientOcclusion: boolean | null
+  /** OBJ のモデル（`"loader": "forge:obj"`）なら、その .obj と flip-v。OBJ でなければ null（親のものを使う） */
+  readonly obj: ObjModelRef | null
 }
+
+/** モデルの JSON に書いてある OBJ のファイル */
+export interface ObjModelRef {
+  /** `"model"` の値（`create:models/block/x.obj`）。namespace 付きにしてある */
+  readonly model: string
+  /** テクスチャの v を上下に返すか（`flip-v`、NeoForge は `flip_v`） */
+  readonly flipV: boolean
+}
+
+/** OBJ の読み込みを指す loader（`forge:obj`・`neoforge:obj`・`porting_lib:obj` など） */
+const OBJ_LOADER = /^([a-z0-9_.-]+:)?obj$/
 
 type JsonObject = { [key: string]: JsonValue }
 
@@ -204,5 +217,15 @@ export function parseModelJson(json: JsonValue, note: (m: string) => void): Unba
     })
   }
   const ao = json.ambientocclusion
-  return { parent, textures, elements, ambientOcclusion: typeof ao === 'boolean' ? ao : null }
+  return { parent, textures, elements, ambientOcclusion: typeof ao === 'boolean' ? ao : null, obj: parseObjRef(json, note) }
+}
+
+function parseObjRef(json: JsonObject, note: (m: string) => void): ObjModelRef | null {
+  if (typeof json.loader !== 'string' || !OBJ_LOADER.test(json.loader)) return null
+  if (typeof json.model !== 'string' || !json.model.toLowerCase().endsWith('.obj')) {
+    note(`loader ${json.loader} の model（.obj のファイル）が書いてありません`)
+    return null
+  }
+  const flip = json['flip-v'] ?? json.flip_v
+  return { model: withNamespace(json.model), flipV: flip === true }
 }

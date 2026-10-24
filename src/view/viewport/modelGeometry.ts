@@ -9,9 +9,19 @@
 // - PlacedModel の x・y は、ブロックの中心を軸に x を先に、次に y を回す。向きは Minecraft と同じく
 //   正の軸から見て時計回り（y=90 で北が東になる。x=90 で上が北になる）
 // - uvlock なら、回したあとの位置からテクスチャを貼り直し、向きを世界に合わせる
+// - OBJ のモデルの三角形（ModelMesh）は、置き方の回転だけを当てて、そのまま描く。隣のブロックで隠さない
 // 頂点の座標はブロックの中心を原点にしたブロック単位（-0.5〜0.5）。
 
-import type { AppearanceSet, AtlasRegion, BlockAppearance, ModelElementRotation, ModelFace, PlacedModel, TextureAtlas } from '../../domain/blockModel'
+import type {
+  AppearanceSet,
+  AtlasRegion,
+  BlockAppearance,
+  ModelElementRotation,
+  ModelFace,
+  ModelMesh,
+  PlacedModel,
+  TextureAtlas,
+} from '../../domain/blockModel'
 import { DIRECTIONS, directionVector, type Direction } from '../../domain/direction'
 
 type Mutable3 = [number, number, number]
@@ -216,6 +226,7 @@ export function buildModelGeometry(
         addFace(face, dir, element.from, element.to, element.rotation, part, atlas, tint, positions, normals, uvs, colors, indices)
       }
     }
+    for (const mesh of part.model.meshes) addMesh(mesh, part, atlas, positions, normals, uvs, colors, indices)
   }
 
   return {
@@ -298,6 +309,35 @@ function addFace(
   }
   // 左上・左下・右下、左上・右下・右上（外から見て反時計回り）
   indices.push(base, base + 3, base + 2, base, base + 2, base + 1)
+}
+
+/** OBJ のモデルの三角形を足す。テクスチャの座標は 0〜16 の外を端に寄せ、隣のテクセルをにじませない */
+function addMesh(
+  mesh: ModelMesh,
+  part: PlacedModel,
+  atlas: TextureAtlas,
+  positions: number[],
+  normals: number[],
+  uvs: number[],
+  colors: number[],
+  indices: number[],
+): void {
+  const region = regionOf(atlas, mesh.texture)
+  const base = positions.length / 3
+  const count = mesh.positions.length / 3
+  for (let i = 0; i < count; i++) {
+    const p: Mutable3 = [mesh.positions[i * 3]!, mesh.positions[i * 3 + 1]!, mesh.positions[i * 3 + 2]!]
+    applyPlacedRotation(p, part, true)
+    positions.push((p[0] / 16 - 0.5) * MODEL_SCALE, (p[1] / 16 - 0.5) * MODEL_SCALE, (p[2] / 16 - 0.5) * MODEL_SCALE)
+    const n: Mutable3 = [mesh.normals[i * 3]!, mesh.normals[i * 3 + 1]!, mesh.normals[i * 3 + 2]!]
+    applyPlacedRotation(n, part, false)
+    normals.push(n[0], n[1], n[2])
+    const u = Math.min(Math.max(mesh.uvs[i * 2]!, UV_INSET), 16 - UV_INSET) / 16
+    const v = Math.min(Math.max(mesh.uvs[i * 2 + 1]!, UV_INSET), 16 - UV_INSET) / 16
+    uvs.push(region.u0 + u * (region.u1 - region.u0), region.v0 + v * (region.v1 - region.v0))
+    colors.push(1, 1, 1)
+    indices.push(base + i)
+  }
 }
 
 /** 見た目の中の面が持つ cullface の、置いたあとの向き（cullBit の和）。隠せる面がない向きのビットは立たない */

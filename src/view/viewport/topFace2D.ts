@@ -7,8 +7,10 @@
 //
 // 回転の向きは Minecraft の blockstates と同じ：x=90 で北の面が下、上の面が北を向く。y=90 で北の面が東を向く。
 // 要素の回転（22.5 度など）は範囲に入れない（傾いた板も、回す前の範囲で描く）。
+// OBJ のモデルの三角形（ModelMesh）は、置いたあとに上を向く三角形を、テクスチャごとに1つの面にまとめる
+// （真上から見た範囲と、テクスチャの座標の範囲。形どおりではない近似）。
 
-import type { BlockAppearance, ModelElement, ModelFace, QuarterTurn, TextureId } from '../../domain/blockModel'
+import type { BlockAppearance, ModelElement, ModelFace, ModelMesh, PlacedModel, QuarterTurn, TextureId } from '../../domain/blockModel'
 import type { Direction } from '../../domain/direction'
 
 type Vec = readonly [number, number, number]
@@ -119,6 +121,10 @@ export function topFaces(appearance: BlockAppearance): TopFace2D[] {
       if (!face) continue
       faces.push({ face: topFaceOf(face, element, part.x, part.y, part.uvlock), order: faces.length })
     }
+    for (const mesh of part.model.meshes) {
+      const face = meshTopFace(mesh, part)
+      if (face) faces.push({ face, order: faces.length })
+    }
   }
   if (faces.length === 0) {
     const fallback = topmostElementFace(appearance)
@@ -126,6 +132,53 @@ export function topFaces(appearance: BlockAppearance): TopFace2D[] {
   }
   faces.sort((a, b) => a.face.top - b.face.top || a.order - b.order)
   return faces.map((f) => f.face)
+}
+
+/** 置いたあとの法線の y がこれより大きい三角形を、上を向くとみなす */
+const MESH_UP_THRESHOLD = 0.5
+
+/** OBJ の三角形のうち、置いたあとに上を向くものをまとめた面。なければ null */
+function meshTopFace(mesh: ModelMesh, part: PlacedModel): TopFace2D | null {
+  let x0 = Infinity
+  let z0 = Infinity
+  let x1 = -Infinity
+  let z1 = -Infinity
+  let top = -Infinity
+  let u0 = Infinity
+  let v0 = Infinity
+  let u1 = -Infinity
+  let v1 = -Infinity
+  const count = mesh.positions.length / 9
+  for (let t = 0; t < count; t++) {
+    const n = rotateVec([mesh.normals[t * 9]!, mesh.normals[t * 9 + 1]!, mesh.normals[t * 9 + 2]!], part.x, part.y)
+    if (n[1] <= MESH_UP_THRESHOLD) continue
+    for (let k = 0; k < 3; k++) {
+      const i = t * 3 + k
+      const p = rotateVec([mesh.positions[i * 3]! - 8, mesh.positions[i * 3 + 1]! - 8, mesh.positions[i * 3 + 2]! - 8], part.x, part.y)
+      x0 = Math.min(x0, p[0] + 8)
+      x1 = Math.max(x1, p[0] + 8)
+      z0 = Math.min(z0, p[2] + 8)
+      z1 = Math.max(z1, p[2] + 8)
+      top = Math.max(top, p[1] + 8)
+      u0 = Math.min(u0, mesh.uvs[i * 2]!)
+      u1 = Math.max(u1, mesh.uvs[i * 2]!)
+      v0 = Math.min(v0, mesh.uvs[i * 2 + 1]!)
+      v1 = Math.max(v1, mesh.uvs[i * 2 + 1]!)
+    }
+  }
+  if (top === -Infinity) return null
+  const clamp = (v: number) => Math.min(Math.max(v, 0), 16)
+  return {
+    texture: mesh.texture,
+    uv: [u0, v0, u1, v1],
+    rotation: normalizeTurn(part.uvlock ? 0 : part.y),
+    tintIndex: null,
+    x0: clamp(x0),
+    z0: clamp(z0),
+    x1: clamp(x1),
+    z1: clamp(z1),
+    top,
+  }
 }
 
 /** 面を探す順。上を向く面がないとき（草花の交差したモデルなど）に使う */

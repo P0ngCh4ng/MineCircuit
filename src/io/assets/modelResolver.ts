@@ -1,10 +1,11 @@
 // ブロック状態から、描くモデル（要素とテクスチャ）を確定する（#82）。
 // 1. blockstates（assets/<ns>/blockstates/<path>.json）の variants / multipart から使うモデルを選ぶ（blockStateSelector）
 // 2. モデルの parent をたどり、テクスチャの変数（#side）と要素を確定する
+//    OBJ のモデル（`"loader": "forge:obj"`）なら、.obj と .mtl を読んで三角形にする（objModel）
 // 読むのは AssetReader だけ。jar をどう読むかは知らない。
 // 結果はブロック状態ごと・モデルごとに覚えておき、同じものは2度読まない。
 
-import type { BlockAppearance, ModelElement, ModelFace, PlacedModel, ResolvedModel, TextureId } from '../../domain/blockModel'
+import type { BlockAppearance, ModelElement, ModelFace, ModelMesh, PlacedModel, ResolvedModel, TextureId } from '../../domain/blockModel'
 import type { BlockState } from '../../domain/blockState'
 import type { Direction } from '../../domain/direction'
 import type { ResourceLocation } from '../../domain/resourceLocation'
@@ -12,7 +13,8 @@ import { parseLenientJson, type JsonValue } from '../modpack/jarScanner'
 import type { AssetReader } from './assetTypes'
 import { selectModels } from './blockStateSelector'
 import { builtinParentModel, UNDRAWABLE_BUILTIN_MODELS } from './builtinParentModels'
-import { modelPath, parseModelJson, withNamespace, type UnbakedElement, type UnbakedModel } from './modelJson'
+import { modelPath, parseModelJson, withNamespace, type ObjModelRef, type UnbakedElement, type UnbakedModel } from './modelJson'
+import { objModelPath, parseMtl, parseObj, siblingPath, type ParsedObj } from './objModel'
 
 /**
  * テクスチャの変数が決まらなかった面に使う ID（Minecraft と同じ名前）。
@@ -35,6 +37,9 @@ type RawModel = { readonly model: UnbakedModel } | 'missing' | 'invalid' | 'undr
 
 type ModelResult = { readonly model: ResolvedModel } | { readonly error: string }
 
+/** OBJ を読んだ結果。materials は材質の名前 → テクスチャ（map_Kd） */
+type ObjResult = { readonly obj: ParsedObj; readonly materials: Readonly<Record<string, string>> } | { readonly error: string }
+
 /** ブロックの ID → blockstates のパス。create:shaft → assets/create/blockstates/shaft.json */
 export function blockStatePath(id: ResourceLocation): string {
   return `assets/${id.namespace}/blockstates/${id.path}.json`
@@ -51,6 +56,7 @@ export class ModelResolver {
   private readonly byModel = new Map<string, Promise<ModelResult>>()
   private readonly rawModels = new Map<string, Promise<RawModel>>()
   private readonly definitions = new Map<string, Promise<JsonFile>>()
+  private readonly objs = new Map<string, Promise<ObjResult>>()
 
   constructor(private readonly reader: AssetReader) {}
 
@@ -142,7 +148,7 @@ export class ModelResolver {
       if ('error' in result) return null // 理由はモデルの問題として書いてある
       parts.push({ model: result.model, x: ref.x, y: ref.y, uvlock: ref.uvlock })
     }
-    if (parts.every((p) => p.model.elements.length === 0)) {
+    if (parts.every((p) => p.model.elements.length === 0 && p.model.meshes.length === 0)) {
       // ゲームでは BlockEntityRenderer などのプログラムで描くブロック。箱で描いたほうが場所が分かる
       this.problem(`${key}: モデルに描く要素がありません（ゲームではプログラムで描くブロックです）`)
       return null
@@ -211,13 +217,75 @@ export class ModelResolver {
     // 子が書いたものが優先。テクスチャの変数は根から順に上書きする
     const textures: Record<string, string> = {}
     for (let i = chain.length - 1; i >= 0; i--) Object.assign(textures, chain[i]!.textures)
-    const elements = chain.find((m) => m.elements !== null)?.elements ?? []
+    // 形は、一番子に近い「elements か OBJ を持つモデル」のものを使う
+    const shape = chain.find((m) => m.elements !== null || m.obj !== null)
     const ambientOcclusion = chain.find((m) => m.ambientOcclusion !== null)?.ambientOcclusion ?? true
 
     const missing = new Set<string>()
-    const baked: ModelElement[] = elements.map((e) => this.bakeElement(e, textures, missing))
+    let baked: ModelElement[] = []
+    let meshes: ModelMesh[] = []
+    if (shape?.obj) {
+      const result = await this.loadObj(shape.obj)
+      if ('error' in result) return { error: `モデル ${id}: ${result.error}` }
+      meshes = this.bakeMeshes(result, textures, missing)
+    } else {
+      baked = (shape?.elements ?? []).map((e) => this.bakeElement(e, textures, missing))
+    }
     for (const ref of missing) this.problem(`モデル ${id}: テクスチャの変数 ${ref} が決まっていません`)
-    return { model: { id, elements: baked, ambientOcclusion } }
+    return { model: { id, elements: baked, meshes, ambientOcclusion } }
+  }
+
+  /** OBJ と、そこから読む MTL を読む。同じ OBJ は1回だけ読む */
+  private loadObj(ref: ObjModelRef): Promise<ObjResult> {
+    const key = `${ref.model}|${ref.flipV}`
+    let p = this.objs.get(key)
+    if (!p) {
+      p = this.readObj(ref)
+      this.objs.set(key, p)
+    }
+    return p
+  }
+
+  private async readObj(ref: ObjModelRef): Promise<ObjResult> {
+    const path = objModelPath(ref.model)
+    let text: string | null
+    try {
+      text = await this.reader.readText(path)
+    } catch (e) {
+      return { error: `${path} を読めませんでした（${e instanceof Error ? e.message : String(e)}）` }
+    }
+    if (text === null) return { error: `OBJ のファイルが見つかりません（${path}）` }
+    const obj = parseObj(text, ref.flipV, (m) => this.problem(`${path}: ${m}`))
+    if (obj.groups.length === 0) return { error: `${path} に描く面がありません` }
+    const materials: Record<string, string> = {}
+    for (const lib of obj.materialLibraries) {
+      const mtlPath = siblingPath(path, lib)
+      try {
+        const mtl = await this.reader.readText(mtlPath)
+        if (mtl === null) this.problem(`${path}: 材質のファイルが見つかりません（${mtlPath}）`)
+        else Object.assign(materials, parseMtl(mtl))
+      } catch (e) {
+        this.problem(`${mtlPath} を読めませんでした（${e instanceof Error ? e.message : String(e)}）`)
+      }
+    }
+    return { obj, materials }
+  }
+
+  /** OBJ の材質ごとの三角形に、テクスチャを決める。材質のテクスチャが決まらなければ missing にする */
+  private bakeMeshes(
+    result: { readonly obj: ParsedObj; readonly materials: Readonly<Record<string, string>> },
+    textures: Readonly<Record<string, string>>,
+    missing: Set<string>,
+  ): ModelMesh[] {
+    return result.obj.groups.map((g) => {
+      const reference = g.material === null ? undefined : result.materials[g.material]
+      let texture = reference === undefined ? null : resolveTextureReference(reference, textures)
+      if (texture === null) {
+        missing.add(reference ?? `（材質 ${g.material ?? 'なし'}）`)
+        texture = MISSING_TEXTURE
+      }
+      return { texture, positions: g.positions, uvs: g.uvs, normals: g.normals }
+    })
   }
 
   private bakeElement(element: UnbakedElement, textures: Readonly<Record<string, string>>, missing: Set<string>): ModelElement {

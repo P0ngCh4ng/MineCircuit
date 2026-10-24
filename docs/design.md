@@ -620,8 +620,19 @@ flowchart LR
 | blockstates | `blockStateSelector.ts` | variants はキーの property がすべて同じなら合う（`""`・`normal` と、キーにない property は何でもよい）。複数合えば後に書いたもの（Minecraft と同じ）。重み付きの配列は先頭。multipart は when が合う部分をすべて重ねる（`a|b`、先頭の `!` で否定、`OR`・`AND`） |
 | モデルの JSON | `modelJson.ts` | namespace のない ID は `minecraft:`。uv のない面は要素の範囲を面に投影して決める（Minecraft と同じ）。読めない要素・面は飛ばして problems に書く |
 | 親の継承 | `modelResolver.ts` | `textures` は根から順に子が上書きする。`elements` と `ambientocclusion` は一番子に近いものを使う。変数（`#a` → `#b` → ID）が決まらない面は `minecraft:missingno`（アトラスでは紫と黒）にする。親の循環は止めて null |
-| 描けないもの | 同上 | `builtin/generated`・`builtin/entity` まで親をたどったら null。要素が1つもない見た目（BlockEntityRenderer で描くブロック）も null にして箱で描く。空気は何もない見た目 |
+| OBJ のモデル | `objModel.ts` | 下の「OBJ のモデル」 |
+| 描けないもの | 同上 | `builtin/generated`・`builtin/entity` まで親をたどったら null。要素も OBJ の三角形も1つもない見た目（BlockEntityRenderer で描くブロック）も null にして箱で描く。空気は何もない見た目 |
 | 覚えておく | 同上 | ブロック状態の key ごと、モデルの ID ごと、ファイルのパスごとに結果を1つ持つ。同じ問題は1回だけ書く |
+
+**OBJ のモデル。** Create などは、モデルの JSON に `"loader": "forge:obj"`（`neoforge:obj`・`porting_lib:obj` も同じ）と `"model": "<ns>:models/<パス>.obj"` を書き、形を Wavefront OBJ に置く（ブレイズバーナーの籠、粉砕ホイール、フライホイール、水車、バルブのハンドル、線路など）。`objModel.ts` で読み、`ResolvedModel.meshes`（テクスチャごとの三角形。`domain/blockModel.ts` の `ModelMesh`）にする。
+
+- 読むのは `v`・`vt`・`vn`・`f`・`usemtl`・`mtllib` と、MTL の `newmtl`・`map_Kd` だけ。`o`・`g`・`s` などは読まない。4つ以上の頂点の面は扇形に三角形に分ける。負の番号は後ろから数える。法線がなければ三角形の向きから決める。
+- 位置はブロック単位で、ブロックの角（西・下・北）が原点。要素と同じ 0〜16 に直す。テクスチャの v は、`flip-v`（NeoForge は `flip_v`）なら 1 - v にする（Forge の読み込みと同じ）。
+- MTL は `.obj` と同じフォルダから読む。`map_Kd` の値（`#0` など）はモデルの `textures` で解決する。決まらない材質は `minecraft:missingno`（紫と黒）にする。
+- 親をたどるとき、形は一番子に近い「elements か OBJ を持つモデル」のものを使う。blockstates の回転（x・y）は要素と同じく当てる。uvlock は当てない。
+- 3D では三角形をそのまま描き、隣のブロックで隠さない（cullface がない）。2D の上の面は、置いたあとに上を向く三角形を、テクスチャごとに1つの面（真上から見た範囲とテクスチャの座標の範囲）にまとめた近似にする。
+- `.obj`・`.mtl` は `models/` の下にあるので、資産の索引（`JarSummary.assets`）にもともと入っている。保存の版は変えない。
+- ベルトやブレイズの頭のように、ゲームの描画のコードが部品のモデルを選ぶブロックは、OBJ を読んでも描けない（#101 で扱う）。
 
 **バニラの親モデル。** Mod のモデルの多くは `block/cube_all` などのバニラの親を使うが、これは Mod の jar にない。バニラのモデルファイルはアプリに入れないので、よく使う親だけを、コードで同じ形に組み立てる（`builtinParentModels.ts`）。組み立てるのは「0〜16 の立方体の各面が `#down`・`#up`… を指す」という一般的な形と、変数名の対応（`all`、`end`/`side`、`top`/`bottom`/`side`、`front`）だけで、ファイルの写しではない。対象は `block/block`・`block/cube`・`block/cube_all`・`block/cube_column`・`block/cube_bottom_top`・`block/orientable`・`block/orientable_with_bottom`。利用者の資産（リソースパックや本体の jar）に同じ ID のモデルがあれば、そちらを先に使う。これ以外のバニラの親（階段、ハーフブロック、柵など）は見つからないとして扱い、色付きの箱で描く。
 
