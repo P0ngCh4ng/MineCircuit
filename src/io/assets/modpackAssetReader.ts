@@ -37,6 +37,8 @@ export type AssetLocation =
       readonly source?: FileSource
     }
   | { readonly kind: 'folder'; readonly path: string }
+  /** ファイルにはなく、アプリが組み立てた資産（KubeJS のスクリプトのブロック）。files は資産のパス → 中身 */
+  | { readonly kind: 'memory'; readonly path: string; readonly files: Readonly<Record<string, string>> }
 
 /** 開いた zip。一部を読めるときは一覧だけを持ち、読めないときはファイル全体を持つ */
 type OpenedZip =
@@ -156,7 +158,7 @@ export class ModpackAssetReader implements AssetReader {
   readonly problems: string[] = []
 
   /** 優先度の高い順 */
-  private readonly locations: readonly (ZipArchive | { readonly kind: 'folder'; readonly path: string })[]
+  private readonly locations: readonly (ZipArchive | Exclude<AssetLocation, { kind: 'zip' }>)[]
   private readonly source: FileSource | null
   /** 開けなかった zip。2回目からは読まない */
   private readonly broken = new Set<string>()
@@ -167,12 +169,12 @@ export class ModpackAssetReader implements AssetReader {
    */
   constructor(source: FileSource | null, locations: readonly AssetLocation[]) {
     this.source = source
-    const usable: (ZipArchive | { readonly kind: 'folder'; readonly path: string })[] = []
+    const usable: (ZipArchive | Exclude<AssetLocation, { kind: 'zip' }>)[] = []
     for (const l of locations) {
       if (l.kind === 'zip') {
         const from = l.source ?? source
         if (from) usable.push(new ZipArchive(l.path, l.assets, from))
-      } else if (source) {
+      } else if (l.kind === 'memory' || source) {
         usable.push(l)
       }
     }
@@ -208,6 +210,9 @@ export class ModpackAssetReader implements AssetReader {
             this.problems.push(`${location.path}: ${name} を読めませんでした（${errorText(e)}）`)
           }
         }
+      } else if (location.kind === 'memory') {
+        const text = location.files[name]
+        if (text !== undefined) return new TextEncoder().encode(text)
       } else {
         const bytes = await this.readFolder(location.path, name)
         if (bytes) return bytes
