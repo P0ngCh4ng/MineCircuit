@@ -191,6 +191,23 @@ export async function looksLikeGameFolder(source: FileSource): Promise<boolean> 
 }
 
 /**
+ * Modpack のフォルダの絶対パスから、ランチャーのゲームのフォルダの絶対パスを割り出す（フォルダを選ぶ画面の初めの場所に使う）。
+ * CurseForge は `<L>/Instances/<名前>` → `<L>/Install`、Modrinth App は `<L>/profiles/<名前>` → `<L>/meta`、
+ * Prism Launcher・MultiMC は `<L>/instances/<名前>/.minecraft`（または `minecraft`）→ `<L>`。
+ * どれにも当たらなければ null。区切りは元のパスに合わせる。フォルダがあるかは確かめない
+ */
+export function guessGameFolderPath(modpackPath: string): string | null {
+  const sep = modpackPath.includes('\\') ? '\\' : '/'
+  const parts = modpackPath.replace(/[\\/]+$/, '').split(/[\\/]+/)
+  const at = (fromEnd: number) => (parts[parts.length - fromEnd] ?? '').toLowerCase()
+  const join = (keep: number, ...rest: string[]) => [...parts.slice(0, parts.length - keep), ...rest].join(sep)
+  if (parts.length >= 4 && (at(1) === '.minecraft' || at(1) === 'minecraft') && at(3) === 'instances') return join(3)
+  if (parts.length >= 3 && at(2) === 'instances') return join(2, 'Install')
+  if (parts.length >= 3 && at(2) === 'profiles') return join(2, 'meta')
+  return null
+}
+
+/**
  * 資産の索引（`assets/indexes/<id>.json`）のパスを探す。id は版の情報の `assetIndex.id` から読む
  * （`versions/<id>/<id>.json`、Prism は `meta/net.minecraft/<版>.json`）。
  * 版の情報がなければ `assets/indexes/<版>.json` と `<1.xx>.json` を試す。なければ null

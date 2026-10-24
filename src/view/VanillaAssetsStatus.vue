@@ -9,6 +9,7 @@ import type { GameFolderRegistry } from '../io/modpack/gameFolderRegistry'
 import { loadDesktopGameFolders, type DesktopGameFolders } from './platform/fileAccess'
 import { isDesktop } from './platform/platform'
 import { useGameFolderStore } from './stores/gameFolders'
+import { useModpackStore } from './stores/modpack'
 import { useModpackContentStore } from './stores/modpackContent'
 
 const props = defineProps<{
@@ -22,6 +23,7 @@ const props = defineProps<{
 
 const store = useGameFolderStore()
 const content = useModpackContentStore()
+const modpack = useModpackStore()
 const desktop = props.desktopFolders !== undefined || (props.registry === undefined && isDesktop())
 const canPick = desktop || (props.pickerSupported ?? supportsDirectoryPicker())
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -48,7 +50,8 @@ async function pickFolder(): Promise<void> {
   if (desktop) {
     busy.value = true
     try {
-      const picked = await (await desktopAccess()).pickFolder()
+      // 選んでいる Modpack のフォルダから、ゲームのフォルダ（CurseForge なら Install）で画面を開く
+      const picked = await (await desktopAccess()).pickFolder(modpack.source)
       if (picked) await store.add(picked.name, picked.source, picked.handle)
     } finally {
       busy.value = false

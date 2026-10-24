@@ -8,6 +8,7 @@ import { FileNotFoundError, type FileSource } from '../fileSource'
 import { IndexedDbModpackStore } from '../modpack/indexedDbModpackStore'
 import { GameFolderRegistry } from '../modpack/gameFolderRegistry'
 import { ModpackRegistry, type ModpackHandleOpener, type ModpackStore } from '../modpack/modpackRegistry'
+import { guessGameFolderPath } from '../modpack/vanillaAssets'
 import { baseName, TauriFileSource, TauriForbiddenError } from './tauriFileSource'
 
 /** デスクトップ版の保存先の名前。ブラウザ版（ハンドルを保存する）と分ける */
@@ -77,9 +78,14 @@ function tauriOpener(title: string): ModpackHandleOpener<string> {
 /** 保存したパスから Modpack のフォルダを開く */
 export const tauriHandleOpener: ModpackHandleOpener<string> = tauriOpener(MODPACK_PICK_TITLE)
 
-/** Minecraft 本体のフォルダ（ゲームのフォルダ）を選ぶ画面を出す。取り消したら null */
-export function pickTauriGameFolder(): Promise<PickedTauriFolder | null> {
-  return pickTauriFolder(undefined, GAME_FOLDER_PICK_TITLE)
+/**
+ * Minecraft 本体のフォルダ（ゲームのフォルダ）を選ぶ画面を出す。取り消したら null。
+ * modpackSource が登録した Modpack のフォルダなら、そこから割り出したゲームのフォルダ（CurseForge なら Install）で開く。
+ * 初めの場所を変えるだけで、読む許可は選んだフォルダにしか足さない
+ */
+export function pickTauriGameFolder(modpackSource: FileSource | null = null): Promise<PickedTauriFolder | null> {
+  const defaultPath = modpackSource instanceof TauriFileSource ? guessGameFolderPath(modpackSource.root) : null
+  return pickTauriFolder(defaultPath ?? undefined, GAME_FOLDER_PICK_TITLE)
 }
 
 /** デスクトップ版のゲームのフォルダの一覧。store を省略すると IndexedDB に保存する */
