@@ -1,5 +1,6 @@
 // Modpack のフォルダの mods/*.jar を読み、Modpack を作る（docs/design.md「Modpack / ModpackLoader」）。
-// jar の外の翻訳（resourcepacks/ と ModTranslations/）も読み、jar の翻訳の上に重ねる（langPacks.ts）。
+// jar の外の翻訳（resourcepacks/、ModTranslations/、kubejs/）も読み、jar の翻訳の上に重ねる（langPacks.ts）。
+// KubeJS のスクリプトで登録したブロックの namespace も読む（kubejs.ts）。
 // jar を開く処理（scan）は差し替えられる。画面では Web Worker で開き、テストではその場で開く。
 // 読んだ結果は jar ごとに保存し（JarCache）、2回目からは変わった jar だけを読み直す。
 // 最後に Minecraft 本体の jar を、Modpack のフォルダと利用者が選んだゲームのフォルダから探して読む（vanillaAssets.ts）。
@@ -7,6 +8,7 @@
 import type { AssetLocation } from '../assets/modpackAssetReader'
 import { isDirectoryEntry, type FileSource, type FileStat } from '../fileSource'
 import { isWantedJarEntry, scanJarContent, type JarContent, type JarSummary } from './jarScanner'
+import { findKubeJsNamespaces, KUBEJS_STARTUP_DIR } from './kubejs'
 import { findLangPacks, hasNames, langPackFromSummary, readFolderLangPack, type LangPack, type LangPackLocation } from './langPacks'
 import { Modpack, type ModpackProblem } from './modpack'
 import { MODS_DIR } from './modpackFolder'
@@ -178,13 +180,17 @@ export class ModpackLoader {
     }
 
     this.throwIfAborted()
+    const kubejs = await findKubeJsNamespaces(this.source)
+    for (const message of kubejs.problems) problems.push({ jar: KUBEJS_STARTUP_DIR, message })
+
+    this.throwIfAborted()
     this.onProgress?.({ done: total - 1, total, fromCache, current: 'Minecraft 本体' })
     const vanilla = await this.loadVanilla(summaries, problems)
     if (vanilla.cached) fromCache++
 
     this.throwIfAborted()
     this.onProgress?.({ done: total, total, fromCache, current: null })
-    return new Modpack(summaries, this.source, problems, langPacks, assetPacks, vanilla.result)
+    return new Modpack(summaries, this.source, problems, langPacks, assetPacks, vanilla.result, kubejs.namespaces)
   }
 
   /**

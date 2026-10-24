@@ -28,7 +28,7 @@ const NAME_KINDS = ['block', 'item', 'entity', 'fluid'] as const
 export class Modpack {
   /** Mod の一覧（jar の名前順） */
   readonly mods: readonly ModInfo[]
-  /** jar の `assets/<namespace>/` にある namespace（名前順）。Minecraft 本体は含まない */
+  /** jar の `assets/<namespace>/` にある namespace と、KubeJS のスクリプトで登録している namespace（名前順）。Minecraft 本体は含まない */
   readonly namespaces: readonly string[]
   /** 読めなかった jar やファイル */
   readonly problems: readonly ModpackProblem[]
@@ -56,6 +56,7 @@ export class Modpack {
    * jar の資産は summaries の索引（JarSummary.assets）から読む。
    * vanilla は Minecraft 本体の jar を読んだ結果。翻訳・ブロック状態の定義・資産を、どの jar よりも優先度の低いものとして足す
    * （Mod の一覧と namespace には足さない）。
+   * scriptNamespaces は KubeJS のスクリプトで登録している namespace（kubejs.ts）。namespace にだけ足す。
    */
   constructor(
     summaries: readonly JarSummary[],
@@ -64,6 +65,7 @@ export class Modpack {
     langPacks: readonly LangPack[] = [],
     assetPacks: readonly AssetLocation[] = [],
     vanilla: VanillaLoadResult | null = null,
+    scriptNamespaces: readonly string[] = [],
   ) {
     const mods: ModInfo[] = []
     const namespaces = new Set<string>()
@@ -85,6 +87,7 @@ export class Modpack {
       for (const [id, def] of Object.entries(s.blockStates)) blockStates.set(id, def)
       for (const message of s.problems) allProblems.push({ jar: s.jar, message })
     }
+    for (const ns of scriptNamespaces) namespaces.add(ns)
     for (const p of langPacks) {
       for (const code of LANG_CODES) Object.assign(lang[code], p.lang[code])
       for (const message of p.problems) allProblems.push({ jar: p.path, message })
@@ -115,7 +118,10 @@ export class Modpack {
     return this.assetReader
   }
 
-  /** namespace の Mod が入っているか。jar の `assets/<namespace>/` で判定する。`minecraft` は常に true */
+  /**
+   * namespace の Mod が入っているか。jar の `assets/<namespace>/` と、KubeJS のスクリプトの登録で判定する。
+   * `minecraft` は常に true
+   */
   hasNamespace(ns: string): boolean {
     return BUILTIN_NAMESPACES.includes(ns) || this.namespaceSet.has(ns)
   }
