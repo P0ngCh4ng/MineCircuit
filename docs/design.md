@@ -250,7 +250,7 @@ class Modpack {
 }
 ```
 
-- namespace と modId は一致しないModがあるため、`hasNamespace` は jar の `assets/<namespace>/` で判定する。
+- namespace と modId は一致しないModがあるため、`hasNamespace` は jar の `assets/<namespace>/` で判定する。KubeJS のスクリプトで登録したブロックの namespace も足す（下の「KubeJS が足すブロック」）。
 - jar から読むのは翻訳ファイル・モデル・ブロック状態の定義・テクスチャだけ。Javaのコードは実行しない。
 - 読み込んだ表示名の一覧はアプリ内（IndexedDB）に保存し、2回目以降を速くする。jar ごとに、ファイル名・大きさ・更新時刻を鍵にして IndexedDB に保存し、変わった jar だけ読み直す。
 - jar を開く処理（zip の展開と JSON の解釈）は Web Worker で行う。`ModpackLoader` は開く関数を差し替えられるので、テストでは Worker なしで動く。
@@ -291,13 +291,22 @@ Modpack によっては、jar の外で Mod の翻訳を足している。`Modpa
 | `resourcepacks/*.zip` | zip のリソースパック |
 | `resourcepacks/<フォルダ>/` | フォルダのリソースパック |
 | `ModTranslations/` | `assets/<namespace>/lang/` を持つフォルダ（pack.mcmeta はない） |
+| `kubejs/` | `kubejs/assets/<namespace>/` を持つフォルダ（KubeJS が足したブロックの翻訳と資産。下の「KubeJS が足すブロック」） |
 
-- 同じキーがあれば、優先度の高いものを使う。低い順に、jar（名前順） < `ModTranslations/` < `resourcepacks/` のうち `options.txt` に書いていないもの（名前順） < `options.txt` の `resourcePacks` に書いてあるもの（書いてある順。後ろほど優先。ゲームと同じ）。
+- 同じキーがあれば、優先度の高いものを使う。低い順に、jar（名前順） < `kubejs/` < `ModTranslations/` < `resourcepacks/` のうち `options.txt` に書いていないもの（名前順） < `options.txt` の `resourcePacks` に書いてあるもの（書いてある順。後ろほど優先。ゲームと同じ）。
 - `options.txt` で有効になっていないパックも読む。Modpack が別の Mod（Global Packs など）でパックを有効にしていることがあり、どれが有効かを確実には決められないため。表示名にだけ使うので、外れても困ることは少ない。
 - 表示名の言語の順（日本語 → 英語）はこれまでどおり。リソースパックの英語名が jar の日本語名に勝つことはない。
 - リソースパックは Mod ではないので、`hasNamespace`・ブロック状態の定義・Mod の一覧には足さない。
 - zip のリソースパックは jar と同じ読み方（Worker の `scanJar`、IndexedDB の保存）を使う。保存の鍵はパス（`resourcepacks/foo.zip`）にして jar と分け、保存する前に翻訳以外を捨てる。フォルダは翻訳ファイルだけを直接読む（数が少ないので保存しない）。
 - 読めないパックや翻訳ファイルは `Modpack.problems` に入れ、ほかは読み続ける。翻訳を読んだ場所の一覧は `Modpack.langPacks`。
+
+#### KubeJS が足すブロック
+
+Modpack によっては、jar ではなく KubeJS のスクリプトでブロックを登録している（Create Astral の `createastral:` など）。jar の `assets/` にない namespace なので、そのままでは足りない Mod と判定してしまう（`io/modpack/kubejs.ts`）。
+
+- `kubejs/startup_scripts/` の `.js`（下のフォルダも含む）から、`.create("<namespace>:<path>")` の形の呼び出しを探し、その namespace を `hasNamespace` と `Modpack.namespaces` に足す。スクリプトは実行しない。namespace のない ID（`kubejs:` になる）は数えない（KubeJS の jar が `kubejs` を持つ）。
+- 文字列で探すだけなので、変数で組み立てた ID は拾えない。また、スクリプトが既存の Mod の namespace（`create:` など）で登録していれば、その Mod の jar がなくても「ある」とみなす。
+- `kubejs/assets/` は、フォルダのリソースパックと同じく翻訳と見た目の資産を読む（上の「jar の外の翻訳」）。KubeJS はブロック状態の定義をゲームの中で作るので、`kubejs/assets/` に `blockstates/` がないことが多い。そのときは、ほかの Mod の資産のないブロックと同じく色付きの箱で描く。
 
 ## analysis：集計と検索
 

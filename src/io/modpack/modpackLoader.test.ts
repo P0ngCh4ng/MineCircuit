@@ -211,6 +211,33 @@ describe('ModpackLoader（jar の外の翻訳）', () => {
     expect(pack.problems).toEqual([])
   })
 
+  it('KubeJS で登録した namespace を足し、kubejs/assets/ の翻訳を jar < kubejs < ModTranslations の順で重ねる', async () => {
+    const source = new MemoryFileSource([
+      ['mods/a.jar', gearJar('jar の歯車')],
+      ['kubejs/startup_scripts/blocks.js', strToU8('event.create("astral:dust")')],
+      ...fakeResourcePackFolder('kubejs', {
+        mcmeta: false,
+        lang: {
+          astral: { ja_jp: { 'block.astral.dust': '星の粉' } },
+          gears: { ja_jp: { 'block.gears.gear': 'KubeJS の歯車', 'block.gears.big': 'KubeJS の大歯車' } },
+        },
+      }),
+      ...fakeResourcePackFolder('ModTranslations', {
+        mcmeta: false,
+        lang: { gears: { ja_jp: { 'block.gears.gear': '翻訳の歯車' } } },
+      }),
+    ])
+    const pack = await new ModpackLoader(source).load()
+    expect(pack.hasNamespace('astral')).toBe(true)
+    expect(pack.namespaces).toEqual(['astral', 'gears'])
+    expect(pack.displayName(rl('astral:dust'), 'ja_jp')).toBe('星の粉')
+    expect(pack.displayName(rl('gears:big'), 'ja_jp')).toBe('KubeJS の大歯車')
+    expect(pack.displayName(rl('gears:gear'), 'ja_jp')).toBe('翻訳の歯車')
+    expect(pack.langPacks).toEqual(['kubejs', 'ModTranslations'])
+    expect(pack.jarCount).toBe(1)
+    expect(pack.problems).toEqual([])
+  })
+
   it('リソースパックどうしは options.txt の後ろのものを優先し、書いていないものはその下に置く', async () => {
     const zip = (name: string) => fakeResourcePackZip({ lang: { gears: { ja_jp: { 'block.gears.gear': name } } } })
     const make = (options: string | null) =>

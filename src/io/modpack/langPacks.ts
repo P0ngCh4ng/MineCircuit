@@ -1,10 +1,11 @@
 // jar の外にある翻訳（docs/design.md「Modpack / ModpackLoader」の「jar の外の翻訳」）。
-// Modpack によっては、resourcepacks/ のリソースパック（zip またはフォルダ）や ModTranslations/ で
+// Modpack によっては、resourcepacks/ のリソースパック（zip またはフォルダ）や ModTranslations/、kubejs/assets/ で
 // Mod の翻訳を足している。そこから assets/<namespace>/lang/ の ja_jp / en_us を読み、jar の翻訳の上に重ねる。
 // zip のリソースパックは jar と同じ読み方（scanJar、Worker、保存）で読むので、ここではフォルダだけを読む。
 
 import { FileNotFoundError, isDirectoryEntry, type FileSource } from '../fileSource'
 import { LANG_CODES, parseLenientJson, pickNames, type JarSummary, type LangCode, type LangTable } from './jarScanner'
+import { KUBEJS_DIR } from './kubejs'
 import { stripBom } from './modMetadata'
 
 /** リソースパックを置くフォルダ */
@@ -70,9 +71,10 @@ export function resourcePackOrder(optionsTxt: string): string[] | null {
 /**
  * jar の外の翻訳の置き場所を、優先度の低い順に並べる（後ろのものが前のものを上書きする）。
  *
- * 1. `ModTranslations/`（Mod の翻訳を足すもの。jar の翻訳より優先）
- * 2. `resourcepacks/` のうち options.txt に書いていないもの（名前順）
- * 3. `resourcepacks/` のうち options.txt に書いてあるもの（options.txt の順。ゲームで有効にしたパック）
+ * 1. `kubejs/`（`kubejs/assets/` があるとき。KubeJS が足したブロックの翻訳と資産。jar の翻訳より優先）
+ * 2. `ModTranslations/`（Mod の翻訳を足すもの）
+ * 3. `resourcepacks/` のうち options.txt に書いていないもの（名前順）
+ * 4. `resourcepacks/` のうち options.txt に書いてあるもの（options.txt の順。ゲームで有効にしたパック）
  *
  * どれもなければ空の配列。options.txt がなくても、resourcepacks/ にあるものはすべて読む
  * （Modpack が別の Mod でパックを有効にしていることがあるため）。
@@ -80,6 +82,9 @@ export function resourcePackOrder(optionsTxt: string): string[] | null {
 export async function findLangPacks(source: FileSource): Promise<LangPackLocation[]> {
   const top = await source.list('')
   const out: LangPackLocation[] = []
+  if (top.includes(`${KUBEJS_DIR}/`) && (await listOrNull(source, `${KUBEJS_DIR}/assets`))) {
+    out.push({ kind: 'folder', path: KUBEJS_DIR })
+  }
   if (top.includes(`${MOD_TRANSLATIONS_DIR}/`)) out.push({ kind: 'folder', path: MOD_TRANSLATIONS_DIR })
 
   const packs = top.includes(`${RESOURCEPACKS_DIR}/`) ? await listOrNull(source, RESOURCEPACKS_DIR) : null
