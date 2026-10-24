@@ -9,6 +9,7 @@ import {
 } from '../../../tests/fixtures/fakeAppearance'
 import type { BlockAppearance, ModelFace, ResolvedModel, TextureAtlas } from '../../domain/blockModel'
 import type { Direction } from '../../domain/direction'
+import { axisRotation } from '../../domain/rotation3'
 import { buildModelGeometry, cullableMask, cullBit, isOpaqueFullCube, isTextureOpaque, MODEL_SCALE, OpaqueCubeCache, placedDirection, type ModelGeometryData } from './modelGeometry'
 
 const atlas = fakeAtlas()
@@ -225,6 +226,18 @@ describe('buildModelGeometry（OBJ の三角形）', () => {
     expect(corners.some((c) => near(c, [H, (4 / 16 - 0.5) * MODEL_SCALE, -H]))).toBe(true)
     expect(near([...turned.normals.slice(0, 3)], [0, 1, 0])).toBe(true)
     for (let i = 0; i < 3; i++) expect(textureAt(atlas, [turned.uvs[i * 2]!, turned.uvs[i * 2 + 1]!])).toBe('test:block/blue')
+  })
+})
+
+describe('buildModelGeometry（回転の行列）', () => {
+  it('x・y のあとに matrix を当てる。cullface の向きも一緒に回る', () => {
+    // z のまわりに 90 度：東の面が上を向く
+    const part = { ...single(oneFaceModel('east', { cullface: 'east' })).parts[0]!, matrix: axisRotation('z', 90) }
+    const g = buildModelGeometry({ parts: [part] }, atlas)
+    expect(near([...g.normals.slice(0, 3)], [0, 1, 0])).toBe(true)
+    expect(placedDirection('east', part)).toBe('up')
+    // 上で隠すと描かない
+    expect(buildModelGeometry({ parts: [part] }, atlas, cullBit('up')).indices.length).toBe(0)
   })
 })
 

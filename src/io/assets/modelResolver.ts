@@ -2,6 +2,7 @@
 // 1. blockstates（assets/<ns>/blockstates/<path>.json）の variants / multipart から使うモデルを選ぶ（blockStateSelector）
 // 2. モデルの parent をたどり、テクスチャの変数（#side）と要素を確定する
 //    OBJ のモデル（`"loader": "forge:obj"`）なら、.obj と .mtl を読んで三角形にする（objModel）
+// 3. 描画のコードが部品のモデルを選ぶブロック（Create のベルトなど）は、表の部品を重ねる（partialModels）
 // 読むのは AssetReader だけ。jar をどう読むかは知らない。
 // 結果はブロック状態ごと・モデルごとに覚えておき、同じものは2度読まない。
 
@@ -15,6 +16,7 @@ import { selectModels } from './blockStateSelector'
 import { builtinParentModel, UNDRAWABLE_BUILTIN_MODELS } from './builtinParentModels'
 import { modelPath, parseModelJson, withNamespace, type ObjModelRef, type UnbakedElement, type UnbakedModel } from './modelJson'
 import { objModelPath, parseMtl, parseObj, siblingPath, type ParsedObj } from './objModel'
+import { partialModelsFor } from './partialModels'
 
 /**
  * テクスチャの変数が決まらなかった面に使う ID（Minecraft と同じ名前）。
@@ -148,6 +150,13 @@ export class ModelResolver {
       if ('error' in result) return null // 理由はモデルの問題として書いてある
       parts.push({ model: result.model, x: ref.x, y: ref.y, uvlock: ref.uvlock })
     }
+    // 部品のモデルは、読めなくてもほかの部分は描く（理由はモデルの問題として書いてある）
+    const partials = partialModelsFor(state)
+    const partialResults = await Promise.all(partials.map((p) => this.bake(withNamespace(p.model))))
+    partials.forEach((p, i) => {
+      const result = partialResults[i]!
+      if ('model' in result) parts.push({ model: result.model, x: 0, y: 0, uvlock: false, matrix: p.matrix })
+    })
     if (parts.every((p) => p.model.elements.length === 0 && p.model.meshes.length === 0)) {
       // ゲームでは BlockEntityRenderer などのプログラムで描くブロック。箱で描いたほうが場所が分かる
       this.problem(`${key}: モデルに描く要素がありません（ゲームではプログラムで描くブロックです）`)

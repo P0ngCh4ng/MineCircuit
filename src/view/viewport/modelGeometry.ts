@@ -6,7 +6,7 @@
 // - 面の uv は 0〜16 の [u1, v1, u2, v2]。面を外から見て、左上が (u1, v1)、右下が (u2, v2)
 // - 面の rotation はテクスチャを時計回りに回す
 // - 要素の rotation は origin を中心に右手系で回す。rescale なら回した軸以外の2軸を 1/cos 倍にする
-// - PlacedModel の x・y は、ブロックの中心を軸に x を先に、次に y を回す。向きは Minecraft と同じく
+// - PlacedModel の x・y は、ブロックの中心を軸に x を先に、次に y を回す（matrix があれば、そのあとに当てる）。向きは Minecraft と同じく
 //   正の軸から見て時計回り（y=90 で北が東になる。x=90 で上が北になる）
 // - uvlock なら、回したあとの位置からテクスチャを貼り直し、向きを世界に合わせる
 // - OBJ のモデルの三角形（ModelMesh）は、置き方の回転だけを当てて、そのまま描く。隣のブロックで隠さない
@@ -23,6 +23,7 @@ import type {
   TextureAtlas,
 } from '../../domain/blockModel'
 import { DIRECTIONS, directionVector, type Direction } from '../../domain/direction'
+import { rotateVector } from '../../domain/rotation3'
 
 type Mutable3 = [number, number, number]
 
@@ -136,9 +137,9 @@ function applyElementRotation(p: Mutable3, r: ModelElementRotation | null, asPoi
   }
 }
 
-/** PlacedModel の回転を当てる（x を先に、次に y。正の軸から見て時計回り） */
+/** PlacedModel の回転を当てる（x を先に、次に y。正の軸から見て時計回り。そのあと matrix） */
 function applyPlacedRotation(p: Mutable3, part: PlacedModel, asPoint: boolean): void {
-  if (part.x === 0 && part.y === 0) return
+  if (part.x === 0 && part.y === 0 && !part.matrix) return
   if (asPoint) {
     p[0] -= 8
     p[1] -= 8
@@ -146,6 +147,12 @@ function applyPlacedRotation(p: Mutable3, part: PlacedModel, asPoint: boolean): 
   }
   rotateAxis(p, 'x', -part.x)
   rotateAxis(p, 'y', -part.y)
+  if (part.matrix) {
+    const [x, y, z] = rotateVector(part.matrix, p)
+    p[0] = x
+    p[1] = y
+    p[2] = z
+  }
   if (asPoint) {
     p[0] += 8
     p[1] += 8
