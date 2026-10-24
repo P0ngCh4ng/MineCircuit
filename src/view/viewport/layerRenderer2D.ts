@@ -161,7 +161,7 @@ export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, sc
       ctx.globalAlpha = alpha * TEXTURE_BACKDROP_ALPHA
       ctx.fillRect(x, y, size, size)
       ctx.globalAlpha = alpha
-      if (painter.paint(ctx, c.state, x, y, size)) return true
+      if (painter.paint(ctx, c.state, x, y, size, c.appearanceKey)) return true
       ctx.fillStyle = blockColorCss(c.id)
     }
     ctx.fillRect(x, y, size, size)

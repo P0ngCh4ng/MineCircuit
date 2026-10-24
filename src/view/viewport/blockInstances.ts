@@ -9,6 +9,9 @@ import type { AppearanceSet, BlockAppearance } from '../../domain/blockModel'
 import type { BlockState } from '../../domain/blockState'
 import type { Blueprint } from '../../domain/blueprint'
 import { directionVector, HORIZONTAL_DIRECTIONS, type Direction } from '../../domain/direction'
+import type { RawNbt } from '../../domain/nbt'
+import type { Vec3 } from '../../domain/vec3'
+import { appearanceKey, hasBlockEntityAppearance } from '../../io/assets/blockEntityAppearance'
 import type { LayerVisibility } from '../layers/layerDisplay'
 import { blockColor } from './blockColor'
 import { cullBit, OpaqueCubeCache } from './modelGeometry'
@@ -79,12 +82,15 @@ export function collectBlockInstances(
   const opaque = appearances ? new OpaqueCubeCache(appearances) : null
   const appearanceIds = new Map<BlockAppearance, number>()
 
-  const appearanceOf = (state: BlockState): BlockAppearance | null => appearances?.appearances[state.key] ?? null
+  // 生データで見た目が変わるブロック（Custom Machinery の機械）は、生データから見た目の鍵を決める
+  const keyOf = (state: BlockState, blockEntity: () => RawNbt | null): string =>
+    hasBlockEntityAppearance(state) ? appearanceKey(state, blockEntity()) : state.key
+  const appearanceOf = (key: string): BlockAppearance | null => appearances?.appearances[key] ?? null
   const isDimmed = (x: number, y: number, z: number): boolean => dimmed !== null && dimmed(x, y, z)
 
   blueprint.regions.forEach((region, ri) => {
     const [ox, oy, oz] = region.offset
-    region.forEachBlock((lx, ly, lz, state) => {
+    region.forEachBlock((lx, ly, lz, state, blockEntity) => {
       const x = lx + ox
       const y = ly + oy
       const z = lz + oz
@@ -92,7 +98,8 @@ export function collectBlockInstances(
       if (multiRegion && ri > 0 && blueprint.locate([x, y, z])?.region !== region) return
       const id = state.id.toString()
       const dim = isDimmed(x, y, z)
-      const appearance = appearanceOf(state)
+      const lookKey = keyOf(state, () => blockEntity)
+      const appearance = appearanceOf(lookKey)
       let key = id
       let cullMask = 0
       if (appearance) {
@@ -106,7 +113,8 @@ export function collectBlockInstances(
           const [dx, dy, dz] = directionVector(d)
           const neighbor = blueprint.get([x + dx, y + dy, z + dz])
           if (!neighbor) continue
-          const na = appearanceOf(neighbor)
+          const np: Vec3 = [x + dx, y + dy, z + dz]
+          const na = appearanceOf(keyOf(neighbor, () => blueprint.blockEntityAt(np)))
           if (!na || !opaque!.isOpaqueCube(na)) continue
           if (!dim && isDimmed(x + dx, y + dy, z + dz)) continue
           cullMask |= cullBit(d)
@@ -121,10 +129,10 @@ export function collectBlockInstances(
       let entry = groups.get(key)
       if (!entry) {
         entry = {
-          sortKey: appearance ? `${id}|${state.key}|${cullMask}` : id,
+          sortKey: appearance ? `${id}|${lookKey}|${cullMask}` : id,
           id,
           appearance,
-          stateKey: appearance ? state.key : null,
+          stateKey: appearance ? lookKey : null,
           cullMask,
           normal: null,
           dimmed: null,

@@ -4,6 +4,7 @@ import { effectScope, nextTick, type EffectScope } from 'vue'
 import { blueprintFixture } from '../../../tests/fixtures/blueprintFixture'
 import { FakeAppearanceProvider } from '../../../tests/fixtures/fakeAppearance'
 import { BlockState } from '../../domain/blockState'
+import { nbt } from '../../domain/nbt'
 import { ResourceLocation } from '../../domain/resourceLocation'
 import { placeBlock } from '../../edit/editCommand'
 import type { Modpack } from '../../io/modpack/modpack'
@@ -114,6 +115,20 @@ describe('useAppearanceSync', () => {
     await vi.advanceTimersByTimeAsync(100)
     expect(provider.calls).toHaveLength(2)
     expect(provider.calls[1]).toEqual(['test:red_block', 'minecraft:stone', 'test:plate', 'test:grass'])
+  })
+
+  it('生データで見た目が変わる機械は、見た目を借りる先の状態も頼み、借りた見た目を鍵で足す', async () => {
+    start()
+    const bp = blueprintFixture({ size: [2, 1, 1] })
+      .place([0, 0, 0], 'custommachinery:custom_machine_block[facing=north]', nbt.compound({ machineID: nbt.string('a:m') }))
+      .toBlueprint()
+    useDocumentSession().setBlueprint(bp)
+    useModpackContentStore().pack = { machineAppearance: (id: string) => (id === 'a:m' ? 'test:red_block' : null) } as unknown as Modpack
+    await settle()
+    expect(providers[0]!.calls).toEqual([['custommachinery:custom_machine_block[facing=north]', 'test:red_block']])
+    const set = useAppearanceStore().set!
+    const look = set.appearances['custommachinery:custom_machine_block[facing=north]|machine=a:m']
+    expect(look?.parts[0]!.model).toBe(set.appearances['test:red_block']!.parts[0]!.model)
   })
 
   it('Modpack を読み直すと、前の provider を止めて作り直す。なくなったら見た目を消す', async () => {

@@ -675,6 +675,18 @@ flowchart LR
 
 読み込み中と problems の件数は「描き方」の切り替え（`AppearanceModeSwitch`）に出す。
 
+### 生データで見た目が変わるブロック
+
+見た目は、ふつうはブロック状態だけで決まる（`AppearanceSet.appearances` の鍵は `BlockState.key`）。ただし、生データ（ブロックエンティティ）で見た目が変わるブロックがある。Custom Machinery の機械は、ブロック状態がどれも `custommachinery:custom_machine_block[facing=…]` で、どの機械かは生データの `machineID` に入っており、見た目は機械の定義が指す別のブロックのものになる。こういうブロックのために、見た目の鍵をブロック状態と生データから決める（`io/assets/blockEntityAppearance.ts`）。
+
+- **見た目の鍵。** `appearanceKey(state, blockEntity)` は、ふつうのブロックなら `state.key`、生データで見た目が変わるブロックなら `state.key` に生データから決めた印を足したもの（`…|machine=createastral:distillery`）。Modpack がなくても、生データだけで決まる。3D（`blockInstances.ts`）と 2D（`textureCellPainter2D.ts`）は、マスごとにこの鍵で見た目を引く。生データを調べるのは、そうしたブロックの ID のときだけ。
+- **見た目を借りる。** `appearanceAlias(state, blockEntity, pack)` は、その鍵の見た目を「どのブロック状態の見た目を、どう回して使うか」として返す。つなぎ込み（`appearanceSync.ts`）は、設計図のパレットの状態に、借りる先の状態を足して provider に頼み、できた `AppearanceSet` に、借りた見た目を回したもの（`PlacedModel.matrix` に向きの回転を重ねる）を鍵で足す。Worker と provider は変えない（頼むのは今までどおりブロック状態だけ）。
+- 借りる先が分からない（Modpack がない、機械の定義がない、見た目のブロックが描けない）ときは、見た目は null（色付きの箱）。
+- Mod 固有の知識なので、入れるものを絞る。今入れているのは Custom Machinery だけ。
+  - 機械の定義は、`kubejs/data/<ns>/machines/` と `datapacks/<パック>/data/<ns>/machines/`（フォルダのデータパック）の `.json`（下のフォルダも含む）から読む（`io/modpack/customMachinery.ts`）。機械の ID は `<ns>:<machines/ からのパス>`。zip のデータパックと、Mod の jar の `data/` は読まない。
+  - `appearance.block`（`<id>` か `<id>[<property>=<値>,…]`）のブロックの見た目を借りる。`appearance.model` や、動いているとき（`running`）の見た目は使わない。
+  - 向きは、機械の `facing` に合わせて y に回す（北が回さない向き。Minecraft の blockstates の y と同じく、東は 90 度）。
+
 ## view：画面
 
 - `ViewState`（Piniaのストア）：今の段、段の表示方法（上を消す・半透明・この段だけ）、段ごとの表示・非表示、3D/2D の切り替え、強調するブロック、今のツール

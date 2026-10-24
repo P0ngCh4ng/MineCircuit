@@ -28,10 +28,10 @@ export type TextureCanvasLike = Pick<
 /** マス1つにブロックを描く。2D表示の描画（layerRenderer2D）が使う */
 export interface CellPainter2D {
   /**
-   * 左上 (px, py)、大きさ size のマスに state を描く。
+   * 左上 (px, py)、大きさ size のマスに state を描く。key はマスの見た目の鍵（appearanceKey。省略すると state.key）。
    * 描けなければ（見た目が分からない、上から見える面がない）何もせず false を返す。呼ぶ側は色で塗る
    */
-  paint(ctx: TextureCanvasLike, state: BlockState, px: number, py: number, size: number): boolean
+  paint(ctx: TextureCanvasLike, state: BlockState, px: number, py: number, size: number, key?: string): boolean
 }
 
 /** canvas を作る。作れない環境（テストの happy-dom など）では null */
@@ -85,7 +85,7 @@ export function atlasImages(atlas: TextureAtlas): AtlasImages | null {
 
 /** AppearanceSet とアトラスの画像で、マスに上の面を描く */
 export class TextureCellPainter implements CellPainter2D {
-  /** BlockState.key → 上から見える面。同じ状態の計算を繰り返さない */
+  /** 見た目の鍵 → 上から見える面。同じ状態の計算を繰り返さない */
   private readonly facesCache = new Map<string, readonly TopFace2D[]>()
 
   constructor(
@@ -93,9 +93,8 @@ export class TextureCellPainter implements CellPainter2D {
     private readonly images: AtlasImages,
   ) {}
 
-  /** state の上から見える面。見た目が分からなければ空 */
-  facesOf(state: BlockState): readonly TopFace2D[] {
-    const key = state.key
+  /** state の上から見える面。key はマスの見た目の鍵（省略すると state.key）。見た目が分からなければ空 */
+  facesOf(state: BlockState, key: string = state.key): readonly TopFace2D[] {
     const cached = this.facesCache.get(key)
     if (cached) return cached
     const appearance = this.set.appearances[key] ?? null
@@ -104,8 +103,8 @@ export class TextureCellPainter implements CellPainter2D {
     return faces
   }
 
-  paint(ctx: TextureCanvasLike, state: BlockState, px: number, py: number, size: number): boolean {
-    const faces = this.facesOf(state)
+  paint(ctx: TextureCanvasLike, state: BlockState, px: number, py: number, size: number, key?: string): boolean {
+    const faces = this.facesOf(state, key)
     if (faces.length === 0) return false
     const { atlas } = this.set
     ctx.save()

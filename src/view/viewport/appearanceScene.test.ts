@@ -3,7 +3,10 @@ import * as THREE from 'three'
 import { blueprintFixture } from '../../../tests/fixtures/blueprintFixture'
 import { fakeAppearanceSet } from '../../../tests/fixtures/fakeAppearance'
 import type { LayerDisplay } from '../layers/layerDisplay'
+import { nbt } from '../../domain/nbt'
+import { appearanceAlias, withAliases } from '../../io/assets/blockEntityAppearance'
 import { collectBlockInstances } from './blockInstances'
+import { layerCells } from './layerGrid2D'
 import { BlueprintScene } from './blueprintScene'
 import { cullBit } from './modelGeometry'
 
@@ -124,5 +127,34 @@ describe('BlueprintScene.setAppearances', () => {
       'test:unknown',
     ])
     scene.dispose()
+  })
+})
+
+describe('生データで見た目が変わるブロック', () => {
+  const machineNbt = nbt.compound({ machineID: nbt.string('createastral:distillery') })
+  const bp = () =>
+    blueprintFixture({ size: [2, 1, 1] })
+      .place([0, 0, 0], 'custommachinery:custom_machine_block[facing=east]', machineNbt)
+      .place([1, 0, 0], 'custommachinery:custom_machine_block[facing=east]')
+      .toBlueprint()
+  const lookup = { machineAppearance: (id: string) => (id === 'createastral:distillery' ? 'test:red_block' : null) }
+
+  it('3D は、マスの生データから決めた鍵で見た目を引く。生データのない機械は箱', () => {
+    const blueprint = bp()
+    const alias = appearanceAlias(blueprint.get([0, 0, 0])!, blueprint.blockEntityAt([0, 0, 0]), lookup)!
+    const set = withAliases(fakeAppearanceSet(), [alias])
+    const groups = collectBlockInstances(blueprint, null, set)
+    const withLook = groups.filter((g) => g.appearance !== null)
+    expect(withLook.map((g) => g.positions)).toEqual([[0, 0, 0]])
+    expect(withLook[0]!.appearance).toBe(set.appearances[alias.key])
+    expect(groups.find((g) => g.appearance === null)!.positions).toEqual([1, 0, 0])
+  })
+
+  it('2D のマスにも見た目の鍵を持たせる', () => {
+    const cells = layerCells(bp(), 0)
+    expect(cells.map((c) => c.appearanceKey)).toEqual([
+      'custommachinery:custom_machine_block[facing=east]|machine=createastral:distillery',
+      'custommachinery:custom_machine_block[facing=east]',
+    ])
   })
 })
