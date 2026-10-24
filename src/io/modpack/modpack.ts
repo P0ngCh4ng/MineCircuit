@@ -7,10 +7,14 @@ import type { AssetReader } from '../assets/assetTypes'
 import { ModpackAssetReader, type AssetLocation } from '../assets/modpackAssetReader'
 import { FileNotFoundError, normalizePath, type FileSource } from '../fileSource'
 import { LANG_CODES, type JarSummary, type JsonValue, type LangCode, type LangTable } from './jarScanner'
+import { kubeJsBlockAssets, type KubeJsStartup } from './kubejs'
 import type { LangPack } from './langPacks'
 import type { ModInfo } from './modMetadata'
 import { MODS_DIR } from './modpackFolder'
 import type { VanillaLoadResult, VanillaStatus } from './vanillaAssets'
+
+/** KubeJS のスクリプトから組み立てた資産の場所の名前（problems に出る） */
+export const KUBEJS_SCRIPT_ASSETS = 'kubejs/startup_scripts（組み立てたモデル）'
 
 /** jar の中にないが、いつもある namespace（Minecraft 本体） */
 export const BUILTIN_NAMESPACES: readonly string[] = ['minecraft']
@@ -56,7 +60,8 @@ export class Modpack {
    * jar の資産は summaries の索引（JarSummary.assets）から読む。
    * vanilla は Minecraft 本体の jar を読んだ結果。翻訳・ブロック状態の定義・資産を、どの jar よりも優先度の低いものとして足す
    * （Mod の一覧と namespace には足さない）。
-   * scriptNamespaces は KubeJS のスクリプトで登録している namespace（kubejs.ts）。namespace にだけ足す。
+   * kubejs は KubeJS のスクリプトを読んだ結果（kubejs.ts）。namespace を足し、ブロックの blockstates とモデルを組み立てて、
+   * jar より優先度の高い資産とブロック状態の定義にする（kubejs/assets/ の本物のファイルはさらに優先）。
    */
   constructor(
     summaries: readonly JarSummary[],
@@ -65,7 +70,7 @@ export class Modpack {
     langPacks: readonly LangPack[] = [],
     assetPacks: readonly AssetLocation[] = [],
     vanilla: VanillaLoadResult | null = null,
-    scriptNamespaces: readonly string[] = [],
+    kubejs: Pick<KubeJsStartup, 'namespaces' | 'blocks'> | null = null,
   ) {
     const mods: ModInfo[] = []
     const namespaces = new Set<string>()
@@ -87,7 +92,12 @@ export class Modpack {
       for (const [id, def] of Object.entries(s.blockStates)) blockStates.set(id, def)
       for (const message of s.problems) allProblems.push({ jar: s.jar, message })
     }
-    for (const ns of scriptNamespaces) namespaces.add(ns)
+    for (const ns of kubejs?.namespaces ?? []) namespaces.add(ns)
+    const scriptAssets = kubeJsBlockAssets(kubejs?.blocks ?? [])
+    for (const [path, text] of Object.entries(scriptAssets)) {
+      const m = /^assets\/([^/]+)\/blockstates\/(.+)\.json$/.exec(path)
+      if (m) blockStates.set(`${m[1]}:${m[2]}`, JSON.parse(text) as JsonValue)
+    }
     for (const p of langPacks) {
       for (const code of LANG_CODES) Object.assign(lang[code], p.lang[code])
       for (const message of p.problems) allProblems.push({ jar: p.path, message })
@@ -104,6 +114,7 @@ export class Modpack {
     this.assetLocations = [
       ...(base ? [{ kind: 'zip', path: base.jarPath, assets: base.summary.assets, source: base.source } as const] : []),
       ...summaries.map((s): AssetLocation => ({ kind: 'zip', path: `${MODS_DIR}/${s.jar}`, assets: s.assets })),
+      ...(Object.keys(scriptAssets).length > 0 ? [{ kind: 'memory', path: KUBEJS_SCRIPT_ASSETS, files: scriptAssets } as const] : []),
       ...assetPacks,
     ]
   }

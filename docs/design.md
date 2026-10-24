@@ -306,7 +306,14 @@ Modpack によっては、jar ではなく KubeJS のスクリプトでブロッ
 
 - `kubejs/startup_scripts/` の `.js`（下のフォルダも含む）から、`.create("<namespace>:<path>")` の形の呼び出しを探し、その namespace を `hasNamespace` と `Modpack.namespaces` に足す。スクリプトは実行しない。namespace のない ID（`kubejs:` になる）は数えない（KubeJS の jar が `kubejs` を持つ）。
 - 文字列で探すだけなので、変数で組み立てた ID は拾えない。また、スクリプトが既存の Mod の namespace（`create:` など）で登録していれば、その Mod の jar がなくても「ある」とみなす。
-- `kubejs/assets/` は、フォルダのリソースパックと同じく翻訳と見た目の資産を読む（上の「jar の外の翻訳」）。KubeJS はブロック状態の定義をゲームの中で作るので、`kubejs/assets/` に `blockstates/` がないことが多い。そのときは、ほかの Mod の資産のないブロックと同じく色付きの箱で描く。
+- `kubejs/assets/` は、フォルダのリソースパックと同じく翻訳と見た目の資産を読む（上の「jar の外の翻訳」）。
+- **ブロックの形。** KubeJS はブロックの blockstates とモデルをゲームの中でスクリプトから組み立てるので、`kubejs/assets/` に `blockstates/` がないことが多い。同じものをこちらで組み立てる（`kubeJsBlockAssets`）。
+  - ブロックの登録のイベント（1.18 の `onEvent('block.registry', …)`、1.19.2 からの `StartupEvents.registry('block', …)`）の中の `.create("<id>"[, "<種類>"])` を探し、次の `.create(` までを、そのブロックの設定とみなす。アイテムなど、ほかのイベントの `.create` は読まない。
+  - 種類が `basic` か省略のもの（立方体）だけを組み立てる。slab・stairs・wall などは形が違うので組み立てず、これまでどおり箱で描く。`.box(…)` の形も読まない。
+  - テクスチャは `<ns>:block/<path>` を既定にして、`.textureAll(…)` と `.texture("<面>", …)` を書いた順に当てる。`.model(…)` があれば blockstates はそのモデルを指し、モデルは組み立てない。
+  - 6面が同じなら `block/cube_all`、違えば `block/cube` を親にしたモデルにする（どちらも内蔵のバニラの親で読める）。particle は北の面。blockstates は状態なし（`""`）。
+  - 組み立てた資産は、jar より優先度が高く、`kubejs/` のフォルダより低い場所（`ModpackAssetReader` の `memory`）に置く。`kubejs/assets/` に本物のモデルがあれば、そちらを使う。組み立てた blockstates はブロック状態の定義にも入れるので、置くブロックの検索にも出る。
+  - 文字列で探すだけなので、変数やループで組み立てた ID とテクスチャは拾えない。
 
 ## analysis：集計と検索
 

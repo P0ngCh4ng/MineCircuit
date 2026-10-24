@@ -238,6 +238,20 @@ describe('ModpackLoader（jar の外の翻訳）', () => {
     expect(pack.problems).toEqual([])
   })
 
+  it('KubeJS のスクリプトのブロックの blockstates とモデルを組み立てる。kubejs/assets/ の本物のファイルが優先', async () => {
+    const source = new MemoryFileSource([
+      ['mods/a.jar', gearJar()],
+      ['kubejs/startup_scripts/blocks.js', strToU8('onEvent("block.registry", e => { e.create("astral:coil"); e.create("astral:dummy").textureAll("astral:block/m") })')],
+      ['kubejs/assets/astral/models/block/coil.json', strToU8('{"parent":"block/cube_all","textures":{"all":"astral:block/real"}}')],
+    ])
+    const pack = await new ModpackLoader(source).load()
+    expect(pack.blockStateDefinition(rl('astral:dummy'))).toEqual({ variants: { '': { model: 'astral:block/dummy' } } })
+    expect(pack.blockIds()).toEqual(expect.arrayContaining(['astral:coil', 'astral:dummy']))
+    const assets = pack.assets()
+    expect(JSON.parse((await assets.readText('assets/astral/models/block/dummy.json'))!).textures).toEqual({ all: 'astral:block/m' })
+    expect(JSON.parse((await assets.readText('assets/astral/models/block/coil.json'))!).textures).toEqual({ all: 'astral:block/real' })
+  })
+
   it('リソースパックどうしは options.txt の後ろのものを優先し、書いていないものはその下に置く', async () => {
     const zip = (name: string) => fakeResourcePackZip({ lang: { gears: { ja_jp: { 'block.gears.gear': name } } } })
     const make = (options: string | null) =>
