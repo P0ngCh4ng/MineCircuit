@@ -469,6 +469,22 @@ describe('ModelResolver：部品のモデルの表', () => {
   })
 })
 
+describe('ModelResolver：液体', () => {
+  it('形がなく particle が still のテクスチャなら、液体の箱にする。ほかの形のないモデルは null のまま', async () => {
+    const { resolver } = resolverOf({
+      'assets/minecraft/blockstates/water.json': { variants: { '': { model: 'minecraft:block/water' } } },
+      'assets/minecraft/models/block/water.json': { textures: { particle: 'block/water_still' } },
+      'assets/test/blockstates/chest.json': { variants: { '': { model: 'test:block/chest' } } },
+      'assets/test/models/block/chest.json': { textures: { particle: 'test:block/planks' } },
+    })
+    const water = await resolver.resolve(state('minecraft:water', { level: '4' }))
+    expect(water!.parts[0]!.model.id).toBe('minecraft:water#fluid')
+    expect(water!.parts[0]!.model.elements[0]!.to[1]).toBeCloseTo((4 / 9) * 16)
+    expect(await resolver.resolve(state('test:chest'))).toBeNull()
+    expect(resolver.problems).toEqual(['test:chest: モデルに描く要素がありません（ゲームではプログラムで描くブロックです）'])
+  })
+})
+
 describe('resolveTextureReference', () => {
   it('変数をたどる。# のない値は変数名として探し、なければ ID とみなす', () => {
     const t = { a: '#b', b: 'test:block/x', c: '#c', name: 'test:block/y' }

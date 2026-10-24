@@ -3,6 +3,7 @@
 // 2. モデルの parent をたどり、テクスチャの変数（#side）と要素を確定する
 //    OBJ のモデル（`"loader": "forge:obj"`）なら、.obj と .mtl を読んで三角形にする（objModel）
 // 3. 描画のコードが部品のモデルを選ぶブロック（Create のベルトなど）は、表の部品を重ねる（partialModels）
+// 4. 形がなく particle が液体のテクスチャ（…_still）なら、液体の箱にする（fluidModel）
 // 読むのは AssetReader だけ。jar をどう読むかは知らない。
 // 結果はブロック状態ごと・モデルごとに覚えておき、同じものは2度読まない。
 
@@ -16,6 +17,7 @@ import { selectModels } from './blockStateSelector'
 import { builtinParentModel, UNDRAWABLE_BUILTIN_MODELS } from './builtinParentModels'
 import { modelPath, parseModelJson, withNamespace, type ObjModelRef, type UnbakedElement, type UnbakedModel } from './modelJson'
 import { objModelPath, parseMtl, parseObj, siblingPath, type ParsedObj } from './objModel'
+import { fluidModel, isFluidTexture } from './fluidModel'
 import { partialModelsFor } from './partialModels'
 
 /**
@@ -59,6 +61,8 @@ export class ModelResolver {
   private readonly rawModels = new Map<string, Promise<RawModel>>()
   private readonly definitions = new Map<string, Promise<JsonFile>>()
   private readonly objs = new Map<string, Promise<ObjResult>>()
+  /** モデルの ID → particle のテクスチャ（決まらなければ null）。液体の見分けに使う */
+  private readonly particles = new Map<string, TextureId | null>()
 
   constructor(private readonly reader: AssetReader) {}
 
@@ -158,6 +162,9 @@ export class ModelResolver {
       if ('model' in result) parts.push({ model: result.model, x: 0, y: 0, uvlock: false, matrix: p.matrix })
     })
     if (parts.every((p) => p.model.elements.length === 0 && p.model.meshes.length === 0)) {
+      // 液体は、ゲームでは液体の描画のコードが描く。still のテクスチャで高さのある箱にする
+      const particle = parts.map((p) => this.particles.get(p.model.id) ?? null).find((t) => t !== null && isFluidTexture(t))
+      if (particle) return { parts: [{ model: fluidModel(id, particle, state.properties.level), x: 0, y: 0, uvlock: false }] }
       // ゲームでは BlockEntityRenderer などのプログラムで描くブロック。箱で描いたほうが場所が分かる
       this.problem(`${key}: モデルに描く要素がありません（ゲームではプログラムで描くブロックです）`)
       return null
@@ -241,6 +248,7 @@ export class ModelResolver {
       baked = (shape?.elements ?? []).map((e) => this.bakeElement(e, textures, missing))
     }
     for (const ref of missing) this.problem(`モデル ${id}: テクスチャの変数 ${ref} が決まっていません`)
+    this.particles.set(id, resolveTextureReference('#particle', textures))
     return { model: { id, elements: baked, meshes, ambientOcclusion } }
   }
 
