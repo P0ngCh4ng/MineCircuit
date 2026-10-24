@@ -1,6 +1,7 @@
 // 2D表示（LayerView2D）のマス目の計算。docs/ui.md「2D表示と計測」。
 // canvas にも Vue にも依存しない計算だけを置き、テストできるようにする。
 
+import { appearanceKey, hasBlockEntityAppearance } from '../../io/assets/blockEntityAppearance'
 import type { Blueprint } from '../../domain/blueprint'
 import type { BlockState } from '../../domain/blockState'
 import type { Vec3 } from '../../domain/vec3'
@@ -71,6 +72,8 @@ export interface LayerCell2D {
   readonly state: BlockState
   /** ブロックの ID（"create:shaft"） */
   readonly id: string
+  /** 見た目の鍵（appearanceKey）。生データで見た目が変わるブロックのときだけ state.key と違う */
+  readonly appearanceKey: string
 }
 
 /** 空気（空気の ID のブロック）なら true。.nbt の読み込みでは空気は空になるが、念のため */
@@ -83,7 +86,9 @@ export function layerCells(blueprint: Blueprint, y: number): LayerCell2D[] {
   const cells: LayerCell2D[] = []
   if (y < 0 || y >= blueprint.size[1]) return cells
   blueprint.forEachInLayer(y, (pos, state) => {
-    if (!isAirState(state)) cells.push({ x: pos[0], z: pos[2], state, id: state.id.toString() })
+    if (isAirState(state)) return
+    const key = hasBlockEntityAppearance(state) ? appearanceKey(state, blueprint.blockEntityAt(pos)) : state.key
+    cells.push({ x: pos[0], z: pos[2], state, id: state.id.toString(), appearanceKey: key })
   })
   return cells
 }

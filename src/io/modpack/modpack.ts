@@ -47,6 +47,7 @@ export class Modpack {
   private readonly lang: Record<LangCode, LangTable>
   private readonly blockStates: ReadonlyMap<string, JsonValue>
   private readonly source: FileSource | null
+  private readonly machines: Readonly<Record<string, string>>
   /** 見た目の資産を読む場所（優先度の低い順） */
   private readonly assetLocations: readonly AssetLocation[]
   private assetReader: ModpackAssetReader | null = null
@@ -62,6 +63,7 @@ export class Modpack {
    * （Mod の一覧と namespace には足さない）。
    * kubejs は KubeJS のスクリプトを読んだ結果（kubejs.ts）。namespace を足し、ブロックの blockstates とモデルを組み立てて、
    * jar より優先度の高い資産とブロック状態の定義にする（kubejs/assets/ の本物のファイルはさらに優先）。
+   * machines は Custom Machinery の機械の ID → 見た目のブロック（customMachinery.ts）。
    */
   constructor(
     summaries: readonly JarSummary[],
@@ -71,6 +73,7 @@ export class Modpack {
     assetPacks: readonly AssetLocation[] = [],
     vanilla: VanillaLoadResult | null = null,
     kubejs: Pick<KubeJsStartup, 'namespaces' | 'blocks'> | null = null,
+    machines: Readonly<Record<string, string>> = {},
   ) {
     const mods: ModInfo[] = []
     const namespaces = new Set<string>()
@@ -111,6 +114,7 @@ export class Modpack {
     this.problems = allProblems
     this.jarCount = summaries.length
     this.source = source
+    this.machines = machines
     this.assetLocations = [
       ...(base ? [{ kind: 'zip', path: base.jarPath, assets: base.summary.assets, source: base.source } as const] : []),
       ...summaries.map((s): AssetLocation => ({ kind: 'zip', path: `${MODS_DIR}/${s.jar}`, assets: s.assets })),
@@ -150,6 +154,11 @@ export class Modpack {
       if (name !== undefined) return name
     }
     return null
+  }
+
+  /** Custom Machinery の機械の見た目のブロック（`<id>` か `<id>[a=b]`）。機械の定義がなければ null */
+  machineAppearance(machineId: string): string | null {
+    return Object.hasOwn(this.machines, machineId) ? this.machines[machineId]! : null
   }
 
   /** 表示名の数（言語ごと） */

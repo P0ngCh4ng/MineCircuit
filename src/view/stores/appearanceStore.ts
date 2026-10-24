@@ -3,6 +3,7 @@ import { computed, markRaw, ref, shallowRef } from 'vue'
 import type { AppearanceSet } from '../../domain/blockModel'
 import type { BlockState } from '../../domain/blockState'
 import type { AppearanceProvider } from '../../io/assets/assetTypes'
+import { withAliases, type AppearanceAlias } from '../../io/assets/blockEntityAppearance'
 
 /** ブロックの描き方。テクスチャ（モデルとテクスチャ）か、色（色付きの箱） */
 export type AppearanceMode = 'texture' | 'color'
@@ -61,9 +62,10 @@ export const useAppearanceStore = defineStore('appearance', () => {
 
   /**
    * 設計図に出てくるブロック状態の見た目を、provider から読み直す。
+   * aliases は、生データで見た目が変わるマスの、見た目を借りる先（借りる先の状態は states に入れておく）。
    * provider がなければ何もしない。読み込みの途中で呼び直したら、前の結果は捨てる
    */
-  async function refresh(states: readonly BlockState[]): Promise<void> {
+  async function refresh(states: readonly BlockState[], aliases: readonly AppearanceAlias[] = []): Promise<void> {
     const p = provider
     if (p === null) return
     const mine = ++seq
@@ -72,7 +74,7 @@ export const useAppearanceStore = defineStore('appearance', () => {
     try {
       const result = await p.prepare(states)
       if (mine !== seq) return
-      set.value = markRaw(result)
+      set.value = markRaw(withAliases(result, aliases))
     } catch (e) {
       if (mine !== seq) return
       set.value = null
