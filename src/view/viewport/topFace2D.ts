@@ -12,6 +12,7 @@
 
 import type { BlockAppearance, ModelElement, ModelFace, ModelMesh, PlacedModel, QuarterTurn, TextureId } from '../../domain/blockModel'
 import type { Direction } from '../../domain/direction'
+import { rotateVector, type Rotation3 } from '../../domain/rotation3'
 
 type Vec = readonly [number, number, number]
 
@@ -39,23 +40,43 @@ function turns(angle: QuarterTurn): number {
   return angle / 90
 }
 
-/** ブロックの中心（8, 8, 8）を軸に、x を先に、次に y を回す。v は中心からのベクトル */
-function rotateVec(v: Vec, x: QuarterTurn, y: QuarterTurn): Vec {
+/** ブロックの中心（8, 8, 8）を軸に、x を先に、次に y を回し、matrix があれば当てる。v は中心からのベクトル */
+function rotateVec(v: Vec, x: QuarterTurn, y: QuarterTurn, matrix?: Rotation3): Vec {
   let r = v
   for (let i = 0; i < turns(x); i++) r = rotateX90(r)
   for (let i = 0; i < turns(y); i++) r = rotateY90(r)
-  return r
+  return matrix ? rotateVector(matrix, r) : r
+}
+
+/** 置き方の回転（PlacedModel の x・y・matrix） */
+interface Placement {
+  readonly x: QuarterTurn
+  readonly y: QuarterTurn
+  readonly matrix?: Rotation3
+}
+
+const placeVec = (v: Vec, p: Placement): Vec => rotateVec(v, p.x, p.y, p.matrix)
+
+/** 置いたあとに北の面がどちらを向くかから、真上から見た絵の回転（時計回りの度）を決める */
+function placedYaw(p: Placement): QuarterTurn {
+  if (!p.matrix) return p.y
+  const [x, , z] = placeVec(DIRECTION_VECTORS.north, p)
+  if (Math.abs(x) < 0.5 && Math.abs(z) < 0.5) return p.y // 北が上か下を向く。横の面の向きは近似
+  if (z < -0.5) return 0
+  if (x > 0.5) return 90
+  if (z > 0.5) return 180
+  return 270
 }
 
 function sameVec(a: Vec, b: Vec): boolean {
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]
 }
 
-/** 置き方（x → y）のあとで上を向く、もとの面の向き */
-export function faceTurnedUp(x: QuarterTurn, y: QuarterTurn): Direction {
+/** 置き方（x → y → matrix）のあとで上を向く、もとの面の向き */
+export function faceTurnedUp(x: QuarterTurn, y: QuarterTurn, matrix?: Rotation3): Direction {
   const up = DIRECTION_VECTORS.up
   for (const [dir, v] of Object.entries(DIRECTION_VECTORS) as [Direction, Vec][]) {
-    if (sameVec(rotateVec(v, x, y), up)) return dir
+    if (sameVec(rotateVec(v, x, y, matrix), up)) return dir
   }
   return 'up'
 }
@@ -82,19 +103,19 @@ function normalizeTurn(deg: number): QuarterTurn {
 }
 
 /** 要素の範囲（0〜16）を、ブロックの中心を軸に回した範囲 */
-function rotatedBounds(element: ModelElement, x: QuarterTurn, y: QuarterTurn): { min: Vec; max: Vec } {
-  const a = rotateVec([element.from[0] - 8, element.from[1] - 8, element.from[2] - 8], x, y)
-  const b = rotateVec([element.to[0] - 8, element.to[1] - 8, element.to[2] - 8], x, y)
+function rotatedBounds(element: ModelElement, p: Placement): { min: Vec; max: Vec } {
+  const a = placeVec([element.from[0] - 8, element.from[1] - 8, element.from[2] - 8], p)
+  const b = placeVec([element.to[0] - 8, element.to[1] - 8, element.to[2] - 8], p)
   const min: Vec = [Math.min(a[0], b[0]) + 8, Math.min(a[1], b[1]) + 8, Math.min(a[2], b[2]) + 8]
   const max: Vec = [Math.max(a[0], b[0]) + 8, Math.max(a[1], b[1]) + 8, Math.max(a[2], b[2]) + 8]
   return { min, max }
 }
 
-function topFaceOf(face: ModelFace, element: ModelElement, x: QuarterTurn, y: QuarterTurn, uvlock: boolean): TopFace2D {
-  const { min, max } = rotatedBounds(element, x, y)
+function topFaceOf(face: ModelFace, element: ModelElement, p: Placement, uvlock: boolean): TopFace2D {
+  const { min, max } = rotatedBounds(element, p)
   // 上の面はもともと北が上（テクスチャの上の辺が北）。y で回すと、絵も一緒に時計回りに回る。
   // uvlock なら回さない。x で横の面が上に来たときの向きは、ここでは同じ扱いにする（近似）
-  const rotation = normalizeTurn(face.rotation + (uvlock ? 0 : y))
+  const rotation = normalizeTurn(face.rotation + (uvlock ? 0 : placedYaw(p)))
   return {
     texture: face.texture,
     uv: face.uv,
@@ -115,11 +136,11 @@ function topFaceOf(face: ModelFace, element: ModelElement, x: QuarterTurn, y: Qu
 export function topFaces(appearance: BlockAppearance): TopFace2D[] {
   const faces: { face: TopFace2D; order: number }[] = []
   for (const part of appearance.parts) {
-    const dir = faceTurnedUp(part.x, part.y)
+    const dir = faceTurnedUp(part.x, part.y, part.matrix)
     for (const element of part.model.elements) {
       const face = element.faces[dir]
       if (!face) continue
-      faces.push({ face: topFaceOf(face, element, part.x, part.y, part.uvlock), order: faces.length })
+      faces.push({ face: topFaceOf(face, element, part, part.uvlock), order: faces.length })
     }
     for (const mesh of part.model.meshes) {
       const face = meshTopFace(mesh, part)
@@ -150,11 +171,11 @@ function meshTopFace(mesh: ModelMesh, part: PlacedModel): TopFace2D | null {
   let v1 = -Infinity
   const count = mesh.positions.length / 9
   for (let t = 0; t < count; t++) {
-    const n = rotateVec([mesh.normals[t * 9]!, mesh.normals[t * 9 + 1]!, mesh.normals[t * 9 + 2]!], part.x, part.y)
+    const n = placeVec([mesh.normals[t * 9]!, mesh.normals[t * 9 + 1]!, mesh.normals[t * 9 + 2]!], part)
     if (n[1] <= MESH_UP_THRESHOLD) continue
     for (let k = 0; k < 3; k++) {
       const i = t * 3 + k
-      const p = rotateVec([mesh.positions[i * 3]! - 8, mesh.positions[i * 3 + 1]! - 8, mesh.positions[i * 3 + 2]! - 8], part.x, part.y)
+      const p = placeVec([mesh.positions[i * 3]! - 8, mesh.positions[i * 3 + 1]! - 8, mesh.positions[i * 3 + 2]! - 8], part)
       x0 = Math.min(x0, p[0] + 8)
       x1 = Math.max(x1, p[0] + 8)
       z0 = Math.min(z0, p[2] + 8)
@@ -171,7 +192,7 @@ function meshTopFace(mesh: ModelMesh, part: PlacedModel): TopFace2D | null {
   return {
     texture: mesh.texture,
     uv: [u0, v0, u1, v1],
-    rotation: normalizeTurn(part.uvlock ? 0 : part.y),
+    rotation: normalizeTurn(part.uvlock ? 0 : placedYaw(part)),
     tintIndex: null,
     x0: clamp(x0),
     z0: clamp(z0),
@@ -191,7 +212,7 @@ function topmostElementFace(appearance: BlockAppearance): TopFace2D | null {
     for (const element of part.model.elements) {
       const dir = FALLBACK_ORDER.find((d) => element.faces[d] !== undefined)
       if (dir === undefined) continue
-      const candidate = topFaceOf(element.faces[dir]!, element, part.x, part.y, part.uvlock)
+      const candidate = topFaceOf(element.faces[dir]!, element, part, part.uvlock)
       if (best === null || candidate.top > best.top) best = candidate
     }
   }

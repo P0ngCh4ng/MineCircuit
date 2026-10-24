@@ -4,6 +4,7 @@
 // どれも構造化複製できる素のデータにする（Worker から送るため）。
 
 import type { Direction } from './direction'
+import type { Rotation3 } from './rotation3'
 import type { Vec3 } from './vec3'
 
 /**
@@ -84,6 +85,11 @@ export interface PlacedModel {
   readonly y: QuarterTurn
   /** 回転してもテクスチャの向きを変えない */
   readonly uvlock: boolean
+  /**
+   * x・y のあとに当てる、ブロックの中心まわりの回転。x・y では表せない向きに使う（部品のモデルの表）。
+   * blockstates から選んだモデルにはない
+   */
+  readonly matrix?: Rotation3
 }
 
 /**

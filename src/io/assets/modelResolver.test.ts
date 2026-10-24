@@ -437,6 +437,38 @@ describe('ModelResolver：OBJ のモデル', () => {
   })
 })
 
+describe('ModelResolver：部品のモデルの表', () => {
+  const plate = (y: number) => ({ textures: { 0: 'create:block/belt' }, elements: [{ from: [1, y, 0], to: [15, y + 1, 16], faces: { up: { texture: '#0' } } }] })
+  const files = {
+    'assets/create/blockstates/belt.json': { variants: { '': { model: 'create:block/belt/particle' } } },
+    'assets/create/models/block/belt/particle.json': { textures: { particle: 'create:block/belt' }, elements: [] },
+    'assets/create/models/block/belt/middle.json': plate(12),
+    'assets/create/models/block/belt/middle_bottom.json': plate(3),
+  }
+  const belt = state('create:belt', { facing: 'east', part: 'middle', slope: 'horizontal' })
+
+  it('blockstates のモデルが空でも、表の部品を回して重ねる', async () => {
+    const { resolver } = resolverOf(files)
+    const look = await resolver.resolve(belt)
+    expect(look!.parts.map((p) => p.model.id)).toEqual([
+      'create:block/belt/particle',
+      'create:block/belt/middle',
+      'create:block/belt/middle_bottom',
+    ])
+    expect(look!.parts[1]!.matrix).toBeDefined()
+    expect(look!.parts[0]!.matrix).toBeUndefined()
+  })
+
+  it('読めない部品は飛ばし、何も描くものがなければ null', async () => {
+    const { resolver } = resolverOf({ ...files, 'assets/create/models/block/belt/middle_bottom.json': undefined as unknown as string })
+    expect((await resolver.resolve(belt))!.parts).toHaveLength(2)
+    expect(resolver.problems).toContain('モデル create:block/belt/middle_bottom が見つかりません（assets/create/models/block/belt/middle_bottom.json）')
+
+    const none = resolverOf({ 'assets/create/blockstates/belt.json': files['assets/create/blockstates/belt.json'], 'assets/create/models/block/belt/particle.json': files['assets/create/models/block/belt/particle.json'] })
+    expect(await none.resolver.resolve(belt)).toBeNull()
+  })
+})
+
 describe('resolveTextureReference', () => {
   it('変数をたどる。# のない値は変数名として探し、なければ ID とみなす', () => {
     const t = { a: '#b', b: 'test:block/x', c: '#c', name: 'test:block/y' }

@@ -632,7 +632,17 @@ flowchart LR
 - 親をたどるとき、形は一番子に近い「elements か OBJ を持つモデル」のものを使う。blockstates の回転（x・y）は要素と同じく当てる。uvlock は当てない。
 - 3D では三角形をそのまま描き、隣のブロックで隠さない（cullface がない）。2D の上の面は、置いたあとに上を向く三角形を、テクスチャごとに1つの面（真上から見た範囲とテクスチャの座標の範囲）にまとめた近似にする。
 - `.obj`・`.mtl` は `models/` の下にあるので、資産の索引（`JarSummary.assets`）にもともと入っている。保存の版は変えない。
-- ベルトやブレイズの頭のように、ゲームの描画のコードが部品のモデルを選ぶブロックは、OBJ を読んでも描けない（#101 で扱う）。
+- ベルトやブレイズの頭のように、ゲームの描画のコードが部品のモデルを選ぶブロックは、OBJ を読んでも描けない（下の「部品のモデルの表」）。
+
+**部品のモデルの表。** Create のベルトやブレイズバーナーの頭は、blockstates のモデルが空（`belt/particle`）か籠だけで、ゲームでは描画のコード（BlockEntityRenderer）が状態に合わせて部品のモデル（partial model）を選んで描く。jar のファイルからは分からないので、選び方を表に書き写す（`io/assets/partialModels.ts`）。Mod 固有の知識をアプリに持たせる例外なので、入れるものを絞る。
+
+- 表に書くのは「どの状態で、どの部品のモデルを、どの向きで重ねるか」だけ。モデルとテクスチャは利用者の jar から読む（アプリに入れない）。出典は README の「注記」。
+- `ModelResolver` は blockstates で選んだモデルのあとに、表の部品を重ねる。読めない部品は problems に書いて飛ばし、ほかの部分は描く。全部で描くものがなければ、これまでどおり null（箱）。
+- 向きは描画のコードと同じ順に回転を重ねた行列（`domain/rotation3.ts` の `Rotation3`、90 度単位）で持ち、`PlacedModel.matrix` に入れる。blockstates の x・y では表せない向き（横向きのベルトの z の回転）があるため。3D・2D・cullface の向きは、x・y のあとに matrix を当てる。
+- 動き（回転、頭の上下の揺れ、流れるベルトの絵）は描かない。世界の様子で変わるもの（上にブロックがあるときのブレイズの顔）は、ないときのものを選ぶ。部品の位置のずらし（ブレイズの棒の上下）は持たず、モデルの位置のまま描く。
+- 今入れているもの：
+  - `create:belt`：`slope`・`part`・`facing` から `belt/start`・`middle`・`end`（と `_bottom`）、坂は `belt/diagonal_*`。端（start・end・pulley）には `belt_pulley` を重ねる。下り坂と、南・東向きの縦のベルトは始まりと終わりを入れ替える。`casing=true` でも、ケースのモデルにベルトを重ねる。
+  - `create:blaze_burner`：`blaze`（熱の段階）から頭を選ぶ。`smouldering` は `blaze/inert`、`fading`・`kindled` は `blaze/idle` と棒（`rods_small`・`rods_large`）、`seething` は `blaze/super` と `superheated_rods_*`。`none` は籠だけ。頭は `facing` に向ける。
 
 **バニラの親モデル。** Mod のモデルの多くは `block/cube_all` などのバニラの親を使うが、これは Mod の jar にない。バニラのモデルファイルはアプリに入れないので、よく使う親だけを、コードで同じ形に組み立てる（`builtinParentModels.ts`）。組み立てるのは「0〜16 の立方体の各面が `#down`・`#up`… を指す」という一般的な形と、変数名の対応（`all`、`end`/`side`、`top`/`bottom`/`side`、`front`）だけで、ファイルの写しではない。対象は `block/block`・`block/cube`・`block/cube_all`・`block/cube_column`・`block/cube_bottom_top`・`block/orientable`・`block/orientable_with_bottom`。利用者の資産（リソースパックや本体の jar）に同じ ID のモデルがあれば、そちらを先に使う。これ以外のバニラの親（階段、ハーフブロック、柵など）は見つからないとして扱い、色付きの箱で描く。
 
