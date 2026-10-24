@@ -16,6 +16,7 @@ import {
   findAssetIndex,
   findClientJar,
   findJaJpObject,
+  guessGameFolderPath,
   looksLikeGameFolder,
   readInstanceVersion,
   soleInstalledVersion,
@@ -45,6 +46,27 @@ function countingScanner(): { scan: JarScanner; scanned: string[] } {
     },
   }
 }
+
+describe('guessGameFolderPath', () => {
+  it('ランチャーごとに、Modpack のフォルダからゲームのフォルダを割り出す', () => {
+    expect(guessGameFolderPath('C:\\Users\\me\\curseforge\\minecraft\\Instances\\Create Astral')).toBe(
+      'C:\\Users\\me\\curseforge\\minecraft\\Install',
+    )
+    expect(guessGameFolderPath('C:\\Users\\me\\curseforge\\minecraft\\Instances\\Create Astral\\')).toBe(
+      'C:\\Users\\me\\curseforge\\minecraft\\Install',
+    )
+    expect(guessGameFolderPath('C:/Users/me/AppData/Roaming/ModrinthApp/profiles/ATM10')).toBe(
+      'C:/Users/me/AppData/Roaming/ModrinthApp/meta',
+    )
+    expect(guessGameFolderPath('D:\\PrismLauncher\\instances\\ATM10\\.minecraft')).toBe('D:\\PrismLauncher')
+    expect(guessGameFolderPath('D:\\MultiMC\\instances\\ATM10\\minecraft')).toBe('D:\\MultiMC')
+  })
+
+  it('どれにも当たらなければ null', () => {
+    expect(guessGameFolderPath('C:\\Users\\me\\AppData\\Roaming\\.minecraft')).toBeNull()
+    expect(guessGameFolderPath('Instances')).toBeNull()
+  })
+})
 
 describe('本体の jar を探す', () => {
   it('公式ランチャー・CurseForge の versions/<版>/<版>.jar', async () => {

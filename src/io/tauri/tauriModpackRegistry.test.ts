@@ -26,6 +26,7 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
 
 const { createTauriGameFolderRegistry, createTauriModpackRegistry, pickTauriFolder, pickTauriGameFolder, samePath } =
   await import('./tauriModpackRegistry')
+const { TauriFileSource } = await import('./tauriFileSource')
 
 /** IndexedDB の代わり。アプリを閉じて開き直すのは、同じ store で registry を作り直すことにあたる */
 class MemoryStore implements ModpackStore<string> {
@@ -153,6 +154,17 @@ describe('デスクトップ版のゲームのフォルダ（Minecraft 本体の
     const [entry] = await createTauriGameFolderRegistry(store).list()
     const opened = await createTauriGameFolderRegistry(store).open(entry.id, false)
     expect(opened.kind).toBe('opened')
+  })
+
+  it('Modpack のフォルダが分かれば、本体のフォルダを選ぶ画面をゲームのフォルダ（Install）で開く', async () => {
+    dialog().nextOpen = null
+    expect(await pickTauriGameFolder(new TauriFileSource(PROFILE))).toBeNull()
+    expect(dialog().openOptions[0]).toMatchObject({ title: 'Minecraft 本体のフォルダを選ぶ', defaultPath: INSTALL })
+    // 割り出せないフォルダや、Modpack がないときは、初めの場所を決めない
+    await pickTauriGameFolder(new TauriFileSource('C:\\Users\\me\\.minecraft'))
+    await pickTauriGameFolder(null)
+    expect((dialog().openOptions[1] as { defaultPath?: string }).defaultPath).toBeUndefined()
+    expect((dialog().openOptions[2] as { defaultPath?: string }).defaultPath).toBeUndefined()
   })
 
   it('許可の範囲が消えていたら、本体のフォルダを選ぶ画面で選び直してもらう', async () => {
