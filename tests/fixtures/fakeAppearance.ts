@@ -87,7 +87,7 @@ export function cubeModel(
   const faces: Partial<Record<Direction, ModelFace>> = {}
   for (const d of DIRECTIONS) faces[d] = face(d === 'up' ? top : d === 'down' ? bottom : side, d)
   const element: ModelElement = { from: [0, 0, 0], to: [16, 16, 16], rotation: null, shade: true, faces }
-  return { id, elements: [element], ambientOcclusion: true }
+  return { id, elements: [element], meshes: [], ambientOcclusion: true }
 }
 
 /** y 軸のシャフトに似たモデル（中央の 4×16×4 の柱）。cullface は上下だけ */
@@ -101,7 +101,7 @@ export function shaftModel(): ResolvedModel {
     shade: true,
     faces: { north: side('north'), south: side('south'), east: side('east'), west: side('west'), up: end('up'), down: end('down') },
   }
-  return { id: 'test:block/shaft', elements: [element], ambientOcclusion: false }
+  return { id: 'test:block/shaft', elements: [element], meshes: [], ambientOcclusion: false }
 }
 
 /** 22.5 度回した板（要素の回転のテスト用） */
@@ -113,7 +113,7 @@ export function tiltedPlateModel(): ResolvedModel {
     shade: true,
     faces: { up: face('test:block/blue', 'up', { cullface: null }), down: face('test:block/blue', 'down', { cullface: null }) },
   }
-  return { id: 'test:block/tilted_plate', elements: [element], ambientOcclusion: false }
+  return { id: 'test:block/tilted_plate', elements: [element], meshes: [], ambientOcclusion: false }
 }
 
 /** 色付け（草）の立方体。上面だけ tintIndex 0 */
@@ -124,6 +124,25 @@ export function tintedCubeModel(): ResolvedModel {
 }
 
 /** モデル1つを置いただけの見た目 */
+/**
+ * OBJ のモデルの代わり：北西の角（x=0〜8、z=0〜8）にある、上を向いた三角形1つ（高さ 4）。テクスチャは青
+ */
+export function meshModel(): ResolvedModel {
+  return {
+    id: 'test:block/obj_plate',
+    elements: [],
+    meshes: [
+      {
+        texture: 'test:block/blue',
+        positions: [0, 4, 0, 0, 4, 8, 8, 4, 0],
+        uvs: [0, 0, 0, 16, 16, 0],
+        normals: [0, 1, 0, 0, 1, 0, 0, 1, 0],
+      },
+    ],
+    ambientOcclusion: true,
+  }
+}
+
 export function single(model: ResolvedModel, x: 0 | 90 | 180 | 270 = 0, y: 0 | 90 | 180 | 270 = 0): BlockAppearance {
   return { parts: [{ model, x, y, uvlock: false }] }
 }

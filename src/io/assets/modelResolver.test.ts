@@ -376,6 +376,67 @@ describe('ModelResolver：読めないもの・覚えておくこと', () => {
   })
 })
 
+describe('ModelResolver：OBJ のモデル', () => {
+  const cage = {
+    parent: 'block/block',
+    loader: 'forge:obj',
+    'flip-v': true,
+    model: 'test:models/block/burner/cage.obj',
+    textures: { '0': 'test:block/brazier', particle: 'test:block/dark' },
+  }
+  const obj = [
+    'mtllib cage.mtl',
+    'v 0 0 0',
+    'v 1 0 0',
+    'v 1 1 0',
+    'vt 0 0',
+    'vt 1 0',
+    'vt 1 1',
+    'usemtl m_0',
+    'f 1/1 2/2 3/3',
+    'usemtl m_unknown',
+    'f 3/3 2/2 1/1',
+  ].join('\n')
+  const files = {
+    'assets/test/blockstates/burner.json': { variants: { 'facing=east': { model: 'test:block/burner/block', y: 90 } } },
+    'assets/test/models/block/burner/block.json': cage,
+    'assets/test/models/block/burner/cage.obj': obj,
+    'assets/test/models/block/burner/cage.mtl': 'newmtl m_0\nmap_Kd #0\n',
+  }
+
+  it('.obj と .mtl を読み、材質のテクスチャをモデルの変数で決める。置き方の回転はそのまま渡す', async () => {
+    const { resolver } = resolverOf(files)
+    const look = await resolver.resolve(state('test:burner', { facing: 'east' }))
+    expect(look?.parts).toHaveLength(1)
+    const part = look!.parts[0]!
+    expect(part.y).toBe(90)
+    expect(part.model.elements).toEqual([])
+    expect(part.model.meshes.map((m) => m.texture)).toEqual(['test:block/brazier', MISSING_TEXTURE])
+    const mesh = part.model.meshes[0]!
+    expect(mesh.positions).toEqual([0, 0, 0, 16, 0, 0, 16, 16, 0])
+    // flip-v なので v は 1 - v
+    expect(mesh.uvs).toEqual([0, 16, 16, 16, 16, 0])
+    expect(resolver.problems).toEqual(['モデル test:block/burner/block: テクスチャの変数 （材質 m_unknown） が決まっていません'])
+  })
+
+  it('子が OBJ を指せば、親の elements は使わない。OBJ がなければ null にして理由を書く', async () => {
+    const { resolver } = resolverOf({
+      ...files,
+      'assets/test/models/block/burner/block.json': { ...cage, parent: 'test:block/cubeish' },
+      'assets/test/models/block/cubeish.json': { elements: [{ from: [0, 0, 0], to: [16, 16, 16], faces: {} }] },
+    })
+    const look = await resolver.resolve(state('test:burner', { facing: 'east' }))
+    expect(look!.parts[0]!.model.elements).toEqual([])
+    expect(look!.parts[0]!.model.meshes).toHaveLength(2)
+
+    const missing = resolverOf({ ...files, 'assets/test/models/block/burner/cage.obj': undefined as unknown as string })
+    expect(await missing.resolver.resolve(state('test:burner', { facing: 'east' }))).toBeNull()
+    expect(missing.resolver.problems).toContain(
+      'モデル test:block/burner/block: OBJ のファイルが見つかりません（assets/test/models/block/burner/cage.obj）',
+    )
+  })
+})
+
 describe('resolveTextureReference', () => {
   it('変数をたどる。# のない値は変数名として探し、なければ ID とみなす', () => {
     const t = { a: '#b', b: 'test:block/x', c: '#c', name: 'test:block/y' }

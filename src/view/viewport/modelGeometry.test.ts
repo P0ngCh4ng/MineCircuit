@@ -3,6 +3,7 @@ import {
   cubeModel,
   fakeAppearances,
   fakeAtlas,
+  meshModel,
   shaftModel,
   single,
 } from '../../../tests/fixtures/fakeAppearance'
@@ -64,7 +65,7 @@ function localUv(a: TextureAtlas, texture: string, uv: readonly [number, number]
 
 function oneFaceModel(dir: Direction, face: Partial<ModelFace>): ResolvedModel {
   const f: ModelFace = { texture: 'test:block/red', uv: [0, 0, 16, 16], rotation: 0, cullface: null, tintIndex: null, ...face }
-  return { id: 'test:block/one', elements: [{ from: [0, 0, 0], to: [16, 16, 16], rotation: null, shade: true, faces: { [dir]: f } }], ambientOcclusion: true }
+  return { id: 'test:block/one', elements: [{ from: [0, 0, 0], to: [16, 16, 16], rotation: null, shade: true, faces: { [dir]: f } }], meshes: [], ambientOcclusion: true }
 }
 
 describe('buildModelGeometry', () => {
@@ -211,6 +212,19 @@ describe('buildModelGeometry', () => {
 
   it('中身のない見た目は空の形になる', () => {
     expect(buildModelGeometry({ parts: [] }, atlas).indices.length).toBe(0)
+  })
+})
+
+describe('buildModelGeometry（OBJ の三角形）', () => {
+  it('三角形をそのまま描き、置き方の y の回転を当てる。隣で隠さない', () => {
+    const g = buildModelGeometry(single(meshModel()), atlas, 0b111111)
+    expect(g.indices.length).toBe(3)
+    // 北西の角（x=0, z=0）は、y=90 で北東の角（x=16, z=0）へ
+    const turned = buildModelGeometry(single(meshModel(), 0, 90), atlas)
+    const corners = [0, 1, 2].map((i) => [...turned.positions.slice(i * 3, i * 3 + 3)])
+    expect(corners.some((c) => near(c, [H, (4 / 16 - 0.5) * MODEL_SCALE, -H]))).toBe(true)
+    expect(near([...turned.normals.slice(0, 3)], [0, 1, 0])).toBe(true)
+    for (let i = 0; i < 3; i++) expect(textureAt(atlas, [turned.uvs[i * 2]!, turned.uvs[i * 2 + 1]!])).toBe('test:block/blue')
   })
 })
 

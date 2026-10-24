@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cubeModel, fakeAppearances, shaftModel, single } from '../../../tests/fixtures/fakeAppearance'
+import { cubeModel, fakeAppearances, meshModel, shaftModel, single } from '../../../tests/fixtures/fakeAppearance'
 import type { BlockAppearance, ResolvedModel } from '../../domain/blockModel'
 import { faceTurnedUp, topFaces } from './topFace2D'
 
@@ -63,6 +63,7 @@ describe('topFaces', () => {
   it('上を向く面がなければ、いちばん高い要素の面を使う', () => {
     const cross: ResolvedModel = {
       id: 'test:block/cross',
+      meshes: [],
       ambientOcclusion: false,
       elements: [
         {
@@ -82,5 +83,17 @@ describe('topFaces', () => {
     // 面を1つも持たない要素だけなら空
     const sideOnly: ResolvedModel = { ...shaftModel(), elements: [{ ...shaftModel().elements[0]!, faces: {} }] }
     expect(topFaces(single(sideOnly))).toEqual([])
+  })
+})
+
+describe('topFaces（OBJ の三角形）', () => {
+  it('上を向く三角形を、真上から見た範囲とテクスチャの範囲の面にする', () => {
+    expect(topFaces(single(meshModel()))).toEqual([
+      { texture: 'test:block/blue', uv: [0, 0, 16, 16], rotation: 0, tintIndex: null, x0: 0, z0: 0, x1: 8, z1: 8, top: 4 },
+    ])
+    // y=90 で北西の角が北東へ
+    expect(topFaces(single(meshModel(), 0, 90))[0]).toMatchObject({ x0: 8, z0: 0, x1: 16, z1: 8, rotation: 90 })
+    // x=180 で下を向くので、上から見える面はない（要素がないので代わりの面もない）
+    expect(topFaces(single(meshModel(), 180, 0))).toEqual([])
   })
 })

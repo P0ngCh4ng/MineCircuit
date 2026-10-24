@@ -51,11 +51,28 @@ export interface ModelElement {
   readonly faces: Readonly<Partial<Record<Direction, ModelFace>>>
 }
 
+/**
+ * OBJ のモデル（`"loader": "forge:obj"`）の三角形。テクスチャ1つ分をまとめる。
+ * 3つの頂点で1つの三角形（外から見て反時計回り）。隣のブロックで隠す面はない
+ */
+export interface ModelMesh {
+  /** 解決済みのテクスチャ */
+  readonly texture: TextureId
+  /** 頂点の位置。要素と同じ 0〜16 の座標。[x, y, z, …] */
+  readonly positions: readonly number[]
+  /** 頂点のテクスチャの座標。面の uv と同じ 0〜16 で、v は下向き。[u, v, …] */
+  readonly uvs: readonly number[]
+  /** 頂点の法線（長さ 1）。[x, y, z, …] */
+  readonly normals: readonly number[]
+}
+
 /** 親のモデルをたどって、要素とテクスチャを確定したモデル */
 export interface ResolvedModel {
   /** 解決のもとにしたモデルの ID（例: "create:block/shaft"）。描画のまとめ単位に使う */
   readonly id: string
   readonly elements: readonly ModelElement[]
+  /** OBJ のモデルの三角形。OBJ でなければ空 */
+  readonly meshes: readonly ModelMesh[]
   readonly ambientOcclusion: boolean
 }
 

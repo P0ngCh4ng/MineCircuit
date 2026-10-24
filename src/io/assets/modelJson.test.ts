@@ -53,6 +53,7 @@ describe('parseModelJson', () => {
     expect(m).toEqual({
       parent: 'minecraft:block/block',
       ambientOcclusion: false,
+      obj: null,
       textures: { side: 'create:block/x', end: '#side', other: 'minecraft:block/stone', obj: 'test:block/s' },
       elements: [
         {
