@@ -1,29 +1,30 @@
 <script setup lang="ts">
-// 左パネルの「置くブロック」（#18、#71）。docs/ui.md「編集」。
-// 設計図にあるブロックから選ぶか、ID を入力して選ぶ。スポイト（I）で表示中のブロックから取ることもできる。
-// Modpack を読んでいれば、jar にあるブロックを日本語名・英語名・ID の一部から探して選べ、
-// ブロック状態の定義（#27）から向きなどの状態を選べる。
-import { computed, nextTick, ref } from 'vue'
-import { blockCatalogFor, type BlockCatalogEntry, type BlockCatalogResult } from '../../analysis/blockCatalog'
+// 左パネルの「置くブロック」（#18、#71、#114）。docs/ui.md「編集」。
+// ブロックの絵（アイコン）を並べた棚から選ぶ。タブは「この設計図」と、Modpack を読んでいれば Mod ごと。
+// 上の欄で今のタブを絞り込み、ID と状態（create:shaft[axis=y]）は Enter でそのまま使う。
+// スポイト（I）で表示中のブロックから取ることもできる。状態（向きなど）はブロック状態の定義（#27）から選ぶ。
+import { computed, ref, watch } from 'vue'
 import { BlockState } from '../../domain/blockState'
-import { ResourceLocation } from '../../domain/resourceLocation'
-import { initialPropertiesFor, propertyValueOptionsFor } from '../../edit/orientationOptions'
+import { propertyValueOptionsFor } from '../../edit/orientationOptions'
 import { useDocumentSession } from '../document/documentSession'
+import { useBlockIconStore } from '../stores/blockIconStore'
 import { useBrushStore } from '../stores/brushStore'
 import { useModpackContentStore } from '../stores/modpackContent'
 import { useToolStore } from '../stores/toolStore'
 import { blockColorCss } from '../viewport/blockColor'
+import { blockAbbreviation } from '../viewport/layerGrid2D'
+import { BLUEPRINT_TAB, shelfItems, shelfTabs, type ShelfItem } from './blockShelf'
 import { blueprintBlockStates, BrushInputError, parseBlockStateInput } from './brushInput'
 
 const session = useDocumentSession()
 const brush = useBrushStore()
 const content = useModpackContentStore()
 const tools = useToolStore()
+const icons = useBlockIconStore()
 
 const input = ref('')
 const inputError = ref<string | null>(null)
-/** 検索結果で選んでいる行 */
-const active = ref(0)
+const tabId = ref(BLUEPRINT_TAB)
 
 /** 設計図にあるブロック状態。開く・編集のたびに集め直す */
 const states = computed<BlockState[]>(() => {
@@ -32,25 +33,38 @@ const states = computed<BlockState[]>(() => {
   return bp ? blueprintBlockStates(bp) : []
 })
 
-/** Modpack から探した結果。Modpack がない・入力が空・"[" を含む（ID と状態の入力）ときは null */
-const results = computed<BlockCatalogResult | null>(() => {
-  const pack = content.pack
-  const text = input.value.trim()
-  if (!pack || text === '' || text.includes('[')) return null
-  return blockCatalogFor(pack).search(text)
-})
+const tabs = computed(() => shelfTabs(content.pack, new Set(states.value.map((s) => s.id.namespace))))
 
-const activeDescendant = computed(() =>
-  results.value && results.value.entries.length > 0 ? `brush-result-${active.value}` : undefined,
+// タブがなくなったら（Modpack を外した）、この設計図に戻す。設計図が空なら最初の Mod のタブにする
+watch(
+  tabs,
+  (list) => {
+    if (!list.some((t) => t.id === tabId.value)) tabId.value = BLUEPRINT_TAB
+    if (tabId.value === BLUEPRINT_TAB && states.value.length === 0 && list.length > 1) tabId.value = list[1]!.id
+  },
+  { immediate: true },
 )
 
-function label(state: BlockState): string {
-  const name = content.displayName(state.id.toString())
-  const props = Object.entries(state.properties)
+/** 今のタブの中身（絞り込んだあと）。"[" を含む入力は ID の入力なので絞り込まない */
+const items = computed<ShelfItem[]>(() => {
+  const text = input.value.trim()
+  return shelfItems(tabId.value, content.pack, states.value, text.includes('[') ? '' : text)
+})
+
+// 見えるタブのアイコンを頼む
+watch(items, (list) => void icons.request(list.map((i) => i.state)), { immediate: true })
+
+function itemName(item: ShelfItem): string {
+  return item.ja ?? item.en ?? item.id
+}
+
+/** マウスを重ねたときの説明。名前と ID。この設計図のタブでは状態も */
+function itemTitle(item: ShelfItem): string {
+  const props = Object.entries(item.state.properties)
     .map(([k, v]) => `${k}=${v}`)
     .join(', ')
-  const base = name ?? state.id.toString()
-  return props ? `${base}（${props}）` : base
+  const id = props && tabId.value === BLUEPRINT_TAB ? `${item.id}（${props}）` : item.id
+  return [item.ja, item.en, id].filter((v) => v !== null).join('\n')
 }
 
 const current = computed(() => {
@@ -61,6 +75,7 @@ const current = computed(() => {
     name: content.displayName(s.id.toString()),
     id: s.id.toString(),
     color: blockColorCss(s.id.toString()),
+    icon: icons.iconOf(s.key) ?? null,
     props: Object.entries(s.properties),
   }
 })
@@ -82,31 +97,20 @@ const propertyChoices = computed(() => {
     })
 })
 
-/** 一覧で選んでいるもの。置くブロックが一覧にないときは空 */
-const selectedKey = computed(() => {
-  const key = brush.state?.key
-  return key && states.value.some((s) => s.key === key) ? key : ''
-})
+// 置くブロックの今の状態のアイコンも頼む（状態を変えたとき）
+watch(
+  () => brush.state,
+  (s) => {
+    if (s) void icons.request([s])
+  },
+  { immediate: true },
+)
 
 function use(state: BlockState): void {
   brush.setFromBlock(state)
   inputError.value = null
   // 選んだらすぐ置けるように、置くツールにする
   tools.setTool('place')
-}
-
-function onSelect(e: Event): void {
-  const key = (e.target as HTMLSelectElement).value
-  const state = states.value.find((s) => s.key === key)
-  if (state) use(state)
-}
-
-/** 検索結果から選ぶ。状態はブロック状態の定義の最初の組み合わせにする */
-function useEntry(entry: BlockCatalogEntry): void {
-  const id = ResourceLocation.parse(entry.id)
-  use(new BlockState(id, initialPropertiesFor(content.pack, id)))
-  input.value = ''
-  active.value = 0
 }
 
 function onProperty(name: string, e: Event): void {
@@ -118,41 +122,33 @@ function onProperty(name: string, e: Event): void {
 
 function onInput(): void {
   inputError.value = null
-  active.value = 0
 }
 
 function onKeydown(e: KeyboardEvent): void {
-  const count = results.value?.entries.length ?? 0
-  if (e.key === 'ArrowDown' && count > 0) {
-    e.preventDefault()
-    active.value = (active.value + 1) % count
-  } else if (e.key === 'ArrowUp' && count > 0) {
-    e.preventDefault()
-    active.value = (active.value - 1 + count) % count
-  } else if (e.key === 'Escape' && input.value !== '') {
+  if (e.key === 'Escape' && input.value !== '') {
     e.preventDefault()
     input.value = ''
     onInput()
-    return
-  } else {
-    return
   }
-  // 選んだ行が見えるようにする
-  void nextTick(() => document.getElementById(`brush-result-${active.value}`)?.scrollIntoView?.({ block: 'nearest' }))
 }
 
+/** Enter：ID と状態の入力ならそれを使う。絞り込んだ結果が1つだけならそれを使う */
 function onSubmit(): void {
-  const hit = results.value?.entries[active.value]
-  if (hit) {
-    useEntry(hit)
+  const text = input.value.trim()
+  const asId = text.includes('[') || (text.includes(':') && items.value.length === 0) || !content.pack
+  if (!asId && items.value.length === 1) {
+    use(items.value[0]!.state)
+    input.value = ''
+    return
+  }
+  if (!asId && items.value.length > 1) {
+    inputError.value = `${items.value.length} 件あります。棚から選ぶか、言葉を足して絞り込みます。`
     return
   }
   try {
     const state = parseBlockStateInput(input.value)
     if (!state) {
-      inputError.value = content.pack
-        ? '名前か ID を入力してください。例：モーター、create:shaft[axis=y]'
-        : 'ID を入力してください。例：create:shaft[axis=y]'
+      inputError.value = 'ID を入力してください。例：create:shaft[axis=y]'
       return
     }
     use(state)
@@ -169,16 +165,15 @@ function onSubmit(): void {
     <h2 id="brush-heading">置くブロック</h2>
 
     <div v-if="current" class="current" data-testid="brush-current" :title="current.key">
-      <span class="swatch" :style="{ background: current.color }" aria-hidden="true"></span>
+      <img v-if="current.icon" class="icon" :src="current.icon" alt="" />
+      <span v-else class="swatch" :style="{ background: current.color }" aria-hidden="true"></span>
       <span class="name">
         {{ current.name ?? current.id }}
         <small v-if="current.name">{{ current.id }}</small>
         <small v-for="[k, v] in current.props" :key="k" class="prop">{{ k }}={{ v }}</small>
       </span>
     </div>
-    <p v-else class="note">
-      まだ選んでいません。下の一覧から選ぶか、{{ content.pack ? '名前か ID で探します' : 'ID を入力します' }}。
-    </p>
+    <p v-else class="note">まだ選んでいません。下の棚から選びます。</p>
 
     <div v-if="propertyChoices.length > 0" class="props" data-testid="brush-props">
       <label v-for="p in propertyChoices" :key="p.name" class="prop-field">
@@ -191,16 +186,8 @@ function onSubmit(): void {
     </div>
     <p v-if="current" class="note">R で水平に回す、Shift+R で縦にする。</p>
 
-    <label class="field">
-      <span>設計図にあるブロック</span>
-      <select data-testid="brush-select" :value="selectedKey" :disabled="states.length === 0" @change="onSelect">
-        <option value="" disabled>{{ states.length === 0 ? '（ブロックがありません）' : '選んでください' }}</option>
-        <option v-for="s in states" :key="s.key" :value="s.key">{{ label(s) }}</option>
-      </select>
-    </label>
-
     <form class="field" @submit.prevent="onSubmit">
-      <label for="brush-id">{{ content.pack ? '名前か ID で探す' : 'ID を入力' }}</label>
+      <label for="brush-id">{{ content.pack ? '絞り込む、または ID を入力' : 'ID を入力' }}</label>
       <div class="row">
         <input
           id="brush-id"
@@ -208,13 +195,9 @@ function onSubmit(): void {
           data-testid="brush-input"
           type="text"
           :list="content.pack ? undefined : 'brush-id-list'"
-          :placeholder="content.pack ? 'モーター、create:shaft[axis=y]' : 'create:shaft[axis=y]'"
+          :placeholder="content.pack ? 'シャフト、create:shaft[axis=y]' : 'create:shaft[axis=y]'"
           spellcheck="false"
           autocomplete="off"
-          :role="content.pack ? 'combobox' : undefined"
-          :aria-expanded="content.pack ? results !== null : undefined"
-          :aria-controls="content.pack ? 'brush-results' : undefined"
-          :aria-activedescendant="activeDescendant"
           :aria-invalid="inputError !== null"
           @input="onInput"
           @keydown="onKeydown"
@@ -224,46 +207,49 @@ function onSubmit(): void {
       <datalist v-if="!content.pack" id="brush-id-list">
         <option v-for="s in states" :key="s.key" :value="s.key"></option>
       </datalist>
-      <template v-if="results">
-        <ul
-          v-if="results.entries.length > 0"
-          id="brush-results"
-          class="results"
-          role="listbox"
-          aria-label="Modpack のブロック"
-          data-testid="brush-results"
-        >
-          <li
-            v-for="(entry, i) in results.entries"
-            :id="`brush-result-${i}`"
-            :key="entry.id"
-            role="option"
-            :aria-selected="i === active"
-            :class="{ active: i === active }"
-            :data-id="entry.id"
-            @mousedown.prevent
-            @mouseenter="active = i"
-            @click="useEntry(entry)"
-          >
-            <span class="swatch small" :style="{ background: blockColorCss(entry.id) }" aria-hidden="true"></span>
-            <span class="name">
-              {{ entry.ja ?? entry.en ?? entry.id }}
-              <small>{{ entry.ja && entry.en ? `${entry.en}・` : '' }}{{ entry.id }}</small>
-            </span>
-          </li>
-        </ul>
-        <p class="note" data-testid="brush-results-summary">
-          <template v-if="results.total === 0">
-            「{{ input.trim() }}」に合うブロックは Modpack にありません。Enter で ID として使います。
-          </template>
-          <template v-else-if="results.total > results.entries.length">
-            {{ results.total }} 件のうち {{ results.entries.length }} 件を出しています。言葉を足して絞り込みます。
-          </template>
-          <template v-else>{{ results.total }} 件。↑↓ で選び、Enter で使います。</template>
-        </p>
-      </template>
       <p v-if="inputError" class="error" role="alert">{{ inputError }}</p>
     </form>
+
+    <div class="tabs" role="tablist" aria-label="ブロックの棚" data-testid="shelf-tabs">
+      <button
+        v-for="t in tabs"
+        :key="t.id"
+        type="button"
+        role="tab"
+        :aria-selected="t.id === tabId"
+        :class="{ on: t.id === tabId }"
+        :data-tab="t.id"
+        @click="tabId = t.id"
+      >
+        {{ t.label }}
+      </button>
+    </div>
+
+    <div class="shelf" role="listbox" :aria-label="tabs.find((t) => t.id === tabId)?.label" data-testid="shelf">
+      <button
+        v-for="item in items"
+        :key="item.state.key"
+        type="button"
+        role="option"
+        class="cell"
+        :class="{ on: item.state.key === brush.state?.key }"
+        :aria-selected="item.state.key === brush.state?.key"
+        :aria-label="itemName(item)"
+        :title="itemTitle(item)"
+        :data-key="item.state.key"
+        @click="use(item.state)"
+      >
+        <img v-if="icons.iconOf(item.state.key)" :src="icons.iconOf(item.state.key)!" alt="" />
+        <span v-else class="fallback" :style="{ background: blockColorCss(item.id) }">{{ blockAbbreviation(item.id) }}</span>
+      </button>
+    </div>
+    <p class="note" data-testid="shelf-summary">
+      <template v-if="items.length === 0 && input.trim() !== ''">
+        「{{ input.trim() }}」に合うブロックはこのタブにありません。ID なら Enter で使います。
+      </template>
+      <template v-else-if="items.length === 0">このタブにブロックはありません。</template>
+      <template v-else>{{ items.length }} 件。クリックで選びます。</template>
+    </p>
   </section>
 </template>
 
@@ -302,9 +288,11 @@ h2 {
   border: 1px solid var(--line);
 }
 
-.swatch.small {
-  width: 14px;
-  height: 14px;
+.icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
 }
 
 .name {
@@ -341,7 +329,6 @@ h2 {
   font-size: 11px;
 }
 
-.field > span,
 .field > label {
   opacity: 0.75;
 }
@@ -362,27 +349,76 @@ input {
   flex: 1;
 }
 
-.results {
-  max-height: 260px;
-  margin: 0;
-  padding: 0;
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.tabs button {
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: Canvas;
+  color: CanvasText;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tabs button.on {
+  background: color-mix(in srgb, Highlight 22%, Canvas);
+  border-color: Highlight;
+}
+
+.shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: 3px;
+  max-height: 320px;
   overflow-y: auto;
-  list-style: none;
+  padding: 3px;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: Canvas;
 }
 
-.results li {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 4px 6px;
+.cell {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 1px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
   cursor: pointer;
 }
 
-.results li.active {
+.cell:hover {
+  border-color: var(--line);
+}
+
+.cell.on {
+  border-color: Highlight;
   background: color-mix(in srgb, Highlight 22%, transparent);
+}
+
+.cell img {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+
+.fallback {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  text-shadow: 0 0 2px #000;
 }
 
 .note {

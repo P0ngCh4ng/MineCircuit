@@ -675,6 +675,14 @@ flowchart LR
 
 読み込み中と problems の件数は「描き方」の切り替え（`AppearanceModeSwitch`）に出す。
 
+### ブロックのアイコン（置くブロックの棚）
+
+置くブロックの棚（docs/ui.md「編集」）は、ブロックの見た目を小さな画像（アイコン）にして並べる（`view/edit/blockIcons.ts`）。
+
+- 見た目は、3D 表示と同じ `AppearanceProvider` で用意する。ただし 3D 表示の provider（設計図のパレットの状態だけ）とは別に、棚のための provider を Modpack ごとに1つ作る（Worker も別）。棚のタブを開いたときに、そのタブのブロックの状態をまとめて頼む。3D 表示のアトラスは大きくしない。
+- 描き方は 3D 表示と同じ頂点データ（`buildModelGeometry`）を、斜め上から見た平行投影で、画面に出さない WebGL の canvas に描き、画像（data URL）にする。1つの WebGL の文脈を使い回す。描くのは少しずつ（画面を止めない）、結果はブロック状態の key ごとに覚える。Modpack が変わったら捨てる。
+- 見た目が null のブロックと、WebGL が使えない環境（テストの happy-dom を含む）では画像を作らず、棚は色と略称で描く。
+
 ### 生データで見た目が変わるブロック
 
 見た目は、ふつうはブロック状態だけで決まる（`AppearanceSet.appearances` の鍵は `BlockState.key`）。ただし、生データ（ブロックエンティティ）で見た目が変わるブロックがある。Custom Machinery の機械は、ブロック状態がどれも `custommachinery:custom_machine_block[facing=…]` で、どの機械かは生データの `machineID` に入っており、見た目は機械の定義が指す別のブロックのものになる。こういうブロックのために、見た目の鍵をブロック状態と生データから決める（`io/assets/blockEntityAppearance.ts`）。

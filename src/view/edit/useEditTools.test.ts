@@ -101,9 +101,9 @@ describe('編集のツール', () => {
     expect(view.hiddenLayers.has(1)).toBe(false)
   })
 
-  it('左パネルで、設計図にあるブロックから選ぶか ID を入力して置くブロックを決める', async () => {
+  it('左パネルで、棚の「この設計図」から選ぶか ID を入力して置くブロックを決める', async () => {
     const { wrapper, brush, tools } = mountApp()
-    await wrapper.get('[data-testid="brush-select"]').setValue('minecraft:stone')
+    await wrapper.get('[data-testid="shelf"] [data-key="minecraft:stone"]').trigger('click')
     expect(brush.state?.key).toBe('minecraft:stone')
     expect(tools.activeToolId).toBe('place')
 
