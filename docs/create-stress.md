@@ -11,6 +11,7 @@ Create の回転（RPM）と応力（SU）の規則を、Create のソースコ�
 | ATM10 | NeoForge 1.21.1 | 6.0 系 | [Creators-of-Create/Create](https://github.com/Creators-of-Create/Create) の `mc1.21.1/dev`（commit `7ff2760`、`mod_version = 6.0.11`） |
 | Create Astral | Fabric 1.18.2 | Create Fabric 0.5.1 系 | [Fabricators-of-Create/create](https://github.com/Fabricators-of-Create/create) の `mc1.18/fabric/dev`（commit `80ecefb`、`mod_version = 0.5.1-i`） |
 
+- Create Astral に入っている jar は `create-fabric-0.5.1-f-build.1415+mc1.18.2`（`fabric.mod.json` の `version`。2026-10-25 に手元の Create Astral で確認）。読んだソースの `0.5.1-i` より少し前の版。f と i のコードの違いは確かめていない。Modpack の設定ファイルが書いていないブロックの値（下の「Create Astral の設定」）は、ワールドの設定ファイルに補われた値がこの書類の初期値と一致した。
 - 回転の伝わり方（`RotationPropagator`）と応力の合計（`KineticNetwork`）は、2つの版で同じ。違いは書式の細部だけ（下の「バージョンの違い」）。
 - 応力の初期値は、2つの版で同じ（`create:chain_conveyor` は 6.0 だけにある）。
 - Create のコードは MIT License（1.21.1 版は「The Create Team / The Creators of Create」、1.18 Fabric 版は「2019 simibubi」）。`src/main/resources/assets/` 以下（テクスチャ・モデルなど）は All Rights Reserved なので使わない。数値はコードの中の定数なので、MIT の条件（著作権表示と許諾表示）を README の注記に書けば内蔵してよい。
@@ -46,7 +47,8 @@ Create には「個体の設定値の初期値」を変える設定がない。�
 - ファイル名は `create-server.toml`。
 - ワールドごとに `saves/<ワールド名>/serverconfig/create-server.toml` に作られる。ワールドを一度開くまでファイルはない。
 - Modpack が初期値を変えている場合は、Modpack のフォルダの `defaultconfigs/create-server.toml` にある。新しいワールドはこれを写して作られる。
-- 1.18.2 の Fabric 版も、Forge Config API Port を通して同じ場所・同じ形式で保存する（仮定。Create Astral の実物で未確認）。
+- 1.18.2 の Fabric 版も、Forge Config API Port を通して同じ場所・同じ形式で保存する。Create Astral の実物で確認した（`saves/新規ワールド/` と `saves/設計用/` の `serverconfig/create-server.toml`。Create の `fabric.mod.json` が `forgeconfigapiport` に依存している）。
+- ゲームは、ワールドを開くときに、ワールドの設定ファイルにない項目を初期値で補い、決まった場所に並べ直して書き戻す。そのため、計算に実際に使われるのはワールドの設定ファイルの値。`defaultconfigs/` のファイルは古い形のまま残っていることがある（下の「Create Astral の設定」）。
 
 `CreateConfig.load(pack)` が探す順番：
 
@@ -54,7 +56,33 @@ Create には「個体の設定値の初期値」を変える設定がない。�
 2. `saves/*/serverconfig/create-server.toml`（複数あれば利用者に選んでもらう。1つなら自動で使う）
 3. なければ `null`（内蔵の初期値を使う）
 
+### Create Astral の設定
+
+手元の Create Astral（2026-10-25）の `defaultconfigs/create-server.toml` と、2つのワールドの `serverconfig/create-server.toml` を、アプリの読み込み（`readCreateServerConfig`）で読み、内蔵の初期値（下の「数値の表」）と比べた。2つのワールドの値は同じで、Modpack が次の値を変えている。
+
+| 表 | ブロック（`create:`） | 初期値 | Create Astral |
+| --- | --- | --- | --- |
+| impact | `crushing_wheel` | 8 | 12 |
+| impact | `mechanical_pump` | 4 | 6 |
+| impact | `shaft`, `andesite_encased_shaft`, `brass_encased_shaft` | 0 | 0.02 |
+| impact | `cogwheel`, `andesite_encased_cogwheel`, `brass_encased_cogwheel` | 0 | 0.025 |
+| impact | `belt` | 0 | 0.05 |
+| impact | `large_cogwheel`, `andesite_encased_large_cogwheel`, `brass_encased_large_cogwheel`, `gearbox`, `gearshift`, `clutch`, `encased_chain_drive`, `adjustable_chain_gearshift`, `sequenced_gearshift`, `display_board` | 0 | 0.1 |
+| impact | `gantry_shaft` | 0 | 0.2 |
+| impact | `flywheel`, `rotation_speed_controller` | 0 | 1 |
+| capacity | `water_wheel` | 32 | 16 |
+| capacity | `windmill_bearing` | 512 | 1024 |
+| capacity | `hand_crank` | 8 | 10 |
+
+- シャフトや歯車にも小さな応力がある。長い軸や歯車の列では、合計が目に見えて変わる。
+- 色付きのバルブのハンドルは、設定ファイルに色ごとの項目（どれも 8）がある。ゲームがどの項目を使うか（`copper_valve_handle` か色ごとか）は確かめていない。今の値はどれも同じなので、結果は変わらない。
+- `maxRotationSpeed`・`maxMotorSpeed` は 256、`disableStress` は false、中速・高速は 30・100 で、初期値のまま。
+- **`defaultconfigs/` のファイルは古い形。** `large_water_wheel`（capacity）、`elevator_pulley`・`netherite_backtank`（impact）の項目がない。中速・高速は `[kinetics.stats]` ではなく `[kinetics.stressValues.stats]` に書いてある。ゲームはワールドを作るときにこれを写し、足りない項目を初期値（128・4・4）で補い、中速・高速を正しい場所に移している。
+- **アプリの読み方とのずれ（直す）。** アプリ（`loadCreateConfig`・`CreateValueResolver`）は `defaultconfigs/` を先に使い、表にないブロックを 0 とみなす。そのため Create Astral では、大きい水車の容量が 0、エレベーターの滑車とネザライトのバックタンクの応力が 0 になる。ワールドの設定ファイルを先に使い、設定ファイルにない項目は内蔵の初期値を使うように直す（初期値も分からないブロックだけ 0。#111）。
+
 ### TOML の形
+
+見出しの形は、Create Astral のワールドの設定ファイルで確かめた（`[kinetics.stressValues.v2.impact]`・`[kinetics.stressValues.v2.capacity]`・`[kinetics.stats]`）。実物はタブで字下げし、数は `8.0` のように小数で書く。
 
 ```toml
 [kinetics]
@@ -485,13 +513,47 @@ Create の `KineticNetwork.calculateCapacity` は、動力源の **生む回転�
 
 `powered_shaft`（`axis=x`）の nbt が `EnginePower: 1.0f`、`Direction: 1`、`EngineType: "create:steam_engine"` のとき、生む回転数 +64、容量 16,384 SU。
 
+## ゲームで確かめる手順
+
+例1〜6 と、残りの未確認事項をゲームで確かめる手順（#110）。Create Astral のクリエイティブのワールド（`設計用`）で行う。結果は、この書類の各節に「ゲームで確認済み（日付）」と書き、未確認事項の印を付ける。
+
+### 準備
+
+1. アプリで Create Astral を Modpack に登録しておく。計算は Modpack の設定（上の「Create Astral の設定」）で行われるので、**期待値はこの書類の初期値ではなく、Create Astral の値で計算したもの**と比べる。アプリの読み方のずれ（上の「アプリの読み方とのずれ」）を直すまでは、大きい水車・エレベーターの滑車・ネザライトのバックタンクを使わない。
+2. ゲームでは、エンジニアのゴーグルを頭に付け、応力計（`stressometer`）と回転計（`speedometer`）を使う。ゴーグルで機械を見ると、回転数と応力が出る。応力計はネットワークの応力と容量を出す。
+3. 組んだ機械は、設計図と羽ペン（`schematic_and_quill`）で範囲を選んで保存する（`schematics/` に .nbt ができる）。応力計と回転計は、計算に影響しない（応力 0）ので、置いたまま保存してよい。
+4. アプリでその .nbt を開き、プローブで同じブロックの回転数と、ネットワークの応力・容量を読む。ゲームの値と比べる。
+
+### 例ごとの手順
+
+| 確かめること | 組み方 | ゲームで読む値 | Create Astral での期待値 |
+| --- | --- | --- | --- |
+| 例1（水車・大歯車・プレス） | 例1 の表のとおり。水車の前に水を流す | プレスの回転数、応力計の応力と容量 | 回転数は −16 のまま。容量は 16 × 8 = 128 SU。応力はプレス2台で 256 + 大歯車 0.1 × 8 + 小歯車 0.025 × 16 = 257.2 SU で**過負荷**。プレス1台でも 129.2 SU で過負荷になる（歯車にも応力があるため）。過負荷かどうかと、応力計の応力の値がアプリの合計と一致するかを見る |
+| 例2（速度コントローラー） | 例2 の表のとおり。コントローラーの目標を 64 にする | 粉砕ホイールの回転数、応力計 | 粉砕ホイール +64。応力は 粉砕ホイール 12 × 64 = 768 + 大歯車 0.1 × 64 = 6.4 + コントローラー 1 × 16 = 16 + シャフト 0.02 × 16 = 0.32 で、合計 790.72 SU。容量 16,384 × 16 = 262,144 SU |
+| 例3（向きの衝突） | 例3 の表のとおり | 回転が止まる（壊れる）か | 衝突。右のモーターを −16 にすると回る |
+| 例4（速度の衝突） | 例4 の表のとおり | 回転が止まる（壊れる）か | 衝突 |
+| 例5（ギアボックス） | 例5 の表のとおり | 3本のシャフトの回転の向き（ゴーグルの表示か、つないだ回転計の符号） | 東 −16、北 −16、南 +16 |
+| 例6（蒸気エンジン） | ボイラー（流体タンク）と蒸気エンジンを組み、効率 100%（ゴーグルの表示）にする | エンジンの軸の回転数と容量 | +64 RPM、容量 16,384 SU |
+
+### 残りの未確認事項の手順
+
+| 確かめること | 手順 |
+| --- | --- |
+| 1本の `powered_shaft` に蒸気エンジンを2台付けたとき | 同じ軸に2台のエンジンを付けて保存し、ゲームの回転数・容量と、アプリの結果を比べる。設計図の `powered_shaft` の nbt に `EnginePos` がいくつ入るかも見る |
+| 速度コントローラーの出力側に、より速い動力源があるとき | 例2 の大歯車の側に、64 より速いクリエイティブモーターをつなぐ。ゲームが衝突にするか、どちらかの回転数になるかを見る |
+| ギアボックスの面の係数が、輪になった配置でも一致するか | ギアボックス4つとシャフトで正方形の輪を作り、モーターを1つつなぐ。ゲームで回るか（衝突しないか）と、各シャフトの向きを見る |
+| 風車を回したまま保存した設計図に、帆が入るか | 風車の軸受と帆を組み、回してから保存する。設計図の中の帆のブロックと、エンティティ（仕掛け）を、アプリのブロック一覧で見る |
+| 色付きのバルブのハンドルの値 | `create-server.toml` の `blue_valve_handle` だけを 100 に変え、ワールドを開き直して、青のハンドルを回したときの容量を応力計で見る。100 × 32 = 3,200 SU なら色ごとの項目を使っている |
+| アプリで作った生データ（`id` と `ScrollValue` だけ）を、ゲームが読むか | アプリで新しい設計図にクリエイティブモーターを置き、詳細パネルで回転数を 64 にして書き出す。ゲームで置き（スキーマティキャノンか、クリエイティブの設計図の配置）、モーターが 64 RPM で回るかを見る（#22 と一緒に行う） |
+
+ATM10（1.21.1）の未確認事項（Create の版、`defaultconfigs/` の値、位置の int 配列）は、ATM10 を入れてから同じ手順で確かめる。
+
 ## 未確認事項
 
-- [ ] ATM10 と Create Astral に入っている Create の正確な版。読んだソースは 6.0.11 と 0.5.1-i。Modpack の jar の版で確かめる
-- [ ] Create Astral（Fabric 1.18.2）で、`create-server.toml` が `saves/<ワールド>/serverconfig/` に作られるか
-- [ ] ATM10 と Create Astral が `defaultconfigs/create-server.toml` で応力の値を変えているか
-- [ ] 実物の `create-server.toml` で、表の見出しが `[kinetics.stressValues.v2.impact]` の形になっているか（コードの組み立て方から読んだもの）
-- [ ] 1.21.1 の設計図で、`Source` などの位置が int 配列で入っているか（実物の .nbt で確認）
+- [ ] ATM10 に入っている Create の正確な版（読んだソースは 6.0.11）。Create Astral は 0.5.1-f と分かった（上の「対象のバージョンと出典」）。0.5.1-f と、読んだ 0.5.1-i のコードの違い
+- [ ] ATM10 が `defaultconfigs/create-server.toml` で応力の値を変えているか（Create Astral は変えている。上の「Create Astral の設定」）
+- [ ] 色付きのバルブのハンドルで、ゲームが `copper_valve_handle` と色ごとの項目のどちらを使うか
+- [ ] 1.21.1 の設計図で、`Source` などの位置が int 配列で入っているか（実物の .nbt で確認。手元に ATM10 がない）
 - [ ] 風車を回したまま保存した設計図に、帆（仕掛けのエンティティ）が入るか
 - [ ] 1本の `powered_shaft` に蒸気エンジンを2台付けたときの扱い（コードでは1台分の位置しか持たない）
 - [ ] 速度コントローラーの出力側に、より速い動力源があるときの結果
@@ -501,6 +563,11 @@ Create の `KineticNetwork.calculateCapacity` は、動力源の **生む回転�
 ## 解消した事項
 
 docs/spec.md と docs/design.md の未確認事項のうち、この書類で答えが出たもの。
+
+- Create Astral（Fabric 1.18.2）でも、`create-server.toml` は `saves/<ワールド>/serverconfig/` に作られる（2026-10-25、実物で確認）
+- Create Astral は `defaultconfigs/create-server.toml` で応力の値を変えている（上の「Create Astral の設定」）
+- 実物の `create-server.toml` の表の見出しは `[kinetics.stressValues.v2.impact]`・`[kinetics.stressValues.v2.capacity]` の形（Create Astral で確認）
+- 1.18.2 の設計図では、`Source` などの位置は compound `{X, Y, Z}` で入る（Create Astral の設計図で確認）
 
 - 応力の数値はワールドごとの `serverconfig/create-server.toml`（サーバー設定）に入る。ファイルがなければ、初期値はコードの中（`AllBlocks.java`）にしかない。初期値は上の表のとおり
 - ベルトのつながりは、ブロック状態（`facing`・`slope`・`part`）だけで組み立てられる
