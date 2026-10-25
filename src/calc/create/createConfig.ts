@@ -153,24 +153,28 @@ export interface CreateConfigLookup {
 
 /**
  * Modpack から create-server.toml を探す。
- * 1. defaultconfigs/create-server.toml
- * 2. saves/<ワールド>/serverconfig/create-server.toml（複数あれば名前順で先頭）
+ * 1. saves/<ワールド>/serverconfig/create-server.toml（複数あれば名前順で先頭）
+ * 2. defaultconfigs/create-server.toml
+ * ゲームが実際に使うのはワールドの設定ファイル（足りない項目を初期値で補ったもの）なので、そちらを先に使う。
+ * defaultconfigs/ は新しいワールドに写されるもとで、古い形のまま残っていることがある（docs/create-stress.md「Create Astral の設定」）。
  * Modpack がない、またはファイルがなければ config は null。
  */
 export async function loadCreateConfig(pack: CalcModpack | null): Promise<CreateConfigLookup> {
   if (!pack) return { config: null, candidates: [] }
-  const defaults = `defaultconfigs/${CREATE_SERVER_CONFIG}`
-  const text = await pack.config(defaults)
-  if (text !== null) return { config: readCreateServerConfig(text, defaults), candidates: [defaults] }
-
   const found: { path: string; text: string }[] = []
   for (const world of await listDirs(pack, 'saves/')) {
     const path = `saves/${world}serverconfig/${CREATE_SERVER_CONFIG}`
     const t = await pack.config(path)
     if (t !== null) found.push({ path, text: t })
   }
-  if (found.length === 0) return { config: null, candidates: [] }
-  return { config: readCreateServerConfig(found[0].text, found[0].path), candidates: found.map((f) => f.path) }
+  if (found.length > 0) {
+    return { config: readCreateServerConfig(found[0].text, found[0].path), candidates: found.map((f) => f.path) }
+  }
+
+  const defaults = `defaultconfigs/${CREATE_SERVER_CONFIG}`
+  const text = await pack.config(defaults)
+  if (text !== null) return { config: readCreateServerConfig(text, defaults), candidates: [defaults] }
+  return { config: null, candidates: [] }
 }
 
 async function listDirs(pack: CalcModpack, dir: string): Promise<string[]> {

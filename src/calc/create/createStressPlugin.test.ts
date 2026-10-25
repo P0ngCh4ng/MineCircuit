@@ -58,7 +58,7 @@ describe('create-server.toml', () => {
     expect(toml.get('kinetics.stressValues.v2.impact.crushing_wheel')).toBe(2)
   })
 
-  it('stressValues は番号が一番大きい版を使い、表にないブロックは 0', () => {
+  it('stressValues は番号が一番大きい版を使い、表にないブロックは内蔵の初期値、初期値もなければ 0', () => {
     const config = readCreateServerConfig(TOML, 'defaultconfigs/create-server.toml')
     expect(config.stressVersion).toBe(2)
     const values = new CreateValueResolver(config)
@@ -67,10 +67,35 @@ describe('create-server.toml', () => {
       source: 'modpack',
       note: 'defaultconfigs/create-server.toml',
     })
-    expect(values.impact('mechanical_drill').value).toBe(0)
+    // 古い形の設定ファイルには項目がないことがある。ゲームは初期値で補う
+    expect(values.impact('mechanical_drill')).toEqual({ value: 4, source: 'builtin' })
+    expect(values.capacity('large_water_wheel')).toEqual({ value: 128, source: 'builtin' })
+    expect(values.impact('not_a_kinetic_block')).toEqual({ value: 0, source: 'builtin' })
     expect(values.capacity('creative_motor').value).toBe(1)
     expect(values.mediumSpeed().value).toBe(40)
     expect(values.maxRotationSpeed()).toMatchObject({ value: 128, source: 'modpack' })
+  })
+
+  it('古い形の defaultconfigs（項目が足りない、中速が別の場所）だけでも、足りない値は内蔵の初期値になる', async () => {
+    // Create Astral の defaultconfigs/create-server.toml と同じ形
+    const old = `
+[kinetics]
+	maxRotationSpeed = 256
+	[kinetics.stressValues]
+		[kinetics.stressValues.v2]
+			[kinetics.stressValues.v2.impact]
+				crushing_wheel = 12.0
+			[kinetics.stressValues.v2.capacity]
+				water_wheel = 16.0
+		[kinetics.stressValues.stats]
+			mediumSpeed = 30.0
+`
+    const values = new CreateValueResolver((await loadCreateConfig(fakePack({ 'defaultconfigs/create-server.toml': old }))).config)
+    expect(values.impact('crushing_wheel')).toMatchObject({ value: 12, source: 'modpack' })
+    expect(values.capacity('water_wheel')).toMatchObject({ value: 16, source: 'modpack' })
+    expect(values.capacity('large_water_wheel')).toEqual({ value: 128, source: 'builtin' })
+    expect(values.impact('elevator_pulley')).toEqual({ value: 4, source: 'builtin' })
+    expect(values.mediumSpeed()).toEqual({ value: 30, source: 'builtin' })
   })
 
   it('設定がなければ内蔵の初期値', () => {
@@ -80,12 +105,18 @@ describe('create-server.toml', () => {
     expect(values.maxRotationSpeed()).toEqual({ value: 256, source: 'builtin' })
   })
 
-  it('defaultconfigs を先に探し、なければ saves/*/serverconfig を探す', async () => {
+  it('saves/*/serverconfig を先に探し、なければ defaultconfigs を使う', async () => {
     const both = fakePack({
       'defaultconfigs/create-server.toml': TOML,
-      'saves/World/serverconfig/create-server.toml': '',
+      'saves/World/serverconfig/create-server.toml': TOML,
     })
-    expect((await loadCreateConfig(both)).config?.path).toBe('defaultconfigs/create-server.toml')
+    expect(await loadCreateConfig(both)).toEqual({
+      config: expect.objectContaining({ path: 'saves/World/serverconfig/create-server.toml' }),
+      candidates: ['saves/World/serverconfig/create-server.toml'],
+    })
+    expect((await loadCreateConfig(fakePack({ 'defaultconfigs/create-server.toml': TOML }))).config?.path).toBe(
+      'defaultconfigs/create-server.toml',
+    )
 
     const saves = fakePack({
       'saves/B/serverconfig/create-server.toml': TOML,

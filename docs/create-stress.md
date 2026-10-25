@@ -52,9 +52,11 @@ Create には「個体の設定値の初期値」を変える設定がない。�
 
 `CreateConfig.load(pack)` が探す順番：
 
-1. `defaultconfigs/create-server.toml`
-2. `saves/*/serverconfig/create-server.toml`（複数あれば利用者に選んでもらう。1つなら自動で使う）
+1. `saves/*/serverconfig/create-server.toml`（ゲームが実際に使うもの。複数あれば名前順で先頭を使い、仮定に載せる）
+2. `defaultconfigs/create-server.toml`（ワールドがまだないとき）
 3. なければ `null`（内蔵の初期値を使う）
+
+設定ファイルの表にないブロックは、内蔵の初期値を使う（ゲームも足りない項目を初期値で補う）。初期値も分からないブロックだけ 0。
 
 ### Create Astral の設定
 
@@ -78,7 +80,7 @@ Create には「個体の設定値の初期値」を変える設定がない。�
 - 色付きのバルブのハンドルは、設定ファイルに色ごとの項目（どれも 8）がある。ゲームがどの項目を使うか（`copper_valve_handle` か色ごとか）は確かめていない。今の値はどれも同じなので、結果は変わらない。
 - `maxRotationSpeed`・`maxMotorSpeed` は 256、`disableStress` は false、中速・高速は 30・100 で、初期値のまま。
 - **`defaultconfigs/` のファイルは古い形。** `large_water_wheel`（capacity）、`elevator_pulley`・`netherite_backtank`（impact）の項目がない。中速・高速は `[kinetics.stats]` ではなく `[kinetics.stressValues.stats]` に書いてある。ゲームはワールドを作るときにこれを写し、足りない項目を初期値（128・4・4）で補い、中速・高速を正しい場所に移している。
-- **アプリの読み方とのずれ（直す）。** アプリ（`loadCreateConfig`・`CreateValueResolver`）は `defaultconfigs/` を先に使い、表にないブロックを 0 とみなす。そのため Create Astral では、大きい水車の容量が 0、エレベーターの滑車とネザライトのバックタンクの応力が 0 になる。ワールドの設定ファイルを先に使い、設定ファイルにない項目は内蔵の初期値を使うように直す（初期値も分からないブロックだけ 0。#111）。
+- **アプリの読み方。** 以前のアプリは `defaultconfigs/` を先に使い、表にないブロックを 0 とみなしていたので、Create Astral では大きい水車の容量が 0 になっていた。ワールドの設定ファイルを先に使い、設定ファイルにない項目は内蔵の初期値を使うように直した（#111）。手元の Create Astral では、大きい水車は 128（ワールドの設定ファイルの値）になる。
 
 ### TOML の形
 
@@ -101,7 +103,7 @@ Create には「個体の設定値の初期値」を変える設定がない。�
 
 - `stressValues.v2` の `v2` は版の番号。Create がこの番号を上げると古い値は捨てられる。読み込みでは `kinetics.stressValues.v*` のうち番号が一番大きいものを使う。
 - キーは `create:` を外したブロック名（`mechanical_press`）。値は小数。
-- `impact` / `capacity` の表に載るのは Create 本体のブロックだけ（他の Mod のブロックは載せられない作り）。表にないブロックは 0 として扱う（Create と同じ）。
+- `impact` / `capacity` の表に載るのは Create 本体のブロックだけ（他の Mod のブロックは載せられない作り）。表に載るブロックは、ゲームが初期値で補うので、ワールドの設定ファイルにはすべて書いてある。古い形の `defaultconfigs/` などで項目がないときは、内蔵の初期値を使う。初期値の表にもないブロックは 0。
 - 追加 Mod（アドオン）は自分の設定ファイルで値を持つ。対象外とし、仮定に載せる。
 
 使う項目：
@@ -519,7 +521,7 @@ Create の `KineticNetwork.calculateCapacity` は、動力源の **生む回転�
 
 ### 準備
 
-1. アプリで Create Astral を Modpack に登録しておく。計算は Modpack の設定（上の「Create Astral の設定」）で行われるので、**期待値はこの書類の初期値ではなく、Create Astral の値で計算したもの**と比べる。アプリの読み方のずれ（上の「アプリの読み方とのずれ」）を直すまでは、大きい水車・エレベーターの滑車・ネザライトのバックタンクを使わない。
+1. アプリで Create Astral を Modpack に登録しておく。計算は Modpack の設定（上の「Create Astral の設定」）で行われるので、**期待値はこの書類の初期値ではなく、Create Astral の値で計算したもの**と比べる。アプリはワールドの設定ファイルを使う。ワールドが2つ以上あるときは名前順で先頭（手元では `新規ワールド`）を使うので、確かめるワールドと値が同じかを見ておく（手元の2つは同じ）。
 2. ゲームでは、エンジニアのゴーグルを頭に付け、応力計（`stressometer`）と回転計（`speedometer`）を使う。ゴーグルで機械を見ると、回転数と応力が出る。応力計はネットワークの応力と容量を出す。
 3. 組んだ機械は、設計図と羽ペン（`schematic_and_quill`）で範囲を選んで保存する（`schematics/` に .nbt ができる）。応力計と回転計は、計算に影響しない（応力 0）ので、置いたまま保存してよい。
 4. アプリでその .nbt を開き、プローブで同じブロックの回転数と、ネットワークの応力・容量を読む。ゲームの値と比べる。
