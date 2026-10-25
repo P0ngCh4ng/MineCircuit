@@ -38,8 +38,9 @@ export class CreateValueResolver {
     defaults: Readonly<Record<string, number>>,
     name: string,
   ): Resolved<number> {
-    // 設定ファイルに表があれば、表にないブロックは 0（Create と同じ）。表がなければ内蔵の初期値
-    const fromConfig = this.config?.stressVersion !== null && table ? (table.get(name) ?? 0) : null
+    // 設定ファイルの表にあればその値。なければ内蔵の初期値（ゲームも、設定ファイルにない項目は初期値で補う）。
+    // 初期値も分からないブロック（応力を持たないブロック）は 0
+    const fromConfig = this.config?.stressVersion !== null && table?.has(name) ? table.get(name)! : null
     return resolveWith(
       [candidate('modpack', () => fromConfig, this.config?.path)],
       resolved(Object.hasOwn(defaults, name) ? defaults[name] : 0, 'builtin'),
