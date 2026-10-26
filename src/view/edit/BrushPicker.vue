@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 左パネルの「置くブロック」（#18、#71、#114）。docs/ui.md「編集」。
-// ブロックの絵（アイコン）を並べた棚から選ぶ。タブは「この設計図」と、Modpack を読んでいれば Mod ごと。
-// 上の欄で今のタブを絞り込み、ID と状態（create:shaft[axis=y]）は Enter でそのまま使う。
+// ブロックの絵（アイコン）を並べた棚から選ぶ。棚に並べるものは「Mod」の欄で選ぶ（「この設計図」と、Modpack を読んでいれば Mod ごと）。
+// 「ブロック」の欄で絞り込み、ID と状態（create:shaft[axis=y]）は Enter でそのまま使う。
 // スポイト（I）で表示中のブロックから取ることもできる。状態（向きなど）はブロック状態の定義（#27）から選ぶ。
 import { computed, ref, watch } from 'vue'
 import { BlockState } from '../../domain/blockState'
@@ -35,7 +35,7 @@ const states = computed<BlockState[]>(() => {
 
 const tabs = computed(() => shelfTabs(content.pack, new Set(states.value.map((s) => s.id.namespace))))
 
-// タブがなくなったら（Modpack を外した）、この設計図に戻す。設計図が空なら最初の Mod のタブにする
+// 選んでいたものがなくなったら（Modpack を外した）、この設計図に戻す。設計図が空なら最初の Mod にする
 watch(
   tabs,
   (list) => {
@@ -45,20 +45,74 @@ watch(
   { immediate: true },
 )
 
-/** 今のタブの中身（絞り込んだあと）。"[" を含む入力は ID の入力なので絞り込まない */
+/** 選んでいる Mod（または「この設計図」） */
+const currentTab = computed(() => tabs.value.find((t) => t.id === tabId.value) ?? tabs.value[0]!)
+
+// Mod の欄。入力中は候補を出し、選んだら欄に名前を戻す
+const modQuery = ref('')
+const modOpen = ref(false)
+const modActive = ref(0)
+
+/** Mod の候補。名前か namespace に、空白で区切った言葉がすべて入っているもの */
+const modOptions = computed(() => {
+  const terms = modQuery.value.toLowerCase().split(/\s+/).filter((t) => t !== '')
+  return tabs.value.filter((t) => terms.every((term) => t.label.toLowerCase().includes(term) || t.id.toLowerCase().includes(term)))
+})
+
+function openMods(e: FocusEvent): void {
+  modOpen.value = true
+  modQuery.value = ''
+  modActive.value = 0
+  // 今の名前を選んだ状態にして、そのまま打ち替えられるようにする
+  ;(e.target as HTMLInputElement).select()
+}
+
+function chooseMod(id: string): void {
+  tabId.value = id
+  modOpen.value = false
+  modQuery.value = ''
+}
+
+function onModInput(e: Event): void {
+  modQuery.value = (e.target as HTMLInputElement).value
+  modOpen.value = true
+  modActive.value = 0
+}
+
+function onModKeydown(e: KeyboardEvent): void {
+  const count = modOptions.value.length
+  if (e.key === 'ArrowDown' && count > 0) {
+    e.preventDefault()
+    modOpen.value = true
+    modActive.value = (modActive.value + 1) % count
+  } else if (e.key === 'ArrowUp' && count > 0) {
+    e.preventDefault()
+    modActive.value = (modActive.value - 1 + count) % count
+  } else if (e.key === 'Enter') {
+    e.preventDefault()
+    const hit = modOptions.value[modActive.value]
+    if (hit) chooseMod(hit.id)
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    modOpen.value = false
+    modQuery.value = ''
+  }
+}
+
+/** 今の Mod の中身（絞り込んだあと）。"[" を含む入力は ID の入力なので絞り込まない */
 const items = computed<ShelfItem[]>(() => {
   const text = input.value.trim()
   return shelfItems(tabId.value, content.pack, states.value, text.includes('[') ? '' : text)
 })
 
-// 見えるタブのアイコンを頼む
+// 棚に並べるブロックのアイコンを頼む
 watch(items, (list) => void icons.request(list.map((i) => i.state)), { immediate: true })
 
 function itemName(item: ShelfItem): string {
   return item.ja ?? item.en ?? item.id
 }
 
-/** マウスを重ねたときの説明。名前と ID。この設計図のタブでは状態も */
+/** マウスを重ねたときの説明。名前と ID。この設計図では状態も */
 function itemTitle(item: ShelfItem): string {
   const props = Object.entries(item.state.properties)
     .map(([k, v]) => `${k}=${v}`)
@@ -186,8 +240,47 @@ function onSubmit(): void {
     </div>
     <p v-if="current" class="note">R で水平に回す、Shift+R で縦にする。</p>
 
+    <div class="field mod-field">
+      <label for="brush-mod">Mod</label>
+      <input
+        id="brush-mod"
+        data-testid="shelf-mod"
+        type="text"
+        role="combobox"
+        spellcheck="false"
+        autocomplete="off"
+        :value="modOpen ? modQuery : currentTab.label"
+        :placeholder="currentTab.label"
+        :aria-expanded="modOpen"
+        aria-controls="brush-mods"
+        :aria-activedescendant="modOpen && modOptions.length > 0 ? `brush-mod-${modActive}` : undefined"
+        @focus="openMods"
+        @blur="modOpen = false"
+        @input="onModInput"
+        @keydown="onModKeydown"
+      />
+      <ul v-if="modOpen" id="brush-mods" class="mods" role="listbox" aria-label="Mod" data-testid="shelf-mods">
+        <li
+          v-for="(t, i) in modOptions"
+          :id="`brush-mod-${i}`"
+          :key="t.id"
+          role="option"
+          :aria-selected="i === modActive"
+          :class="{ active: i === modActive, current: t.id === tabId }"
+          :data-tab="t.id"
+          @mousedown.prevent
+          @mouseenter="modActive = i"
+          @click="chooseMod(t.id)"
+        >
+          {{ t.label }}
+          <small v-if="t.id.startsWith('ns:') && t.id.slice(3) !== t.label">{{ t.id.slice(3) }}</small>
+        </li>
+        <li v-if="modOptions.length === 0" class="empty">「{{ modQuery.trim() }}」に合う Mod はありません</li>
+      </ul>
+    </div>
+
     <form class="field" @submit.prevent="onSubmit">
-      <label for="brush-id">{{ content.pack ? '絞り込む、または ID を入力' : 'ID を入力' }}</label>
+      <label for="brush-id">{{ content.pack ? 'ブロック（絞り込む、または ID を入力）' : 'ID を入力' }}</label>
       <div class="row">
         <input
           id="brush-id"
@@ -210,22 +303,7 @@ function onSubmit(): void {
       <p v-if="inputError" class="error" role="alert">{{ inputError }}</p>
     </form>
 
-    <div class="tabs" role="tablist" aria-label="ブロックの棚" data-testid="shelf-tabs">
-      <button
-        v-for="t in tabs"
-        :key="t.id"
-        type="button"
-        role="tab"
-        :aria-selected="t.id === tabId"
-        :class="{ on: t.id === tabId }"
-        :data-tab="t.id"
-        @click="tabId = t.id"
-      >
-        {{ t.label }}
-      </button>
-    </div>
-
-    <div class="shelf" role="listbox" :aria-label="tabs.find((t) => t.id === tabId)?.label" data-testid="shelf">
+    <div class="shelf" role="listbox" :aria-label="currentTab.label" data-testid="shelf">
       <button
         v-for="item in items"
         :key="item.state.key"
@@ -245,9 +323,9 @@ function onSubmit(): void {
     </div>
     <p class="note" data-testid="shelf-summary">
       <template v-if="items.length === 0 && input.trim() !== ''">
-        「{{ input.trim() }}」に合うブロックはこのタブにありません。ID なら Enter で使います。
+        「{{ input.trim() }}」に合うブロックは「{{ currentTab.label }}」にありません。ID なら Enter で使います。
       </template>
-      <template v-else-if="items.length === 0">このタブにブロックはありません。</template>
+      <template v-else-if="items.length === 0">「{{ currentTab.label }}」にブロックはありません。</template>
       <template v-else>{{ items.length }} 件。クリックで選びます。</template>
     </p>
   </section>
@@ -349,26 +427,50 @@ input {
   flex: 1;
 }
 
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
+.mod-field {
+  position: relative;
 }
 
-.tabs button {
-  padding: 2px 6px;
+.mods {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  max-height: 240px;
+  margin: 2px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: Canvas;
-  color: CanvasText;
-  font: inherit;
-  font-size: 11px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+}
+
+.mods li {
+  padding: 4px 6px;
+  font-size: 12px;
   cursor: pointer;
 }
 
-.tabs button.on {
-  background: color-mix(in srgb, Highlight 22%, Canvas);
-  border-color: Highlight;
+.mods li small {
+  margin-left: 6px;
+  font-size: 10px;
+  opacity: 0.65;
+}
+
+.mods li.current {
+  font-weight: 600;
+}
+
+.mods li.active {
+  background: color-mix(in srgb, Highlight 22%, transparent);
+}
+
+.mods li.empty {
+  cursor: default;
+  opacity: 0.75;
 }
 
 .shelf {

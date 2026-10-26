@@ -60,6 +60,14 @@ function mountPicker() {
   return mount(Host)
 }
 
+/** Mod の欄に文字を入れ、候補から選ぶ */
+async function chooseMod(wrapper: ReturnType<typeof mountPicker>, text: string, tab: string): Promise<void> {
+  const field = wrapper.find('[data-testid="shelf-mod"]')
+  await field.trigger('focus')
+  await field.setValue(text)
+  await wrapper.find(`[data-testid="shelf-mods"] li[data-tab="${tab}"]`).trigger('click')
+}
+
 async function loadPack(): Promise<void> {
   const content = useModpackContentStore()
   content.pack = markRaw(createLikePack())
@@ -81,8 +89,13 @@ describe('BrushPicker（Modpack から探す）', () => {
   it('Mod のタブに、ブロックが表示名の順で並び、クリックすると置くブロックになる', async () => {
     const wrapper = mountPicker()
     await loadPack()
-    expect(wrapper.findAll('[data-testid="shelf-tabs"] button').map((b) => b.text())).toEqual(['この設計図', 'create'])
-    await wrapper.find('[data-tab="ns:create"]').trigger('click')
+    const field = wrapper.find('[data-testid="shelf-mod"]')
+    expect((field.element as HTMLInputElement).value).toBe('この設計図')
+    await field.trigger('focus')
+    expect(wrapper.findAll('[data-testid="shelf-mods"] li').map((li) => li.attributes('data-tab'))).toEqual(['blueprint', 'ns:create'])
+    await chooseMod(wrapper, 'cre', 'ns:create')
+    expect(wrapper.find('[data-testid="shelf-mods"]').exists()).toBe(false)
+    expect((field.element as HTMLInputElement).value).toBe('create')
     const cells = wrapper.findAll('[data-testid="shelf"] button')
     expect(cells.map((c) => c.attributes('data-key'))).toEqual(['create:creative_motor[facing=north]', 'create:shaft[axis=x]'])
     expect(cells[0]!.attributes('aria-label')).toBe('クリエイティブモーター')
@@ -93,10 +106,28 @@ describe('BrushPicker（Modpack から探す）', () => {
     expect(wrapper.find('[data-testid="shelf"] button.on').attributes('data-key')).toBe('create:creative_motor[facing=north]')
   })
 
+  it('Mod の欄は ↑↓ と Enter で選べ、合うものがなければそう出す。Esc で閉じる', async () => {
+    const wrapper = mountPicker()
+    await loadPack()
+    const field = wrapper.find('[data-testid="shelf-mod"]')
+    await field.trigger('focus')
+    await field.trigger('keydown', { key: 'ArrowDown' })
+    await field.trigger('keydown', { key: 'Enter' })
+    expect((field.element as HTMLInputElement).value).toBe('create')
+    expect(wrapper.findAll('[data-testid="shelf"] button')).toHaveLength(2)
+
+    await field.trigger('focus')
+    await field.setValue('nothing')
+    expect(wrapper.find('[data-testid="shelf-mods"]').text()).toContain('「nothing」に合う Mod はありません')
+    await field.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('[data-testid="shelf-mods"]').exists()).toBe(false)
+    expect((field.element as HTMLInputElement).value).toBe('create')
+  })
+
   it('向きをブロック状態の定義の値から選べる', async () => {
     const wrapper = mountPicker()
     await loadPack()
-    await wrapper.find('[data-tab="ns:create"]').trigger('click')
+    await chooseMod(wrapper, 'create', 'ns:create')
     await wrapper.find('[data-key="create:creative_motor[facing=north]"]').trigger('click')
     const select = wrapper.find('[data-testid="brush-props"] select[data-prop="facing"]')
     expect(select.findAll('option').map((o) => o.text())).toEqual(facings)
@@ -107,7 +138,7 @@ describe('BrushPicker（Modpack から探す）', () => {
   it('欄の文字で今のタブを絞り込み、1件なら Enter で使う。2件以上ならそう出す', async () => {
     const wrapper = mountPicker()
     await loadPack()
-    await wrapper.find('[data-tab="ns:create"]').trigger('click')
+    await chooseMod(wrapper, 'create', 'ns:create')
     const input = wrapper.find('[data-testid="brush-input"]')
     await input.setValue('モーター')
     expect(wrapper.findAll('[data-testid="shelf"] button').map((c) => c.attributes('data-key'))).toEqual([
@@ -131,7 +162,7 @@ describe('BrushPicker（Modpack から探す）', () => {
     expect(useBrushStore().state?.key).toBe('create:shaft[axis=z]')
 
     await input.setValue('minecraft:glass')
-    expect(wrapper.find('[data-testid="shelf-summary"]').text()).toContain('このタブにありません')
+    expect(wrapper.find('[data-testid="shelf-summary"]').text()).toContain('「この設計図」にありません')
     await wrapper.find('form').trigger('submit')
     expect(useBrushStore().state?.key).toBe('minecraft:glass')
   })
@@ -143,7 +174,7 @@ describe('BrushPicker（Modpack から探す）', () => {
     })
     const wrapper = mountPicker()
     await loadPack()
-    await wrapper.find('[data-tab="ns:create"]').trigger('click')
+    await chooseMod(wrapper, 'create', 'ns:create')
     await flushPromises()
     await vi.waitFor(() => expect(wrapper.findAll('[data-testid="shelf"] img')).toHaveLength(1))
     // シャフトだけ見た目がある（AnyStateProvider）。モーターは色と略称
@@ -154,7 +185,8 @@ describe('BrushPicker（Modpack から探す）', () => {
   it('Modpack がなければ「この設計図」のタブと ID の入力だけ', async () => {
     const wrapper = mountPicker()
     expect(wrapper.find('label[for="brush-id"]').text()).toBe('ID を入力')
-    expect(wrapper.findAll('[data-testid="shelf-tabs"] button').map((b) => b.text())).toEqual(['この設計図'])
+    await wrapper.find('[data-testid="shelf-mod"]').trigger('focus')
+    expect(wrapper.findAll('[data-testid="shelf-mods"] li').map((li) => li.text())).toEqual(['この設計図'])
     await wrapper.find('[data-key="minecraft:stone"]').trigger('click')
     expect(useBrushStore().state?.key).toBe('minecraft:stone')
     expect(wrapper.find('#brush-id-list').findAll('option').map((o) => o.attributes('value'))).toEqual([
