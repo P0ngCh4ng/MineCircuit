@@ -84,6 +84,15 @@ function onModeChange(e: Event): void {
       >
         略称
       </button>
+      <button
+        type="button"
+        data-toggle="rotation"
+        title="計算で回るブロックを、速さで色分けし、回る向きを出す"
+        :aria-pressed="view.showRotation"
+        @click="view.setRotation(!view.showRotation)"
+      >
+        回転
+      </button>
     </div>
     <!-- 選択の解除（#12） -->
     <div class="bar-group" role="group" aria-label="強調">

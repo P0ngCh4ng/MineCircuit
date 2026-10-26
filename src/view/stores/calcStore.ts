@@ -4,7 +4,7 @@
 import { defineStore } from 'pinia'
 import { computed, markRaw, ref, shallowRef } from 'vue'
 import { createBuiltinRegistry } from '../../calc/builtinPlugins'
-import type { CalcModpack } from '../../calc/calcPlugin'
+import type { CalcModpack, CalcRotation } from '../../calc/calcPlugin'
 import {
   CalcScheduler,
   InlineCalcBackend,
@@ -104,6 +104,11 @@ export const useCalcStore = defineStore('calc', () => {
     (outcomes.value ?? []).flatMap((o) => (o.status === 'ok' ? o.result.issues.map((i) => i.pos) : [])),
   )
 
+  /** 回るブロックごとの回転（すべてのプラグインの分）。表示部分の「回転」で使う */
+  const rotations = computed<readonly CalcRotation[]>(() =>
+    (outcomes.value ?? []).flatMap((o) => (o.status === 'ok' ? (o.result.rotations ?? []) : [])),
+  )
+
   return {
     status,
     outcomes,
@@ -111,6 +116,7 @@ export const useCalcStore = defineStore('calc', () => {
     hasBlueprint,
     ports,
     issuePositions,
+    rotations,
     setBackend,
     attach,
     setPack,

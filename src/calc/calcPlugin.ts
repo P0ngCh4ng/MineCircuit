@@ -61,12 +61,28 @@ export interface CalcProbe {
   readonly network?: number
 }
 
+/** 速さの段階。境目はプラグインが決める（Create は設定の中速・高速） */
+export type SpeedLevel = 'stopped' | 'slow' | 'medium' | 'fast'
+
+/** 回るブロック1つ分の回転。表示部分の「回転」の色分けに使う（docs/ui.md「回転の表示」） */
+export interface CalcRotation {
+  readonly pos: Vec3
+  readonly axis: 'x' | 'y' | 'z'
+  /** 符号付きの回転数。正は軸の正の向きから見て反時計回り（Create と同じ）。過負荷なら止まる前の値 */
+  readonly rpm: number
+  readonly level: SpeedLevel
+  /** 過負荷で止まっている */
+  readonly overloaded: boolean
+}
+
 export interface CalcResult {
   readonly summary: readonly CalcSummaryItem[]
   readonly issues: readonly CalcIssue[]
   readonly assumptions: readonly CalcAssumption[]
   /** ブロックごとの値（回転数・応力など）。プローブで使う。なければ省略 */
   readonly probes?: readonly CalcProbe[]
+  /** 回るブロックごとの回転。表示部分の色分けで使う。なければ省略 */
+  readonly rotations?: readonly CalcRotation[]
 }
 
 export interface CalcPlugin {

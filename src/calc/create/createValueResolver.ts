@@ -33,6 +33,11 @@ export class CreateValueResolver {
     return this.setting((c) => c.mediumSpeed, DEFAULT_KINETICS.mediumSpeed)
   }
 
+  /** 「高速」の下限 */
+  fastSpeed(): Resolved<number> {
+    return this.setting((c) => c.fastSpeed, DEFAULT_KINETICS.fastSpeed)
+  }
+
   private stressValue(
     table: ReadonlyMap<string, number> | undefined,
     defaults: Readonly<Record<string, number>>,

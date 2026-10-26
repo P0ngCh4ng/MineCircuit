@@ -34,6 +34,8 @@ export const useViewStore = defineStore('view', () => {
 
   const showGrid = ref(true)
   const showAxes = ref(false)
+  /** 計算で回るとしたブロックを、速さの段階で色分けする（docs/ui.md「回転の表示」） */
+  const showRotation = ref(false)
 
   const layers = useLayerStore()
   const layerMode = ref<LayerMode>('all')
@@ -87,6 +89,10 @@ export const useViewStore = defineStore('view', () => {
     showAxes.value = visible
   }
 
+  function setRotation(visible: boolean): void {
+    showRotation.value = visible
+  }
+
   function setLayerMode(mode: LayerMode): void {
     layerMode.value = mode
   }
@@ -126,6 +132,8 @@ export const useViewStore = defineStore('view', () => {
     cameraRequest,
     showGrid,
     showAxes,
+    showRotation,
+    setRotation,
     layerMode,
     hiddenLayers,
     layerDisplay,

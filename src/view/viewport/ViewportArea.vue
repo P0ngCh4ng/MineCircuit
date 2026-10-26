@@ -7,6 +7,7 @@ import { useFileDrop } from '../document/useFileDrop'
 import { useViewStore } from '../stores/viewStore'
 import ToolBar from '../tools/ToolBar.vue'
 import LayerView2D from './LayerView2D.vue'
+import RotationLegend from './RotationLegend.vue'
 import Viewport3D from './Viewport3D.vue'
 
 const session = useDocumentSession()
@@ -48,6 +49,9 @@ const drop = useFileDrop((file) => void session.openFile(file))
       </div>
     </div>
 
+    <!-- 回転の表示の凡例（#117） -->
+    <RotationLegend v-if="current && view.showRotation" class="rotation-legend" />
+
     <div v-if="drop.dragging.value" class="drop" aria-hidden="true">ここに落として設計図を開く</div>
   </section>
 </template>
@@ -62,6 +66,13 @@ const drop = useFileDrop((file) => void session.openFile(file))
 
 .viewport-3d {
   z-index: 0;
+}
+
+.rotation-legend {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
 }
 
 .viewport-tools {

@@ -183,6 +183,30 @@ describe('Create の応力プラグイン', () => {
     expect(net('0,0,2')).not.toBe(net('0,0,0'))
   })
 
+  it('回るブロックごとの回転を出す。速さの段階は中速・高速で分け、過負荷は止まる前の回転数で印を付ける', async () => {
+    const motor = (speed: number) => nbt.compound({ ScrollValue: nbt.int(speed) })
+    const bp = blueprintFixture()
+      .place([0, 0, 0], 'create:creative_motor', { facing: 'east' }, motor(16))
+      .place([1, 0, 0], 'create:shaft', { axis: 'x' })
+      .place([0, 0, 2], 'create:creative_motor', { facing: 'east' }, motor(64))
+      .place([1, 0, 2], 'create:shaft', { axis: 'x' })
+      .place([0, 0, 4], 'create:creative_motor', { facing: 'west' }, motor(128))
+      .place([0, 0, 6], 'create:shaft', { axis: 'y' })
+      .toBlueprint()
+    const result = await runCreateStress(bp, { pack: null, ports: [] })
+    const at = (pos: string) => result.rotations?.find((r) => r.pos.join() === pos)
+    expect(at('1,0,0')).toEqual({ pos: [1, 0, 0], axis: 'x', rpm: 16, level: 'slow', overloaded: false })
+    expect(at('1,0,2')).toMatchObject({ rpm: 64, level: 'medium' })
+    // west 向きのモーターは符号が反転する
+    expect(at('0,0,4')).toMatchObject({ rpm: -128, level: 'fast' })
+    expect(at('0,0,6')).toMatchObject({ axis: 'y', rpm: 0, level: 'stopped', overloaded: false })
+
+    // 設定で容量を小さくすると過負荷：回転数は止まる前の値、overloaded を立てる
+    const pack = fakePack({ 'saves/World/serverconfig/create-server.toml': TOML })
+    const over = await runCreateStress(pressLine(), { pack, ports: [] })
+    expect(over.rotations?.find((r) => r.pos.join() === '1,0,0')).toMatchObject({ rpm: 16, overloaded: true })
+  })
+
   it('Modpack の設定ファイルの値を使う', async () => {
     const pack = fakePack({ 'saves/World/serverconfig/create-server.toml': TOML })
     const result = await runCreateStress(pressLine(), { pack, ports: [] })

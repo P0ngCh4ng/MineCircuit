@@ -521,6 +521,17 @@ interface CalcResult {
   summary: { label: string; value: Resolved<string> }[]   // 「使用 2,048 SU / 供給 4,096 SU」
   issues: { pos: Vec3; message: string }[]                // 3D表示で強調する位置
   assumptions: { pos?: Vec3; message: string }[]          // 何を仮定して計算したか
+  probes?: CalcProbe[]                                    // ブロックごとの値（プローブ）
+  rotations?: CalcRotation[]                              // 回るブロックごとの回転（表示部分の色分け）
+}
+
+// 表示部分で「回転」を入れたときに使う。プラグインが回るものとして数えたブロックだけ
+interface CalcRotation {
+  pos: Vec3
+  axis: 'x' | 'y' | 'z'
+  rpm: number          // 符号付き。正は軸の正の向きから見て反時計回り（Create と同じ）。過負荷なら止まる前の値
+  level: 'stopped' | 'slow' | 'medium' | 'fast'   // 速さの段階。境目はプラグインが決める（Create は設定の中速・高速）
+  overloaded: boolean  // 過負荷で止まっている
 }
 
 class PluginRegistry {

@@ -2,7 +2,16 @@
 
 import type { Blueprint } from '../../domain/blueprint'
 import { AssumptionLog } from '../assumptionLog'
-import type { CalcContext, CalcModpack, CalcPlugin, CalcProbe, CalcResult, CalcSummaryItem } from '../calcPlugin'
+import type {
+  CalcContext,
+  CalcModpack,
+  CalcPlugin,
+  CalcProbe,
+  CalcResult,
+  CalcRotation,
+  CalcSummaryItem,
+  SpeedLevel,
+} from '../calcPlugin'
 import { resolved, type Provenance } from '../provenance'
 import { loadCreateConfig } from './createConfig'
 import { CreateValueResolver } from './createValueResolver'
@@ -67,6 +76,7 @@ export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<
     issues: evaluation.issues,
     assumptions: log.list(),
     probes: probes(graph, evaluation),
+    rotations: rotations(graph, evaluation, values),
   }
 }
 
@@ -102,6 +112,26 @@ function summarize(ev: KineticEvaluation, settingSource: Provenance): CalcSummar
     value: resolved(`使用 ${formatNumber(totalStress)} SU / 供給 ${formatNumber(totalCapacity)} SU`, totalSource),
   })
   return items
+}
+
+/**
+ * 回るブロックごとの回転（表示部分の色分け用）。仮の入出力のノードは含めない。
+ * 速さの段階の境目は、設定の中速・高速（初期値 30・100 RPM）。過負荷なら止まる前の回転数で段階を決め、overloaded を立てる
+ */
+function rotations(graph: KineticGraph, ev: KineticEvaluation, values: CreateValueResolver): CalcRotation[] {
+  const medium = values.mediumSpeed().value
+  const fast = values.fastSpeed().value
+  const result: CalcRotation[] = []
+  graph.nodes.forEach((node, i) => {
+    if (node.portId !== null) return
+    const r = ev.nodes[i]!
+    const overloaded = ev.networks[r.network]!.overloaded && r.theoreticalSpeed !== 0
+    const rpm = overloaded ? r.theoreticalSpeed : r.speed
+    const speed = Math.abs(rpm)
+    const level: SpeedLevel = speed === 0 ? 'stopped' : speed >= fast ? 'fast' : speed >= medium ? 'medium' : 'slow'
+    result.push({ pos: [node.pos[0], node.pos[1], node.pos[2]], axis: node.axis, rpm, level, overloaded })
+  })
+  return result
 }
 
 /** ブロックごとの値（プローブ用）。仮の入出力のノードは含めない */
