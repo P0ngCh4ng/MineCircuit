@@ -103,6 +103,11 @@ export interface CalcPlugin {
    * 変えないなら null。from は優先する隣の向き（3D でクリックした面の側）。設計図は読むだけ
    */
   orientForPlacement?(bp: Blueprint, pos: Vec3, state: BlockState, from: Direction | null): BlockState | null
+  /**
+   * その場所に置けるか（任意。#121）。ゲームで置けない（置いても外れて落ちる）なら理由、置けるなら null。
+   * 設計図は読むだけ
+   */
+  placementProblem?(bp: Blueprint, pos: Vec3, state: BlockState): string | null
 }
 
 /** 空の結果 */

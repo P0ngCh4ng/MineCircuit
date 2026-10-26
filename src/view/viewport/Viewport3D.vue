@@ -56,6 +56,8 @@ const blueprintVersion = computed(() => ({
 }))
 
 const scene = new BlueprintScene()
+/** 置けない所の見本の色 */
+const BLOCKED_GHOST_COLOR = 0xe0402a
 // 計算結果の印（ネットワークの強調と問題の位置。#31）
 const calcOverlay = new CalcOverlay3D()
 scene.scene.add(calcOverlay.group)
@@ -204,9 +206,10 @@ onMounted(() => {
     ),
     // 置くツールの見本（#18）
     watch(
-      () => [brush.ghostPos, brush.state] as const,
-      ([pos, state]) => {
-        scene.setGhost(pos, state ? blockColor(state.id.toString()) : null)
+      () => [brush.ghostPos, brush.state, brush.ghostBlocked] as const,
+      ([pos, state, blocked]) => {
+        // 設置の規則で置けない所は赤（#121）
+        scene.setGhost(pos, state ? (blocked ? BLOCKED_GHOST_COLOR : blockColor(state.id.toString())) : null)
         render()
       },
       { immediate: true },

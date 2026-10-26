@@ -21,6 +21,7 @@ class FakeContext implements EditToolContext {
   message: string | null = null
   hovered: Vec3 | null = null
   ghost: Vec3 | null = null
+  ghostBlocked = false
   readonly revealed: number[] = []
 
   constructor(readonly bp: Blueprint) {
@@ -46,14 +47,18 @@ class FakeContext implements EditToolContext {
   setHovered(pos: Vec3 | null): void {
     this.hovered = pos
   }
-  setGhost(pos: Vec3 | null): void {
+  setGhost(pos: Vec3 | null, blocked = false): void {
     this.ghost = pos
+    this.ghostBlocked = blocked
   }
   revealLayer(y: number): void {
     this.revealed.push(y)
   }
   orient(bp: Blueprint, pos: Vec3, s: BlockState, from: Direction | null): BlockState {
     return registry.orientForPlacement(bp, pos, s, from)
+  }
+  placementProblem(bp: Blueprint, pos: Vec3, s: BlockState): string | null {
+    return registry.placementProblem(bp, pos, s)
   }
 }
 
@@ -218,5 +223,28 @@ describe('PlaceTool：隣とつながる向き（#119）', () => {
     expect(bp.get([1, 0, 0])?.key).toBe('create:shaft[axis=x]')
     tool.onClick({ pos: [1, 0, 0], face: 'east', empty: false } as PickTarget, { shift: false, alt: true })
     expect(bp.get([2, 0, 0])?.key).toBe('create:shaft[axis=y]')
+  })
+})
+
+describe('PlaceTool：設置の規則（#121）', () => {
+  it('大きい歯車の横には歯車を置かず、理由を出す。見本は赤くする。斜めには置ける', () => {
+    const bp = blueprintFixture({ size: [3, 3, 1] }).place([0, 0, 0], 'create:large_cogwheel', { axis: 'z' }).toBlueprint()
+    const ctx = new FakeContext(bp)
+    ctx.brushState = state('create:cogwheel', { axis: 'z' })
+    const tool = new PlaceTool(ctx)
+    // 東の隣（軸に垂直）
+    const east = { pos: [1, 0, 0], empty: true } as PickTarget
+    tool.onHover(east)
+    expect(ctx.ghost).toEqual([1, 0, 0])
+    expect(ctx.ghostBlocked).toBe(true)
+    tool.onClick(east, { shift: false, alt: true })
+    expect(bp.get([1, 0, 0])).toBeNull()
+    expect(ctx.message).toContain('大きい歯車の横には歯車を置けません')
+    // 斜め
+    const diagonal = { pos: [1, 1, 0], empty: true } as PickTarget
+    tool.onHover(diagonal)
+    expect(ctx.ghostBlocked).toBe(false)
+    tool.onClick(diagonal, NO_SHIFT)
+    expect(bp.get([1, 1, 0])?.key).toBe('create:cogwheel[axis=z]')
   })
 })

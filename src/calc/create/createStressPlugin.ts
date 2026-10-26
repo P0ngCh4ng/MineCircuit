@@ -4,6 +4,7 @@ import type { Blueprint } from '../../domain/blueprint'
 import { AssumptionLog } from '../assumptionLog'
 import type {
   CalcContext,
+  CalcIssue,
   CalcModpack,
   CalcPlugin,
   CalcProbe,
@@ -14,7 +15,7 @@ import type {
 } from '../calcPlugin'
 import { resolved, type Provenance } from '../provenance'
 import { loadCreateConfig } from './createConfig'
-import { orientForPlacement } from './createPlacement'
+import { orientForPlacement, placementProblem } from './createPlacement'
 import { CreateValueResolver } from './createValueResolver'
 import {
   CREATE_STRESS_PLUGIN_ID,
@@ -51,6 +52,7 @@ export function createStressPlugin(): CalcPlugin {
     supports: (bp: Blueprint, _pack: CalcModpack | null) => bp.namespaces.has('create'),
     run: (bp: Blueprint, ctx: CalcContext) => runCreateStress(bp, ctx),
     orientForPlacement,
+    placementProblem,
   }
 }
 
@@ -75,11 +77,25 @@ export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<
 
   return {
     summary: summarize(evaluation, disableStress.source),
-    issues: evaluation.issues,
+    issues: [...evaluation.issues, ...placementIssues(bp)],
     assumptions: log.list(),
     probes: probes(graph, evaluation),
     rotations: rotations(graph, evaluation, values),
   }
+}
+
+/** 設置の規則に合わないブロック（ゲームでは外れて落ちる）。今は歯車だけ（#121） */
+function placementIssues(bp: Blueprint): CalcIssue[] {
+  const issues: CalcIssue[] = []
+  bp.regions.forEach((region) => {
+    const [ox, oy, oz] = region.offset
+    region.forEachBlock((x, y, z, state) => {
+      const pos: [number, number, number] = [x + ox, y + oy, z + oz]
+      const problem = placementProblem(bp, pos, state)
+      if (problem) issues.push({ pos, message: `この位置は設置の規則に合いません。${problem}` })
+    })
+  })
+  return issues
 }
 
 function summarize(ev: KineticEvaluation, settingSource: Provenance): CalcSummaryItem[] {
