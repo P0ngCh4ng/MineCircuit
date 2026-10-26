@@ -165,7 +165,7 @@ function onPointerLeave(): void {
 
 function onClick(e: MouseEvent): void {
   const target = pickAt(e)
-  if (target) tools.click(target, { shift: e.shiftKey })
+  if (target) tools.click(target, { shift: e.shiftKey, alt: e.altKey })
 }
 
 let resizeObserver: ResizeObserver | null = null

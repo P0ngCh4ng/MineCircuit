@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { blueprintContents, blueprintFixture, state } from '../../../tests/fixtures/blueprintFixture'
 import type { BlockState } from '../../domain/blockState'
 import type { Blueprint } from '../../domain/blueprint'
+import type { Direction } from '../../domain/direction'
+import { createBuiltinRegistry } from '../../calc/builtinPlugins'
 import { nbt } from '../../domain/nbt'
 import type { Vec3 } from '../../domain/vec3'
 import type { EditCommand } from '../../edit/editCommand'
@@ -50,7 +52,12 @@ class FakeContext implements EditToolContext {
   revealLayer(y: number): void {
     this.revealed.push(y)
   }
+  orient(bp: Blueprint, pos: Vec3, s: BlockState, from: Direction | null): BlockState {
+    return registry.orientForPlacement(bp, pos, s, from)
+  }
 }
+
+const registry = createBuiltinRegistry()
 
 const NO_SHIFT = { shift: false }
 const SHIFT = { shift: true }
@@ -197,5 +204,19 @@ describe('PickTool', () => {
     tool.onClick({ pos: [2, 0, 2], empty: true }, NO_SHIFT)
     expect(ctx.brushState?.key).toBe('create:shaft[axis=y]')
     expect(ctx.history.count).toBe(0)
+  })
+})
+
+describe('PlaceTool：隣とつながる向き（#119）', () => {
+  it('シャフトの端の面に置くと、置くブロックの欄の向きによらず同じ軸になる。Alt なら欄の向きのまま', () => {
+    const bp = blueprintFixture({ size: [3, 1, 1] }).place([0, 0, 0], 'create:shaft', { axis: 'x' }).toBlueprint()
+    const ctx = new FakeContext(bp)
+    ctx.brushState = state('create:shaft', { axis: 'y' })
+    const tool = new PlaceTool(ctx)
+    // [0,0,0] の東の面をクリックして [1,0,0] に置く
+    tool.onClick({ pos: [0, 0, 0], face: 'east', empty: false } as PickTarget, NO_SHIFT)
+    expect(bp.get([1, 0, 0])?.key).toBe('create:shaft[axis=x]')
+    tool.onClick({ pos: [1, 0, 0], face: 'east', empty: false } as PickTarget, { shift: false, alt: true })
+    expect(bp.get([2, 0, 0])?.key).toBe('create:shaft[axis=y]')
   })
 })

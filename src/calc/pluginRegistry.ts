@@ -1,6 +1,9 @@
 // 計算プラグインの一覧と、まとめて走らせる処理。
 
+import type { BlockState } from '../domain/blockState'
 import type { Blueprint } from '../domain/blueprint'
+import type { Direction } from '../domain/direction'
+import type { Vec3 } from '../domain/vec3'
 import type { CalcModpack, CalcPlugin, CalcResult } from './calcPlugin'
 import { portsFor, type VirtualPort } from './virtualPort'
 
@@ -22,6 +25,18 @@ export class PluginRegistry {
   }
 
   /** 登録した順 */
+  /**
+   * 置くときの向き。向きを決めるプラグインに順に聞き、最初に変えたものを返す。どれも変えなければ state のまま。
+   * 置く前の設計図には、まだそのプラグインのブロックがないことがあるので、supports は見ない
+   */
+  orientForPlacement(bp: Blueprint, pos: Vec3, state: BlockState, from: Direction | null): BlockState {
+    for (const p of this.plugins.values()) {
+      const oriented = p.orientForPlacement?.(bp, pos, state, from)
+      if (oriented) return oriented
+    }
+    return state
+  }
+
   all(): CalcPlugin[] {
     return [...this.plugins.values()]
   }

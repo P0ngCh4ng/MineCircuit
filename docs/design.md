@@ -510,6 +510,9 @@ interface CalcPlugin {
   readonly portKinds: PortKindDef[]            // 受け付ける仮の入出力の種類。画面の入力欄に使う
   supports(bp: Blueprint, pack: Modpack | null): boolean
   run(bp: Blueprint, ctx: CalcContext): Promise<CalcResult>
+  // 置くときの向き（任意）。隣とつながる向きに合わせた状態を返す。変えないなら null。
+  // from は優先する隣の向き（3D でクリックした面の側）。docs/ui.md「編集」
+  orientForPlacement?(bp: Blueprint, pos: Vec3, state: BlockState, from: Direction | null): BlockState | null
 }
 
 interface CalcContext {
