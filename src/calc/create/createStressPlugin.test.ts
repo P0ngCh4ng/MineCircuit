@@ -207,6 +207,16 @@ describe('Create の応力プラグイン', () => {
     expect(over.rotations?.find((r) => r.pos.join() === '1,0,0')).toMatchObject({ rpm: 16, overloaded: true })
   })
 
+  it('設置の規則に合わない歯車を、問題に出す', async () => {
+    const bp = blueprintFixture()
+      .place([0, 0, 0], 'create:large_cogwheel', { axis: 'y' })
+      .place([1, 0, 0], 'create:cogwheel', { axis: 'y' })
+      .toBlueprint()
+    const result = await runCreateStress(bp, { pack: null, ports: [] })
+    const placement = result.issues.filter((i) => i.message.startsWith('この位置は設置の規則に合いません'))
+    expect(placement.map((i) => i.pos)).toEqual([[0, 0, 0], [1, 0, 0]])
+  })
+
   it('Modpack の設定ファイルの値を使う', async () => {
     const pack = fakePack({ 'saves/World/serverconfig/create-server.toml': TOML })
     const result = await runCreateStress(pressLine(), { pack, ports: [] })

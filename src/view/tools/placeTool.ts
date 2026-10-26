@@ -1,4 +1,4 @@
-import { directionVector, oppositeDirection } from '../../domain/direction'
+import { directionVector, oppositeDirection, type Direction } from '../../domain/direction'
 import type { Vec3 } from '../../domain/vec3'
 import { placeBlock } from '../../edit/editCommand'
 import { isInside, outOfRangeMessage, type EditToolContext } from './editToolContext'
@@ -27,6 +27,11 @@ export function placeCell(target: PickTarget, mods: PickModifiers): PlaceCell {
   return { pos: [p[0] + d[0], p[1] + d[1], p[2] + d[2]], replace: false }
 }
 
+/** 置く先から見て、優先する隣の向き。3D で面をクリックしたときは、クリックしたブロックの側 */
+function fromOf(target: PickTarget, cell: PlaceCell): Direction | null {
+  return !cell.replace && target.face !== undefined ? oppositeDirection(target.face) : null
+}
+
 /** 置くツール（B）。クリックした所に置くブロックを置く。範囲の外には置かせず、理由を出す */
 export class PlaceTool implements Tool {
   readonly id = 'place' as const
@@ -36,9 +41,14 @@ export class PlaceTool implements Tool {
   onHover(target: PickTarget | null): void {
     const bp = this.ctx.blueprint()
     const cell = target ? placeCell(target, { shift: false }) : null
-    // 見本は、置けるマスにだけ出す
-    const show = bp && cell && this.ctx.brush() && isInside(bp, cell.pos) && (cell.replace || bp.get(cell.pos) === null)
-    this.ctx.setGhost(show ? cell.pos : null)
+    const brush = this.ctx.brush()
+    // 見本は、空いているマスにだけ出す。設置の規則で置けないなら赤くする（#121）
+    if (!target || !bp || !cell || !brush || !isInside(bp, cell.pos) || (!cell.replace && bp.get(cell.pos) !== null)) {
+      this.ctx.setGhost(null)
+      return
+    }
+    const state = this.ctx.orient(bp, cell.pos, brush, fromOf(target, cell))
+    this.ctx.setGhost(cell.pos, this.ctx.placementProblem(bp, cell.pos, state) !== null)
   }
 
   onClick(target: PickTarget, mods: PickModifiers): void {
@@ -60,8 +70,13 @@ export class PlaceTool implements Tool {
     }
     this.ctx.notify(null)
     // 隣とつながる向きに合わせる（#119）。3D で面をクリックしたときは、その面のブロックの側を優先する。Alt なら合わせない
-    const from = !replace && target.face !== undefined ? oppositeDirection(target.face) : null
-    const placed = mods.alt ? state : this.ctx.orient(bp, pos, state, from)
+    const placed = mods.alt ? state : this.ctx.orient(bp, pos, state, fromOf(target, { pos, replace }))
+    // ゲームで置けない所には置かない（#121）
+    const problem = this.ctx.placementProblem(bp, pos, placed)
+    if (problem) {
+      this.ctx.notify(problem)
+      return
+    }
     // 同じブロックがすでにあるときは変化なし（null）なので、何もしない
     if (this.ctx.apply(placeBlock(bp, pos, placed, replace))) this.ctx.revealLayer(pos[1])
   }

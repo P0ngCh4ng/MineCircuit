@@ -1,7 +1,6 @@
 // 編集のツール（置く・消す・スポイト）を使えるようにする（#18）。docs/ui.md「編集」。
 // ツールはストアと DocumentSession を EditToolContext としてまとめて受け取る。
 
-import { createBuiltinRegistry } from '../../calc/builtinPlugins'
 import { eraseBlock } from '../../edit/editCommand'
 import { useDocumentSession } from '../document/documentSession'
 import { layerVisibility } from '../layers/layerDisplay'
@@ -13,9 +12,7 @@ import type { EditToolContext } from '../tools/editToolContext'
 import { EraseTool } from '../tools/eraseTool'
 import { PickTool } from '../tools/pickTool'
 import { PlaceTool } from '../tools/placeTool'
-
-/** 置くときの向きを決める計算プラグイン（#119）。計算そのものは Worker で行うので、ここでは向きだけに使う */
-const placementRegistry = createBuiltinRegistry()
+import { orientForPlacement, placementProblem } from './placementRules'
 
 /** 画面のストアと DocumentSession から EditToolContext を作る。部品の setup の中で呼ぶ */
 export function useEditToolContext(): EditToolContext {
@@ -39,8 +36,9 @@ export function useEditToolContext(): EditToolContext {
     setBrush: (state) => brush.setFromBlock(state),
     notify: (message) => brush.setMessage(message),
     setHovered: (pos) => tools.setHovered(pos),
-    setGhost: (pos) => brush.setGhost(pos),
-    orient: (bp, pos, state, from) => placementRegistry.orientForPlacement(bp, pos, state, from),
+    setGhost: (pos, blocked) => brush.setGhost(pos, blocked),
+    orient: orientForPlacement,
+    placementProblem,
     revealLayer(y) {
       if (layerVisibility(view.layerDisplay, y) === 'solid') return
       view.setLayerHidden(y, false)

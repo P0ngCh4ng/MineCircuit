@@ -37,6 +37,15 @@ export class PluginRegistry {
     return state
   }
 
+  /** その場所に置けるか。置けないと答えたプラグインの理由。どれも答えなければ null */
+  placementProblem(bp: Blueprint, pos: Vec3, state: BlockState): string | null {
+    for (const p of this.plugins.values()) {
+      const problem = p.placementProblem?.(bp, pos, state) ?? null
+      if (problem) return problem
+    }
+    return null
+  }
+
   all(): CalcPlugin[] {
     return [...this.plugins.values()]
   }

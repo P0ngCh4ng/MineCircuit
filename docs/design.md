@@ -513,6 +513,9 @@ interface CalcPlugin {
   // 置くときの向き（任意）。隣とつながる向きに合わせた状態を返す。変えないなら null。
   // from は優先する隣の向き（3D でクリックした面の側）。docs/ui.md「編集」
   orientForPlacement?(bp: Blueprint, pos: Vec3, state: BlockState, from: Direction | null): BlockState | null
+  // その場所に置けるか（任意）。ゲームで置けない（置いても外れる）なら理由、置けるなら null。
+  // 置く・回す前に画面が聞く。置く向きを自動で選ぶときは、置けない向きを候補から外す。計算では、規則に合わないブロックを issues に出す
+  placementProblem?(bp: Blueprint, pos: Vec3, state: BlockState): string | null
 }
 
 interface CalcContext {

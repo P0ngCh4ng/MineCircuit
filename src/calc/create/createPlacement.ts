@@ -3,6 +3,12 @@
 // - 小さい歯車どうしは、同じ軸で、軸に垂直な向きに隣り合えば噛み合う
 // 向きの候補は、ブロック状態の axis（x・y・z）か facing（6方向）を変えたもの。いちばん多くつながる候補を選ぶ。
 // from（3D でクリックした面の側）でつながる候補を優先する。つながる相手がなければ変えない。
+// 置けない向き（placementProblem）は候補から外す。
+//
+// 置けるか（placementProblem、#121）：Create の歯車の規則（CogWheelBlock.isValidCogwheelPosition）。
+// 軸に垂直な4方向の隣を調べ、隣が大きい歯車なら置けない。自分が大きい歯車で、隣が小さい歯車でも置けない。
+// ただし、隣のブロックの axis がその方向の軸なら問題ない。軸の両端の隣は調べない。ケース入りの歯車も同じ。
+// ゲームでは「その場所に残れるか」の判定なので、あとから隣に置かれても外れて落ちる。
 
 import type { Blueprint } from '../../domain/blueprint'
 import { BlockState } from '../../domain/blockState'
@@ -26,6 +32,40 @@ function orientations(state: BlockState): BlockState[] {
   const key = name
   const current = props[key]!
   return [current, ...values.filter((v) => v !== current)].map((v) => new BlockState(state.id, { ...props, [key]: v }))
+}
+
+type CogSize = 'small' | 'large'
+
+/** 歯車の大きさ（ケース入りを含む）。歯車でなければ null */
+function cogSize(state: BlockState): CogSize | null {
+  if (state.id.namespace !== 'create') return null
+  const path = state.id.path
+  if (path === 'large_cogwheel' || path.endsWith('_encased_large_cogwheel')) return 'large'
+  if (path === 'cogwheel' || path.endsWith('_encased_cogwheel')) return 'small'
+  return null
+}
+
+/** 隣に大きい歯車があって置けないとき */
+export const NEXT_TO_LARGE_COG = '大きい歯車の横には歯車を置けません（ゲームでは外れて落ちます）。噛み合わせるときは斜めに置きます。'
+/** 大きい歯車を、小さい歯車の横に置こうとしたとき */
+export const LARGE_COG_NEXT_TO_SMALL = '大きい歯車は小さい歯車の横に置けません（ゲームでは外れて落ちます）。噛み合わせるときは斜めに置きます。'
+
+/** pos に state を置けるか。置けないなら理由、置けるなら null */
+export function placementProblem(bp: Blueprint, pos: Vec3, state: BlockState): string | null {
+  const size = cogSize(state)
+  const axis = state.properties.axis
+  if (!size || (axis !== 'x' && axis !== 'y' && axis !== 'z')) return null
+  for (const d of DIRECTIONS) {
+    const dAxis = directionAxis(d)
+    if (dAxis === axis) continue
+    const v = directionVector(d)
+    const n = bp.get([pos[0] + v[0], pos[1] + v[1], pos[2] + v[2]])
+    if (!n || n.properties.axis === dAxis) continue
+    const other = cogSize(n)
+    if (other === 'large') return NEXT_TO_LARGE_COG
+    if (size === 'large' && other === 'small') return LARGE_COG_NEXT_TO_SMALL
+  }
+  return null
 }
 
 function shapeOf(state: BlockState): KineticShape | null {
@@ -61,7 +101,7 @@ export function orientForPlacement(bp: Blueprint, pos: Vec3, state: BlockState, 
   let bestScore = 0
   for (const c of candidates) {
     const shape = shapeOf(c)
-    if (!shape) continue
+    if (!shape || placementProblem(bp, pos, c) !== null) continue
     let score = 0
     for (const n of neighbors) {
       const link = linkStrength(shape, n.d, n.shape)

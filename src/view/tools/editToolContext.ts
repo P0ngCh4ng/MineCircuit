@@ -22,7 +22,7 @@ export interface EditToolContext {
   /** マウスの下のブロックの枠 */
   setHovered(pos: Vec3 | null): void
   /** 置くブロックの見本を出すマス。null で消す */
-  setGhost(pos: Vec3 | null): void
+  setGhost(pos: Vec3 | null, blocked?: boolean): void
   /** 段 y が今の表示で隠れていれば、その段へ移って見えるようにする */
   revealLayer(y: number): void
   /**
@@ -30,6 +30,8 @@ export interface EditToolContext {
    * from は優先する隣の向き（3D でクリックした面の側）
    */
   orient(bp: Blueprint, pos: Vec3, state: BlockState, from: Direction | null): BlockState
+  /** pos に state を置けるか（#121）。ゲームで置けないなら理由、置けるなら null */
+  placementProblem(bp: Blueprint, pos: Vec3, state: BlockState): string | null
 }
 
 /** 範囲の外を指したときの知らせ */

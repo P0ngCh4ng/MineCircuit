@@ -25,6 +25,8 @@ export const useBrushStore = defineStore('brush', () => {
   const message = ref<string | null>(null)
   /** 置くツールで、置くブロックの見本を出すマス（3D表示）。出さなければ null */
   const ghostPos = shallowRef<Vec3 | null>(null)
+  /** 見本のマスに、設置の規則で置けないか（#121） */
+  const ghostBlocked = ref(false)
 
   /** 置くブロックの状態。画面ではこれを読む */
   const state = computed<BlockState | null>(() => {
@@ -60,9 +62,10 @@ export const useBrushStore = defineStore('brush', () => {
     message.value = next
   }
 
-  /** 置くブロックの見本を出すマスを変える（置くツールから呼ぶ） */
-  function setGhost(pos: Vec3 | null): void {
+  /** 置くブロックの見本を出すマスを変える（置くツールから呼ぶ）。blocked なら置けない所（赤く出す。#121） */
+  function setGhost(pos: Vec3 | null, blocked = false): void {
     ghostPos.value = pos
+    ghostBlocked.value = pos !== null && blocked
   }
 
   // Modpack を読み終えた・外したら、取りうる値を読み直す
@@ -82,5 +85,5 @@ export const useBrushStore = defineStore('brush', () => {
     },
   )
 
-  return { state, message, ghostPos, setFromBlock, rotate, setMessage, setGhost }
+  return { state, message, ghostPos, ghostBlocked, setFromBlock, rotate, setMessage, setGhost }
 })

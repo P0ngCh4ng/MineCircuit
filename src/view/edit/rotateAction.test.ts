@@ -71,6 +71,24 @@ describe('R / Shift+R のキー', () => {
     expect(bp?.get([0, 0, 0])?.properties.axis).toBe('x')
   })
 
+  it('回した向きがゲームで置けない向きなら、回さずに理由を出す（#121）', () => {
+    const { session, tools, brush } = mountApp()
+    const bp = session.current.value!.blueprint
+    // [0,0,0] の大きい歯車（axis=x）の東に小さい歯車（axis=y）。大きい歯車の軸の向きの隣は調べないので、今は置ける
+    session.apply({
+      label: '用意',
+      changes: [
+        { pos: [0, 0, 0], before: { state: bp.get([0, 0, 0]), blockEntity: null }, after: { state: state('create:large_cogwheel', { axis: 'x' }), blockEntity: null } },
+        { pos: [1, 0, 0], before: { state: bp.get([1, 0, 0]), blockEntity: null }, after: { state: state('create:cogwheel', { axis: 'y' }), blockEntity: null } },
+      ],
+    })
+    tools.setSelected([0, 0, 0])
+    // 水平に回すと axis=z になり、東の小さい歯車が軸に垂直な横に来る
+    press('r')
+    expect(bp.get([0, 0, 0])?.properties.axis).toBe('x')
+    expect(brush.message).toContain('大きい歯車は小さい歯車の横に置けません')
+  })
+
   it('選択中のブロックが回せなければ知らせ、選択を変えたら消す', async () => {
     const { wrapper, session, tools, brush } = mountApp()
     tools.setSelected([1, 0, 0])
