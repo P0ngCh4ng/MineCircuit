@@ -1,5 +1,5 @@
 // 置くブロックの棚の中身（docs/ui.md「編集」）。画面に依存しない計算だけを置く。
-// - タブ：「この設計図」と、Modpack の Mod（namespace）ごと。設計図で使っている Mod を先に、残りを名前順
+// - 選択肢（「Mod」の欄で選ぶ）：「この設計図」と、Modpack の Mod（namespace）ごと。設計図で使っている Mod を先に、残りを名前順
 // - 中身：この設計図ならブロック状態そのもの、Mod ならブロック状態の定義の最初の組み合わせ。表示名の順
 // - 絞り込み：日本語名・英語名・ID に、空白で区切った言葉がすべて入っているもの
 
@@ -8,7 +8,7 @@ import { ResourceLocation } from '../../domain/resourceLocation'
 import { initialPropertiesFor, type BlockStateDefinitionSource } from '../../edit/orientationOptions'
 import type { ModInfo } from '../../io/modpack/modMetadata'
 
-/** 「この設計図」のタブの id */
+/** 「この設計図」の選択肢の id */
 export const BLUEPRINT_TAB = 'blueprint'
 
 export interface ShelfTab {
@@ -37,13 +37,13 @@ function namespaceOf(id: string): string {
   return colon < 0 ? 'minecraft' : id.slice(0, colon)
 }
 
-/** Mod のタブの名前。namespace と同じ modId の Mod の表示名。なければ namespace */
+/** Mod の選択肢の名前。namespace と同じ modId の Mod の表示名。なければ namespace */
 export function modLabel(pack: ShelfModpack, ns: string): string {
   if (ns === 'minecraft') return 'Minecraft'
   return pack.mods.find((m) => m.modId === ns)?.name ?? ns
 }
 
-/** タブの一覧。Modpack がなければ「この設計図」だけ */
+/** 選択肢の一覧。Modpack がなければ「この設計図」だけ */
 export function shelfTabs(pack: ShelfModpack | null, blueprintNamespaces: ReadonlySet<string>): ShelfTab[] {
   const tabs: ShelfTab[] = [{ id: BLUEPRINT_TAB, label: 'この設計図' }]
   if (!pack) return tabs
@@ -69,8 +69,8 @@ export function matchesFilter(item: ShelfItem, filter: string): boolean {
 }
 
 /**
- * タブの中身（絞り込んだあと）。blueprintStates は設計図にあるブロック状態。
- * Mod のタブは pack がなければ空
+ * 選択肢の中身（絞り込んだあと）。blueprintStates は設計図にあるブロック状態。
+ * Mod は pack がなければ空
  */
 export function shelfItems(
   tabId: string,
