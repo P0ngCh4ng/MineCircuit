@@ -88,6 +88,7 @@ function draw(): void {
     fontFamily: getComputedStyle(el).fontFamily || 'sans-serif',
     highlighted: highlight.value,
     calcMarks: { network: probe.networkPositions, issues: calc.issuePositions },
+    rotations: viewMode.showRotation ? calc.rotations : null,
     cellPainter: cellPainter.value,
   })
   // 計測とつながり（#16）
@@ -112,9 +113,9 @@ watch(
   { flush: 'post' },
 )
 
-// 計算結果の印（ネットワークの強調と問題の位置。#31）が変わったら描き直す
+// 計算結果の印（ネットワークの強調と問題の位置。#31）と回転の表示（#117）が変わったら描き直す
 watch(
-  () => [probe.networkPositions, calc.issuePositions],
+  () => [probe.networkPositions, calc.issuePositions, viewMode.showRotation, calc.rotations],
   () => draw(),
   { flush: 'post' },
 )

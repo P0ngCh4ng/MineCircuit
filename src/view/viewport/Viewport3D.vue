@@ -16,6 +16,7 @@ import { useViewStore } from '../stores/viewStore'
 import { blockColor } from './blockColor'
 import { BlueprintScene } from './blueprintScene'
 import { CalcOverlay3D } from './calcOverlay3D'
+import { RotationOverlay3D } from './rotationOverlay3D'
 import { PortOverlay3D } from './portOverlay3D'
 import { createViewportRenderer, type SceneRenderer, type SceneRendererFactory } from './viewportRenderer'
 import { currentThemeName, viewportTheme, watchThemeName } from './viewportTheme'
@@ -58,6 +59,9 @@ const scene = new BlueprintScene()
 // 計算結果の印（ネットワークの強調と問題の位置。#31）
 const calcOverlay = new CalcOverlay3D()
 scene.scene.add(calcOverlay.group)
+// 回転の表示（#117）
+const rotationOverlay = new RotationOverlay3D()
+scene.scene.add(rotationOverlay.group)
 // 仮の入出力の印（#70）
 const portOverlay = new PortOverlay3D()
 scene.scene.add(portOverlay.group)
@@ -216,6 +220,15 @@ onMounted(() => {
       },
       { immediate: true },
     ),
+    // 回転の表示（#117）。「回転」を切ったら出さない
+    watch(
+      () => [view.showRotation, calc.rotations, view.layerDisplay] as const,
+      ([show, rotations, display]) => {
+        rotationOverlay.update(show ? rotations : [], display)
+        render()
+      },
+      { immediate: true },
+    ),
     // 仮の入出力の印（#70）
     watch(
       () => [ports.ports, ports.selectedId, view.layerDisplay] as const,
@@ -246,11 +259,12 @@ onBeforeUnmount(() => {
   renderer = null
   scene.dispose()
   calcOverlay.dispose()
+  rotationOverlay.dispose()
   portOverlay.dispose()
   tools.hover(null)
 })
 
-defineExpose({ scene, calcOverlay, portOverlay })
+defineExpose({ scene, calcOverlay, rotationOverlay, portOverlay })
 </script>
 
 <template>

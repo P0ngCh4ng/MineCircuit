@@ -1,10 +1,12 @@
 // 2D表示の描画。今の段をマス目で canvas に描く。docs/ui.md「2D表示と計測」。
 // 1つ下の段を薄く出し、マスが大きいときはブロックの略称を出す。上が北（−Z）。
 
+import type { CalcRotation } from '../../calc/calcPlugin'
 import type { Blueprint } from '../../domain/blueprint'
 import type { Vec3 } from '../../domain/vec3'
 import type { GridLayout2D } from '../tools/picker'
 import { blockColor, blockColorCss } from './blockColor'
+import { ROTATION_COLORS, rotationColorKey } from './rotationColors'
 import type { CellPainter2D, TextureCanvasLike } from './textureCellPainter2D'
 import { axisLabelStep, blockAbbreviation, LABEL_MIN_CELL_SIZE, layerCells, type LayerCell2D } from './layerGrid2D'
 
@@ -73,6 +75,8 @@ export interface LayerScene2D {
   readonly highlighted?: readonly Vec3[] | null
   /** 計算結果の印（#31）。今の段にあるものだけ描く。なければ省略 */
   readonly calcMarks?: CalcMarks2D
+  /** 回転の表示（#117）。今の段にあるものを速さの色で塗り、回転数を書く。null か省略で出さない */
+  readonly rotations?: readonly CalcRotation[] | null
   /**
    * テクスチャで描く（#85）。描けないブロックと、null か省略のときは色で塗る
    */
@@ -95,6 +99,18 @@ export interface CalcMarks2D {
 
 /** ネットワークの印の色（3D表示の calcOverlay3D と同じ） */
 export const NETWORK_MARK_CSS = '#14a3c7'
+
+/** 回転数を書くマスの大きさの下限（画素） */
+export const ROTATION_LABEL_MIN_CELL_SIZE = 22
+
+/**
+ * 2D のマスに書く回転数。上下の軸（y）なら上から見た向き（正は ↺）を付け、横の軸なら符号を付ける
+ */
+export function rotationLabel(r: CalcRotation): string {
+  const speed = Math.round(Math.abs(r.rpm) * 10) / 10
+  if (r.axis === 'y') return `${r.rpm > 0 ? '↺' : '↻'}${speed}`
+  return `${r.rpm > 0 ? '+' : '−'}${speed}`
+}
 /** 問題の印の色 */
 export const ISSUE_MARK_CSS = '#e0402a'
 
@@ -253,6 +269,36 @@ export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, sc
   ctx.textBaseline = 'top'
   ctx.fillText('z', ox - 34, oy + 2)
   ctx.fillText('↓', ox - 34, oy + 16)
+
+  // 回転の表示：速さの段階の色で塗り、マスが大きければ回転数を書く。上下の軸は、上から見た向き（↺ ↻）も
+  if (scene.rotations) {
+    ctx.save()
+    for (const r of scene.rotations) {
+      if (r.pos[1] !== layer) continue
+      const px = ox + r.pos[0] * cs
+      const py = oy + r.pos[2] * cs
+      const color = ROTATION_COLORS[rotationColorKey(r)]
+      ctx.globalAlpha = 0.4
+      ctx.fillStyle = color
+      ctx.fillRect(px, py, cs, cs)
+      ctx.globalAlpha = 1
+      ctx.strokeStyle = color
+      ctx.lineWidth = 2
+      ctx.strokeRect(px + 1, py + 1, cs - 2, cs - 2)
+      if (cs >= ROTATION_LABEL_MIN_CELL_SIZE && r.rpm !== 0) {
+        ctx.font = `600 ${Math.max(9, Math.floor(cs * 0.3))}px ${scene.fontFamily}`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillStyle = '#ffffff'
+        ctx.strokeStyle = 'rgb(0 0 0 / 70%)'
+        ctx.lineWidth = 3
+        const text = rotationLabel(r)
+        ctx.strokeText(text, px + cs / 2, py + cs / 2)
+        ctx.fillText(text, px + cs / 2, py + cs / 2)
+      }
+    }
+    ctx.restore()
+  }
 
   // 計算結果の印：ネットワークは青緑、問題は赤。半透明で塗って枠を引く
   const calcMark = (positions: readonly Vec3[] | null | undefined, color: string, lineWidth: number): void => {
