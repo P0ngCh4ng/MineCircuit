@@ -1,4 +1,4 @@
-import { directionVector } from '../../domain/direction'
+import { directionVector, oppositeDirection } from '../../domain/direction'
 import type { Vec3 } from '../../domain/vec3'
 import { placeBlock } from '../../edit/editCommand'
 import { isInside, outOfRangeMessage, type EditToolContext } from './editToolContext'
@@ -59,8 +59,11 @@ export class PlaceTool implements Tool {
       return
     }
     this.ctx.notify(null)
+    // 隣とつながる向きに合わせる（#119）。3D で面をクリックしたときは、その面のブロックの側を優先する。Alt なら合わせない
+    const from = !replace && target.face !== undefined ? oppositeDirection(target.face) : null
+    const placed = mods.alt ? state : this.ctx.orient(bp, pos, state, from)
     // 同じブロックがすでにあるときは変化なし（null）なので、何もしない
-    if (this.ctx.apply(placeBlock(bp, pos, state, replace))) this.ctx.revealLayer(pos[1])
+    if (this.ctx.apply(placeBlock(bp, pos, placed, replace))) this.ctx.revealLayer(pos[1])
   }
 
   deactivate(): void {

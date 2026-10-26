@@ -2,7 +2,9 @@
 // Mod ごとの計算（Create の応力など）を同じ形で足す。プラグインは Web Worker の中で動くので、
 // 結果（CalcResult）は structured clone で送れる素のデータだけで作る（クラスや関数を入れない）。
 
+import type { BlockState } from '../domain/blockState'
 import type { Blueprint } from '../domain/blueprint'
+import type { Direction } from '../domain/direction'
 import type { Vec3 } from '../domain/vec3'
 import type { PortKindDef, VirtualPort } from './virtualPort'
 import type { Resolved } from './provenance'
@@ -96,6 +98,11 @@ export interface CalcPlugin {
   supports(bp: Blueprint, pack: CalcModpack | null): boolean
   /** 計算する。設計図は読むだけで、書き換えない（設計のルール 6） */
   run(bp: Blueprint, ctx: CalcContext): Promise<CalcResult>
+  /**
+   * 置くときの向き（任意。docs/ui.md「編集」）。pos に state を置くとき、隣とつながる向きに合わせた状態を返す。
+   * 変えないなら null。from は優先する隣の向き（3D でクリックした面の側）。設計図は読むだけ
+   */
+  orientForPlacement?(bp: Blueprint, pos: Vec3, state: BlockState, from: Direction | null): BlockState | null
 }
 
 /** 空の結果 */

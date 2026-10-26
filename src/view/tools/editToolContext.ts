@@ -1,5 +1,6 @@
 import type { BlockState } from '../../domain/blockState'
 import type { Blueprint } from '../../domain/blueprint'
+import type { Direction } from '../../domain/direction'
 import type { Vec3 } from '../../domain/vec3'
 import type { EditCommand } from '../../edit/editCommand'
 
@@ -24,6 +25,11 @@ export interface EditToolContext {
   setGhost(pos: Vec3 | null): void
   /** 段 y が今の表示で隠れていれば、その段へ移って見えるようにする */
   revealLayer(y: number): void
+  /**
+   * 置くときの向き（#119）。pos に state を置くとき、隣とつながる向きに合わせた状態。変えないなら state のまま。
+   * from は優先する隣の向き（3D でクリックした面の側）
+   */
+  orient(bp: Blueprint, pos: Vec3, state: BlockState, from: Direction | null): BlockState
 }
 
 /** 範囲の外を指したときの知らせ */

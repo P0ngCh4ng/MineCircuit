@@ -21,6 +21,8 @@ export interface PickTarget {
 /** クリックしたときに押していた修飾キー */
 export interface PickModifiers {
   readonly shift: boolean
+  /** Alt。置くツールでは、隣に合わせて向きを変えない（#119） */
+  readonly alt?: boolean
 }
 
 /**

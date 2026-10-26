@@ -101,7 +101,7 @@ function onPointerUp(e: PointerEvent): void {
   if (!start || e.button !== 0) return
   if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > CLICK_TOLERANCE) return
   const target = pickAt(e)
-  if (target) tools.click(target, { shift: e.shiftKey })
+  if (target) tools.click(target, { shift: e.shiftKey, alt: e.altKey })
   // クリックで設計図が変わることがあるので、マウスの下を調べ直す
   tools.hover(pickAt(e))
 }
