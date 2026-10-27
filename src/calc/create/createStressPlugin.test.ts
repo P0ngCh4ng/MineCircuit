@@ -149,7 +149,7 @@ describe('Create の応力プラグイン', () => {
     const plugin = createStressPlugin()
     expect(plugin.supports(pressLine(), null)).toBe(true)
     expect(plugin.supports(blueprintFixture().place([0, 0, 0], 'minecraft:stone').toBlueprint(), null)).toBe(false)
-    expect(plugin.portKinds.map((k) => k.kind)).toEqual(['rotation-source', 'rotation-load'])
+    expect(plugin.portKinds.map((k) => k.kind)).toEqual(['rotation-source', 'rotation-load', 'item-input'])
   })
 
   it('Modpack がなくても内蔵の初期値で計算し、そのことを仮定に載せる', async () => {

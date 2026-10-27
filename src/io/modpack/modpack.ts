@@ -7,6 +7,7 @@ import type { AssetReader } from '../assets/assetTypes'
 import { ModpackAssetReader, type AssetLocation } from '../assets/modpackAssetReader'
 import { FileNotFoundError, normalizePath, type FileSource } from '../fileSource'
 import { LANG_CODES, type JarSummary, type JsonValue, type LangCode, type LangTable } from './jarScanner'
+import { flattenItemTags, mergeItemTagFiles, type ItemTagFiles } from './itemTags'
 import { kubeJsBlockAssets, type KubeJsStartup } from './kubejs'
 import type { KubeJsRecipes } from './kubejsRecipes'
 import type { LangPack } from './langPacks'
@@ -53,6 +54,7 @@ export class Modpack {
   /** 見た目の資産を読む場所（優先度の低い順） */
   private readonly assetLocations: readonly AssetLocation[]
   private assetReader: ModpackAssetReader | null = null
+  private itemIdCache: string[] | null = null
   private readonly recipes: RecipeBook
 
   /**
@@ -69,6 +71,7 @@ export class Modpack {
    * machines は Custom Machinery の機械の ID → 見た目のブロック（customMachinery.ts）。
    * kubejsRecipes は kubejs/data/ のレシピとスクリプトの有無（kubejsRecipes.ts）。jar のレシピより優先する。
    * Minecraft 本体の jar のレシピは使わない。
+   * アイテムのタグは、Minecraft 本体の jar → jar（名前順）→ kubejs/data/ の順にまとめ、入れ子のタグをたどって平らにする。
    */
   constructor(
     summaries: readonly JarSummary[],
@@ -79,7 +82,7 @@ export class Modpack {
     vanilla: VanillaLoadResult | null = null,
     kubejs: Pick<KubeJsStartup, 'namespaces' | 'blocks'> | null = null,
     machines: Readonly<Record<string, string>> = {},
-    kubejsRecipes: Pick<KubeJsRecipes, 'recipes' | 'scriptsChangeRecipes'> | null = null,
+    kubejsRecipes: Pick<KubeJsRecipes, 'recipes' | 'scriptsChangeRecipes' | 'itemTags'> | null = null,
   ) {
     const mods: ModInfo[] = []
     const namespaces = new Set<string>()
@@ -125,6 +128,12 @@ export class Modpack {
     this.recipes = {
       recipes: mergeRecipes(...summaries.map((s) => s.recipes), kubejsRecipes?.recipes ?? []),
       scriptsChangeRecipes: kubejsRecipes?.scriptsChangeRecipes ?? false,
+      itemTags: flattenItemTags(
+        [base?.summary.itemTags, ...summaries.map((s) => s.itemTags), kubejsRecipes?.itemTags].reduce<ItemTagFiles>(
+          (all, tags) => (tags ? mergeItemTagFiles(all, tags) : all),
+          {},
+        ),
+      ),
     }
     this.assetLocations = [
       ...(base ? [{ kind: 'zip', path: base.jarPath, assets: base.summary.assets, source: base.source } as const] : []),
@@ -134,7 +143,7 @@ export class Modpack {
     ]
   }
 
-  /** Create の処理のレシピ（jar と kubejs/data/ のもの）と、スクリプトがレシピを変えているか */
+  /** Create の処理のレシピ（jar と kubejs/data/ のもの）、アイテムのタグと、スクリプトがレシピを変えているか */
   recipeBook(): Promise<RecipeBook> {
     return Promise.resolve(this.recipes)
   }
@@ -196,6 +205,24 @@ export class Modpack {
    */
   blockIds(): string[] {
     return [...this.blockStates.keys()].sort()
+  }
+
+  /**
+   * 翻訳にあるアイテムとブロックの ID（`namespace:path`、名前順）。仮の入出力でアイテムを選ぶ候補に使う（#127）。
+   * 翻訳のキー（`item.<ns>.<path>`、`block.<ns>.<path>`）から作るので、名前のないものは入らない
+   */
+  itemIds(): string[] {
+    if (!this.itemIdCache) {
+      const ids = new Set<string>()
+      for (const code of LANG_CODES) {
+        for (const key of Object.keys(this.lang[code])) {
+          const m = /^(?:item|block)\.([^.]+)\.([^.]+)$/.exec(key)
+          if (m) ids.add(`${m[1]}:${m[2]}`)
+        }
+      }
+      this.itemIdCache = [...ids].sort()
+    }
+    return this.itemIdCache
   }
 
   /**

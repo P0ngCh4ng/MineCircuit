@@ -26,6 +26,7 @@ const recipe = (id: string, type: ProcessingRecipe['type'], items: string[], dur
   items,
   tags: [],
   duration,
+  results: [],
 })
 
 const BOOK: RecipeBook = {
@@ -36,6 +37,7 @@ const BOOK: RecipeBook = {
     recipe('create:mixing/andesite_alloy', 'mixing', ['minecraft:andesite'], 0),
   ],
   scriptsChangeRecipes: false,
+  itemTags: {},
 }
 
 /** 1.18 の形のアイテム（{id, Count}） */

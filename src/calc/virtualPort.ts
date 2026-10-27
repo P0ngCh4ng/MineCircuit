@@ -18,6 +18,8 @@ export interface VirtualPort {
   readonly kind: string
   /** { rpm: 256, capacity: 4096 } など */
   readonly params: Readonly<Record<string, number>>
+  /** { item: 'minecraft:wheat' } など。アイテムを選ぶ種類だけ（#127）。まだ選んでいない欄は入れない */
+  readonly items?: Readonly<Record<string, string>>
   /** 「外の水車列」などのメモ */
   readonly label?: string
 }
@@ -38,6 +40,14 @@ export interface PortParamDef {
   readonly optional?: boolean
 }
 
+/** 仮の入出力のアイテムの欄1つ分の定義（#127） */
+export interface PortItemParamDef {
+  /** items のキー（'item'） */
+  readonly key: string
+  /** 画面の名前（「アイテム」） */
+  readonly label: string
+}
+
 /** プラグインが受け付ける仮の入出力の種類 */
 export interface PortKindDef {
   /** VirtualPort.kind の値（'rotation-source'） */
@@ -45,6 +55,8 @@ export interface PortKindDef {
   /** 画面の名前（「回転の供給」） */
   readonly label: string
   readonly params: readonly PortParamDef[]
+  /** アイテムを選ぶ欄。なければ省略 */
+  readonly itemParams?: readonly PortItemParamDef[]
   /** 画面に添える説明 */
   readonly description?: string
 }

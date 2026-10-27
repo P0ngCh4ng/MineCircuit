@@ -14,16 +14,18 @@ import { useToolStore } from '../stores/toolStore'
 import { PortTool } from '../tools/portTool'
 import type { GridLayout2D } from '../tools/picker'
 import { portMarkRect } from '../viewport/portOverlay2D'
-import { PORT_LOAD_COLOR, PORT_SOURCE_COLOR, PortOverlay3D, portColor } from '../viewport/portOverlay3D'
+import { PORT_ITEM_COLOR, PORT_LOAD_COLOR, PORT_SOURCE_COLOR, PortOverlay3D, portColor } from '../viewport/portOverlay3D'
 import PortPanel from './PortPanel.vue'
 import {
   createPort,
   defaultPortFace,
   defaultPortParams,
+  itemCandidates,
   parsePortNumber,
   portAt,
   portKindOptions,
   withPortFace,
+  withPortItem,
   withPortLabel,
   withPortParam,
 } from './portModel'
@@ -54,7 +56,7 @@ function port(over: Partial<VirtualPort> = {}): VirtualPort {
 describe('portModel', () => {
   it('プラグインの portKinds から種類を並べる', () => {
     const options = portKindOptions(createBuiltinRegistry().all())
-    expect(options.map((o) => `${o.pluginId}/${o.def.kind}`)).toEqual(['create-stress/rotation-source', 'create-stress/rotation-load'])
+    expect(options.map((o) => `${o.pluginId}/${o.def.kind}`)).toEqual(['create-stress/rotation-source', 'create-stress/rotation-load', 'create-stress/item-input'])
   })
 
   it('初期値は、省略できない値と、省略できる値の最初の1つだけ', () => {
@@ -250,6 +252,24 @@ describe('PortPanel', () => {
     expect(ports.ports).toEqual([])
   })
 
+  it('物の入口のアイテムは、打っている途中で元に戻らず、欄を離れると入る（#127）', async () => {
+    const { wrapper, ports } = mountPanel()
+    ports.setPlaceKey('create-stress/item-input')
+    ports.place([0, 0, 0], 'up')
+    await flushPromises()
+    const input = wrapper.find('[data-port] input[data-item="item"]')
+    const el = input.element as HTMLInputElement
+    el.value = 'whe'
+    await input.trigger('input')
+    expect(el.value).toBe('whe')
+    expect(ports.ports[0].items).toBeUndefined()
+    el.value = 'wheat'
+    await input.trigger('input')
+    await input.trigger('change')
+    expect(ports.ports[0].items).toEqual({ item: 'minecraft:wheat' })
+    expect(el.value).toBe('minecraft:wheat')
+  })
+
   it('負荷の省略できる値は空にできる', async () => {
     const { wrapper, ports } = mountPanel()
     ports.setPlaceKey('create-stress/rotation-load')
@@ -292,5 +312,35 @@ describe('仮の入出力の印', () => {
     expect(portMarkRect(port({ face: 'west', pos: [1, 0, 1] }), layout)).toEqual([17, 30, 3, 10])
     expect(portMarkRect(port({ face: 'south', pos: [1, 0, 1] }), layout)).toEqual([20, 40, 10, 3])
     expect(portMarkRect(port({ face: 'up', pos: [0, 0, 0] }), layout)).toEqual([13, 23, 4, 4])
+  })
+})
+
+describe('物の入口のアイテム（#127）', () => {
+  const port: VirtualPort = { id: 'p', pos: [0, 0, 0], face: 'up', pluginId: 'create-stress', kind: 'item-input', params: { rate: 1 } }
+
+  it('アイテムの欄を入れる・消す。namespace がなければ minecraft: を付ける', () => {
+    const withWheat = withPortItem(port, 'item', ' wheat ')
+    expect(withWheat.items).toEqual({ item: 'minecraft:wheat' })
+    expect(withPortItem(withWheat, 'item', 'create:crushed_raw_iron').items).toEqual({ item: 'create:crushed_raw_iron' })
+    expect(withPortItem(withWheat, 'item', '')).not.toHaveProperty('items')
+  })
+
+  it('候補は名前か ID に打った文字を含むもの。Modpack がないか、文字が空なら出さない', () => {
+    const pack = {
+      itemIds: () => ['minecraft:wheat', 'create:wheat_flour', 'minecraft:stone'],
+      displayName: (id: { namespace: string; path: string }, lang: 'ja_jp' | 'en_us') =>
+        lang === 'ja_jp' ? ({ wheat: '小麦', wheat_flour: '小麦粉' } as Record<string, string>)[id.path] ?? null : null,
+    }
+    expect(itemCandidates(pack, '小麦')).toEqual([
+      { id: 'minecraft:wheat', name: '小麦' },
+      { id: 'create:wheat_flour', name: '小麦粉' },
+    ])
+    expect(itemCandidates(pack, 'stone')).toEqual([{ id: 'minecraft:stone', name: 'minecraft:stone' }])
+    expect(itemCandidates(pack, ' ')).toEqual([])
+    expect(itemCandidates(null, '小麦')).toEqual([])
+  })
+
+  it('物の入口の印は青', () => {
+    expect(portColor('item-input')).toBe(PORT_ITEM_COLOR)
   })
 })

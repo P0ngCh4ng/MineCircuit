@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { mergeRecipes, readProcessingRecipe, RECIPE_PATH, type ProcessingRecipe } from './recipes'
+import { mergeRecipes, PROCESSING_RECIPE_TYPES, readProcessingRecipe, RECIPE_PATH, type ProcessingRecipe } from './recipes'
 
 describe('readProcessingRecipe', () => {
-  it('石臼・粉砕・ソー・ミキサーのレシピを読む。種類は create: を外した名前', () => {
-    for (const type of ['milling', 'crushing', 'cutting', 'mixing'] as const) {
+  it('石臼・粉砕・ソー・ミキサー・プレス・圧縮のレシピを読む。種類は create: を外した名前', () => {
+    for (const type of PROCESSING_RECIPE_TYPES) {
       const r = readProcessingRecipe(`create:${type}/x`, { type: `create:${type}`, ingredients: [{ item: 'minecraft:wheat' }] })
-      expect(r).toEqual({ id: `create:${type}/x`, type, items: ['minecraft:wheat'], tags: [], duration: 0 })
+      expect(r).toEqual({ id: `create:${type}/x`, type, items: ['minecraft:wheat'], tags: [], duration: 0, results: [] })
     }
+    expect(PROCESSING_RECIPE_TYPES).toEqual(['milling', 'crushing', 'cutting', 'mixing', 'pressing', 'compacting'])
   })
 
   it('ほかの種類・type がない・オブジェクトでないものは null', () => {
-    expect(readProcessingRecipe('create:p', { type: 'create:pressing', ingredients: [] })).toBeNull()
+    expect(readProcessingRecipe('create:d', { type: 'create:deploying', ingredients: [] })).toBeNull()
+    expect(readProcessingRecipe('create:p', { type: 'create:pressing_extra', ingredients: [] })).toBeNull()
     expect(readProcessingRecipe('minecraft:s', { type: 'minecraft:smelting', ingredient: { item: 'a:b' } })).toBeNull()
     expect(readProcessingRecipe('x:milling', { type: 'other:milling' })).toBeNull()
     expect(readProcessingRecipe('x:y', { ingredients: [] })).toBeNull()
@@ -86,7 +88,14 @@ describe('RECIPE_PATH', () => {
 })
 
 describe('mergeRecipes', () => {
-  const recipe = (id: string, duration: number): ProcessingRecipe => ({ id, type: 'milling', items: [], tags: [], duration })
+  const recipe = (id: string, duration: number): ProcessingRecipe => ({
+    id,
+    type: 'milling',
+    items: [],
+    tags: [],
+    duration,
+    results: [],
+  })
 
   it('同じ ID なら後のものを使う。違う ID はすべて残す', () => {
     const merged = mergeRecipes([recipe('a:1', 10), recipe('a:2', 20)], [recipe('a:1', 99)], [recipe('a:3', 30)])
@@ -109,5 +118,115 @@ describe('readProcessingRecipe（1.21 の形）', () => {
       processing_time: 120,
     })
     expect(r).toMatchObject({ items: ['minecraft:sugar'], tags: [], duration: 120 })
+  })
+})
+
+describe('readProcessingRecipe（できる物）', () => {
+  it('1.18 の形（item・count・chance）を読む。count は書いていなければ 1、chance は 1', () => {
+    // Create（Fabric 版、1.18）の milling/wheat.json と同じ形
+    const r = readProcessingRecipe('create:milling/wheat', {
+      type: 'create:milling',
+      ingredients: [{ item: 'minecraft:wheat' }],
+      results: [
+        { item: 'create:wheat_flour' },
+        { item: 'create:wheat_flour', count: 2, chance: 0.25 },
+        { item: 'minecraft:wheat_seeds', chance: 0.25 },
+      ],
+      processingTime: 150,
+    })
+    expect(r?.results).toEqual([
+      { item: 'create:wheat_flour', count: 1, chance: 1 },
+      { item: 'create:wheat_flour', count: 2, chance: 0.25 },
+      { item: 'minecraft:wheat_seeds', count: 1, chance: 0.25 },
+    ])
+  })
+
+  it('1.21（Create 6.0）の形（id・count・chance）を読む。確率つきの結果がいくつあってもすべて残す', () => {
+    // Create 6.0 の crushing/iron_ore.json と同じ形
+    const r = readProcessingRecipe('create:crushing/iron_ore', {
+      type: 'create:crushing',
+      ingredients: [{ item: 'minecraft:iron_ore' }],
+      processing_time: 250,
+      results: [
+        { id: 'create:crushed_raw_iron' },
+        { chance: 0.75, id: 'create:crushed_raw_iron' },
+        { chance: 0.75, id: 'create:experience_nugget' },
+        { chance: 0.125, id: 'minecraft:cobblestone' },
+      ],
+    })
+    expect(r).toMatchObject({ duration: 250 })
+    expect(r?.results).toEqual([
+      { item: 'create:crushed_raw_iron', count: 1, chance: 1 },
+      { item: 'create:crushed_raw_iron', count: 1, chance: 0.75 },
+      { item: 'create:experience_nugget', count: 1, chance: 0.75 },
+      { item: 'minecraft:cobblestone', count: 1, chance: 0.125 },
+    ])
+  })
+
+  it('プレス・圧縮のレシピは処理時間がなければ 0 で、できる物を読む', () => {
+    const pressing = readProcessingRecipe('create:pressing/iron_ingot', {
+      type: 'create:pressing',
+      ingredients: [{ tag: 'c:ingots/iron' }],
+      results: [{ id: 'create:iron_sheet' }],
+    })
+    expect(pressing).toEqual({
+      id: 'create:pressing/iron_ingot',
+      type: 'pressing',
+      items: [],
+      tags: ['c:ingots/iron'],
+      duration: 0,
+      results: [{ item: 'create:iron_sheet', count: 1, chance: 1 }],
+    })
+    const compacting = readProcessingRecipe('create:compacting/blaze_cake', {
+      type: 'create:compacting',
+      ingredients: [{ tag: 'c:eggs' }, { item: 'minecraft:sugar' }, { item: 'create:cinder_flour' }],
+      results: [{ id: 'create:blaze_cake_base' }],
+    })
+    expect(compacting).toMatchObject({
+      type: 'compacting',
+      duration: 0,
+      results: [{ item: 'create:blaze_cake_base', count: 1, chance: 1 }],
+    })
+  })
+
+  it('液体の結果（1.18 の fluid・amount、1.21 の id・amount）は入れない', () => {
+    const r118 = readProcessingRecipe('create:mixing/a', {
+      type: 'create:mixing',
+      results: [{ fluid: 'create:chocolate', amount: 81000 }, { item: 'minecraft:bowl' }],
+    })
+    expect(r118?.results).toEqual([{ item: 'minecraft:bowl', count: 1, chance: 1 }])
+    const r121 = readProcessingRecipe('create:mixing/chocolate', {
+      type: 'create:mixing',
+      results: [{ amount: 250, id: 'create:chocolate' }],
+    })
+    expect(r121?.results).toEqual([])
+  })
+
+  it('results がない・配列でない・ID が文字列でない結果は空か読み飛ばす。おかしな count と chance は既定の値にする', () => {
+    expect(readProcessingRecipe('a:1', { type: 'create:milling' })?.results).toEqual([])
+    expect(readProcessingRecipe('a:2', { type: 'create:milling', results: { item: 'a:b' } })?.results).toEqual([])
+    const r = readProcessingRecipe('a:3', {
+      type: 'create:milling',
+      results: [
+        null,
+        'a:b',
+        { item: 5 },
+        { count: 2 },
+        { item: 'a:count0', count: 0 },
+        { item: 'a:frac', count: 2.7 },
+        { item: 'a:strcount', count: '3', chance: '0.5' },
+        { item: 'a:neg', chance: -0.5 },
+        { item: 'a:over', chance: 1.5 },
+        { item: 'a:zero', chance: 0 },
+      ],
+    })
+    expect(r?.results).toEqual([
+      { item: 'a:count0', count: 1, chance: 1 },
+      { item: 'a:frac', count: 2, chance: 1 },
+      { item: 'a:strcount', count: 1, chance: 1 },
+      { item: 'a:neg', count: 1, chance: 1 },
+      { item: 'a:over', count: 1, chance: 1 },
+      { item: 'a:zero', count: 1, chance: 0 },
+    ])
   })
 })

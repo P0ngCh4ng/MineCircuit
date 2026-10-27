@@ -5,7 +5,7 @@
 import type { Blueprint } from '../../domain/blueprint'
 import type { NbtTag, RawNbt } from '../../domain/nbt'
 import type { Vec3 } from '../../domain/vec3'
-import type { ProcessingRecipeType, RecipeBook } from '../../io/modpack/recipes'
+import type { ProcessingRecipe, ProcessingRecipeType, RecipeBook } from '../../io/modpack/recipes'
 import type { AssumptionLog } from '../assumptionLog'
 import type { CalcSummaryItem } from '../calcPlugin'
 import { nbtNumber } from '../nbtValues'
@@ -35,6 +35,9 @@ export const DEFAULT_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, numb
   crushing: 100,
   cutting: 50,
   mixing: 100,
+  // プレスは処理時間を使わない（押す動きの速さだけで決まる）
+  pressing: 0,
+  compacting: 0,
 }
 
 /** 機械の名前（仮定の文に使う） */
@@ -43,6 +46,8 @@ const RECIPE_MACHINE_NAMES: Readonly<Record<ProcessingRecipeType, string>> = {
   crushing: '粉砕ホイール',
   cutting: 'ソー',
   mixing: 'ミキサー',
+  pressing: 'プレス',
+  compacting: 'プレス（圧縮）',
 }
 
 // ---- 計算（純粋な関数）。回転数が 0 なら null（動かない） ----
@@ -194,34 +199,52 @@ export interface RecipeChoice {
   readonly duration: Resolved<number>
   /** プローブの「レシピ」の文 */
   readonly text: string
-  /** 初期値を使ったとき、仮定に載せる文。レシピが決まったら null */
+  /** 仮定に載せる文（初期値を使ったとき、材料に合うレシピが2つ以上あったとき）。なければ null */
   readonly assumption: string | null
+  /** 使うレシピ。決まらなければ null */
+  readonly recipe: ProcessingRecipe | null
+  /** レシピを決めた材料（アイテムの ID）。決まらなければ null */
+  readonly item: string | null
 }
 
 /** ミキサーのレシピの処理時間 0（書いていない）は 100（r = 1）として扱う */
-function effectiveDuration(type: ProcessingRecipeType, duration: number): number {
+export function effectiveDuration(type: ProcessingRecipeType, duration: number): number {
   return type === 'mixing' && duration <= 0 ? 100 : duration
+}
+
+/** アイテムがレシピの材料か。ID と、タグ（book.itemTags で平らにしたもの）の両方で照らす */
+export function recipeAccepts(recipe: ProcessingRecipe, item: string, book: RecipeBook | null): boolean {
+  if (recipe.items.includes(item)) return true
+  return recipe.tags.some((tag) => book?.itemTags[tag]?.includes(item) ?? false)
 }
 
 /**
  * どのレシピか（docs/create-throughput.md「どのレシピか」）。
- * 1. 生データの物の ID を材料に持つレシピ 2. その種類のレシピの範囲と初期値 3. Modpack がなければ初期値だけ
+ * itemIds は、物の通り道で届く物（1）があればそれを、なければ生データの物（2）を、優先する順に渡す。
+ * 材料はアイテムの ID とタグで照らす（3）。合うレシピが2つ以上あれば ID の名前順で最初のものを使い、仮定に載せる（4）。
+ * 決まらなければ、その種類のレシピの範囲と初期値（5）。Modpack がなければ初期値だけ（6）
  */
 export function chooseRecipe(type: ProcessingRecipeType, itemIds: readonly string[], book: RecipeBook | null): RecipeChoice {
   const recipes = book?.recipes.filter((r) => r.type === type) ?? []
+  const name = RECIPE_MACHINE_NAMES[type]
   for (const item of itemIds) {
-    const match = recipes.find((r) => r.items.includes(item))
+    const matches = recipes.filter((r) => recipeAccepts(r, item, book)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    const match = matches[0]
     if (match) {
       const d = effectiveDuration(type, match.duration)
       return {
         duration: resolved(d, 'modpack', match.id),
         text: `${match.id}（${item}、処理時間 ${formatNumber(d)} tick）`,
-        assumption: null,
+        assumption:
+          matches.length > 1
+            ? `${name}の材料 ${item} に合うレシピが ${matches.length} つあるので、ID の名前順で最初の ${match.id} を使った`
+            : null,
+        recipe: match,
+        item,
       }
     }
   }
   const fallback = DEFAULT_RECIPE_DURATION[type]
-  const name = RECIPE_MACHINE_NAMES[type]
   let range = ''
   if (recipes.length > 0) {
     const durations = recipes.map((r) => effectiveDuration(type, r.duration))
@@ -234,6 +257,33 @@ export function chooseRecipe(type: ProcessingRecipeType, itemIds: readonly strin
     duration: resolved(fallback, 'assumed'),
     text: `分からない。処理時間 ${formatNumber(fallback)} tick とした${rangeText}`,
     assumption: `${name}のレシピが分からないので、処理時間を Create の初期値の ${formatNumber(fallback)} tick とした${rangeText}`,
+    recipe: null,
+    item: null,
+  }
+}
+
+/**
+ * 機械が1分に処理できる個数（docs/create-throughput.md「機械の処理時間」）。物の通り道で「処理が追いつかない」を調べるのに使う。
+ * 粉砕ホイール・ソーは、まとめて入れたときの方が速いので、上限として 64 個まとめての値を使う。
+ * 機械でない・止まっているなら null
+ */
+export function machineCapacityPerMinute(path: string, rpm: number, duration: number, bulkPressing: boolean): number | null {
+  const per = (ticks: number | null, count = 1): number | null => (ticks === null ? null : perMinuteOf(ticks) * count)
+  switch (path) {
+    case 'mechanical_press':
+      return per(pressCycleTicks(rpm), bulkPressing ? STACK_SIZE : 1)
+    case 'deployer':
+      return per(deployerCycleTicks(rpm))
+    case 'mechanical_mixer':
+      return per(mixerCycleTicks(rpm, duration))
+    case 'millstone':
+      return per(millstoneTicks(rpm, duration))
+    case 'crushing_wheel':
+      return per(crushingTicks(rpm, duration, STACK_SIZE), STACK_SIZE)
+    case 'mechanical_saw':
+      return per(sawTicks(rpm, duration, STACK_SIZE), STACK_SIZE)
+    default:
+      return null
   }
 }
 
@@ -246,6 +296,11 @@ export interface ThroughputEnv {
   /** Modpack のレシピ。なければ null */
   readonly recipes: RecipeBook | null
   readonly log: AssumptionLog
+  /**
+   * 物の通り道（createItemPath.ts）でその位置に届く物。レシピを決めるとき、生データの物より優先する（「どのレシピか」の 1）。
+   * 物の入口がなければ省略
+   */
+  readonly pathItems?: (pos: Vec3) => readonly string[]
 }
 
 /** 回るブロックの回転（止まっている・過負荷なら 0） */
@@ -320,7 +375,8 @@ export function kineticThroughputValues(pos: Vec3, id: string, rotation: Kinetic
     case 'mechanical_mixer': {
       // レシピは2つ下のバサンの中身で決まる
       const basin = env.bp.blockEntityAt([pos[0], pos[1] - 2, pos[2]])
-      const recipe = recipeFor('mixing', [...findItemIds(basin), ...findItemIds(be)], pos, env)
+      const basinPos: Vec3 = [pos[0], pos[1] - 2, pos[2]]
+      const recipe = recipeFor('mixing', itemsFor([basinPos], () => [...findItemIds(basin), ...findItemIds(be)], env), pos, env)
       const ticks = mixerCycleTicks(rpm, recipe.duration.value)!
       return [
         {
@@ -334,7 +390,7 @@ export function kineticThroughputValues(pos: Vec3, id: string, rotation: Kinetic
       ]
     }
     case 'millstone': {
-      const recipe = recipeFor('milling', findItemIds(be), pos, env)
+      const recipe = recipeFor('milling', itemsFor([pos], () => findItemIds(be), env), pos, env)
       const ticks = millstoneTicks(rpm, recipe.duration.value)!
       return [
         {
@@ -350,15 +406,19 @@ export function kineticThroughputValues(pos: Vec3, id: string, rotation: Kinetic
     case 'crushing_wheel': {
       // 中身は2つのホイールの間（隣の crushing_wheel_controller）にある
       const items = [...findItemIds(be)]
+      const controllers: Vec3[] = []
       for (const d of NEIGHBORS) {
         const p: Vec3 = [pos[0] + d[0], pos[1] + d[1], pos[2] + d[2]]
-        if (env.bp.get(p)?.id.toString() === 'create:crushing_wheel_controller') items.push(...findItemIds(env.bp.blockEntityAt(p)))
+        if (env.bp.get(p)?.id.toString() === 'create:crushing_wheel_controller') {
+          controllers.push(p)
+          items.push(...findItemIds(env.bp.blockEntityAt(p)))
+        }
       }
-      const recipe = recipeFor('crushing', items, pos, env)
+      const recipe = recipeFor('crushing', itemsFor(controllers, () => items, env), pos, env)
       return [stackItem(label, crushingTicks(rpm, recipe.duration.value, 1)!, crushingTicks(rpm, recipe.duration.value, STACK_SIZE)!, rotation.source, recipe), recipeItem(recipe)]
     }
     case 'mechanical_saw': {
-      const recipe = recipeFor('cutting', findItemIds(be), pos, env)
+      const recipe = recipeFor('cutting', itemsFor([pos], () => findItemIds(be), env), pos, env)
       return [stackItem(label, sawTicks(rpm, recipe.duration.value, 1)!, sawTicks(rpm, recipe.duration.value, STACK_SIZE)!, rotation.source, recipe), recipeItem(recipe)]
     }
     default:
@@ -420,6 +480,13 @@ const NEIGHBORS: readonly Vec3[] = [
   [0, 0, 1],
   [0, 0, -1],
 ]
+
+/** レシピを決める物。物の通り道で positions のどれかに届く物があればそれ、なければ生データの物 */
+function itemsFor(positions: readonly Vec3[], fromNbt: () => string[], env: ThroughputEnv): string[] {
+  const arrived = new Set<string>()
+  for (const p of positions) for (const item of env.pathItems?.(p) ?? []) arrived.add(item)
+  return arrived.size > 0 ? [...arrived] : fromNbt()
+}
 
 function recipeFor(type: ProcessingRecipeType, items: readonly string[], pos: Vec3, env: ThroughputEnv): RecipeChoice {
   const choice = chooseRecipe(type, items, env.recipes)
