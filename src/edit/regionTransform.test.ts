@@ -5,10 +5,21 @@ import { Blueprint } from '../domain/blueprint'
 import { boxFromCorners } from '../domain/box'
 import { nbt } from '../domain/nbt'
 import type { Vec3 } from '../domain/vec3'
+import { mirrorWithin, rotationAbout, translation } from '../domain/blockTransform'
 import { blueprintToStructure } from '../io/writers/nbtBlueprintWriter'
 import { structureToBlueprint } from '../io/readers/nbtBlueprintReader'
 import { EditHistory } from './editHistory'
-import { entityBlockPos, MAX_BLUEPRINT_SIDE, MOVE_MESSAGES, moveEntity, moveRegion, relocatePos } from './regionMove'
+import {
+  entityBlockPos,
+  MAX_BLUEPRINT_SIDE,
+  MOVE_MESSAGES,
+  moveEntity,
+  moveRegion,
+  relocatePlace,
+  relocatePos,
+  transformRegion,
+  type TransformOptions,
+} from './regionTransform'
 
 const motorNbt = () => nbt.compound({ id: nbt.string('create:creative_motor'), Speed: nbt.int(64) })
 
@@ -88,7 +99,7 @@ describe('moveRegion', () => {
     expect(result.command.relocation).toEqual({
       source: boxFromCorners([0, 0, 0], [1, 0, 0]),
       target: boxFromCorners([0, 0, 0], [1, 0, 0]),
-      translate: [-2, 0, 0],
+      transform: translation([-2, 0, 0]),
       shift: [2, 0, 0],
     })
     expect(result.warnings).toEqual(['設計図を負の向きに広げたので、座標が x +2 ずれました'])
@@ -178,12 +189,119 @@ describe('moveRegion', () => {
   })
 })
 
+describe('transformRegion（回す・反転する）', () => {
+  function check(bp: Blueprint, box: ReturnType<typeof boxFromCorners>, t: ReturnType<typeof rotationAbout>, opts: Partial<TransformOptions> = {}) {
+    const original = blueprintContents(bp)
+    const result = transformRegion(bp, box, t, { overwrite: false, ...opts })
+    if (!result.ok) throw new Error(result.reason)
+    const history = new EditHistory(bp)
+    history.apply(result.command)
+    const edited = blueprintContents(bp)
+    history.undo()
+    expect(blueprintContents(bp)).toEqual(original)
+    history.redo()
+    expect(blueprintContents(bp)).toEqual(edited)
+    return result
+  }
+
+  // 3×1×3。中心は [1,0,1]。東に x 軸のシャフト、北に north 向きのファンネル
+  function cross() {
+    return blueprintFixture({ size: [3, 1, 3] })
+      .place([1, 0, 1], 'create:cogwheel[axis=y]')
+      .place([2, 0, 1], 'create:shaft[axis=x]', motorNbt())
+      .place([1, 0, 0], 'create:andesite_funnel[facing=north]')
+      .entity(entityNbt([2, 0, 1], 'minecraft:item_frame', nbt.compound({ TileX: nbt.int(12), Facing: nbt.byte(5), Rotation: nbt.list('float', [nbt.float(270), nbt.float(0)]) })))
+      .toBlueprint()
+  }
+
+  it('右回りに回すと、位置と向きと生データが一緒に回る', () => {
+    const bp = cross()
+    const box = boxFromCorners([0, 0, 0], [2, 0, 2])
+    const result = check(bp, box, rotationAbout(box, 1))
+    expect(result.command.label).toBe('範囲を回す（3 個）')
+    expect(bp.get([1, 0, 2])?.key).toBe('create:shaft[axis=z]')
+    expect(bp.blockEntityAt([1, 0, 2])).toEqual(motorNbt())
+    expect(bp.get([2, 0, 1])?.key).toBe('create:andesite_funnel[facing=east]')
+    expect(bp.get([1, 0, 1])?.key).toBe('create:cogwheel[axis=y]')
+    // 額縁は東の面（Facing 5）から南（3）へ、yaw は 270（east）から 0（south）へ
+    const frame = bp.regions[0]!.entities[0]!
+    expect(entityBlockPos(frame)).toEqual([1, 0, 2])
+    const inner = frame.value.get('nbt')
+    if (inner?.type !== 'compound') throw new Error('nbt がない')
+    expect(inner.value.get('Facing')).toEqual(nbt.byte(3))
+    expect(inner.value.get('TileZ')).toBeUndefined()
+    expect(inner.value.get('TileX')).toEqual(nbt.int(11))
+    expect(inner.value.get('Rotation')).toEqual(nbt.list('float', [nbt.float(0), nbt.float(0)]))
+  })
+
+  it('4回回すと元の設計図に戻る', () => {
+    const bp = cross()
+    const original = blueprintContents(bp)
+    const box = boxFromCorners([0, 0, 0], [2, 0, 2])
+    const history = new EditHistory(bp)
+    for (let i = 0; i < 4; i++) {
+      const result = transformRegion(bp, box, rotationAbout(box, 1), { overwrite: false })
+      if (!result.ok) throw new Error(result.reason)
+      history.apply(result.command)
+    }
+    expect(blueprintContents(bp)).toEqual(original)
+  })
+
+  it('細長い範囲を回すとはみ出し、設計図を広げる（負の向きなら全体をずらす）', () => {
+    const bp = sample() // 4×2×3
+    const box = boxFromCorners([0, 0, 0], [3, 0, 0])
+    const result = check(bp, box, rotationAbout(box, 1))
+    // 中心 [1,0,0] のまわりで、x 0〜3 が z −1〜2 になる。z が +1 ずれる
+    expect(result.box).toEqual(boxFromCorners([1, 0, 0], [1, 0, 3]))
+    expect(bp.size).toEqual([4, 2, 4])
+    expect(result.warnings).toEqual(['設計図を負の向きに広げたので、座標が z +1 ずれました'])
+    expect(bp.get([1, 0, 0])?.key).toBe('create:shaft[axis=z]')
+    expect(bp.get([1, 0, 1])?.key).toBe('create:creative_motor[facing=up]')
+  })
+
+  it('反転は範囲の中で写し、向きと左右を変える', () => {
+    const bp = blueprintFixture({ size: [2, 1, 1] })
+      .place([0, 0, 0], 'minecraft:oak_door[facing=east,half=lower,hinge=left]')
+      .place([1, 0, 0], 'minecraft:furnace[facing=west]')
+      .toBlueprint()
+    const box = boxFromCorners([0, 0, 0], [1, 0, 0])
+    const result = check(bp, box, mirrorWithin(box, 'x'))
+    expect(result.box).toEqual(box)
+    expect(result.command.label).toBe('範囲を反転する（2 個）')
+    expect(bp.get([0, 0, 0])?.key).toBe('minecraft:furnace[facing=east]')
+    expect(bp.get([1, 0, 0])?.key).toBe('minecraft:oak_door[facing=west,half=lower,hinge=right]')
+  })
+
+  it('生データを直す関数を通し、直せないものは警告に出す', () => {
+    const bp = cross()
+    const box = boxFromCorners([0, 0, 0], [2, 0, 2])
+    const result = check(bp, box, rotationAbout(box, 1), {
+      blockEntity: (state, raw, _t, from, to) =>
+        state.id.path === 'shaft' ? { nbt: nbt.compound({ ...Object.fromEntries(raw.value), From: nbt.intArray(from), To: nbt.intArray(to) }), unresolved: true } : null,
+    })
+    expect(bp.blockEntityAt([1, 0, 2])?.value.get('From')).toEqual(nbt.intArray([2, 0, 1]))
+    expect(bp.blockEntityAt([1, 0, 2])?.value.get('To')).toEqual(nbt.intArray([1, 0, 2]))
+    expect(result.warnings).toEqual([MOVE_MESSAGES.unresolvedBlockEntity(1)])
+  })
+})
+
 describe('relocatePos', () => {
-  const r = { source: boxFromCorners([0, 0, 0], [1, 0, 0]), target: boxFromCorners([0, 0, 0], [1, 0, 0]), translate: [-2, 0, 0], shift: [2, 0, 0] } as const
+  const r = { source: boxFromCorners([0, 0, 0], [1, 0, 0]), target: boxFromCorners([0, 0, 0], [1, 0, 0]), transform: translation([-2, 0, 0]), shift: [2, 0, 0] as Vec3 }
   it('範囲の中は translate と shift、外は shift だけ動き、逆の向きで戻る', () => {
     expect(relocatePos(r, [1, 0, 0], true)).toEqual([1, 0, 0])
     expect(relocatePos(r, [3, 0, 2], true)).toEqual([5, 0, 2])
     expect(relocatePos(r, [1, 0, 0], false)).toEqual([1, 0, 0])
     expect(relocatePos(r, [5, 0, 2], false)).toEqual([3, 0, 2])
+  })
+})
+
+describe('relocatePlace', () => {
+  it('範囲の中の仮の入出力は、位置と面を回し、元に戻すと戻る', () => {
+    const box = boxFromCorners([0, 0, 0], [2, 0, 2])
+    const r = { source: box, target: box, transform: rotationAbout(box, 1), shift: [0, 0, 0] as Vec3 }
+    const moved = relocatePlace(r, { pos: [2, 0, 1], face: 'east' }, true)
+    expect(moved).toEqual({ pos: [1, 0, 2], face: 'south' })
+    expect(relocatePlace(r, moved, false)).toEqual({ pos: [2, 0, 1], face: 'east' })
+    expect(relocatePlace(r, { pos: [5, 0, 0], face: 'east' }, true)).toEqual({ pos: [5, 0, 0], face: 'east' })
   })
 })

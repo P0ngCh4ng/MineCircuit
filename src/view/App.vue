@@ -45,7 +45,7 @@ useKeyboardShortcuts({
   clearSelection: () => tools.setSelected(null),
   undo: () => session.undo(),
   redo: () => session.redo(),
-  rotateBrush: (a) => rotate(a.vertical),
+  rotateBrush: (a) => rotate(a.vertical, a.overwrite),
   deleteSelection: () => edit.deleteSelected(),
   fillSelection: () => edit.fillSelection(),
   selectAll: () => edit.selectAll(),

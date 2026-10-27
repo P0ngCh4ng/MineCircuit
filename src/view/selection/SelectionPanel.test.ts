@@ -65,8 +65,16 @@ describe('SelectionPanel', () => {
     ])
     // Modpack がなければ名前の代わりに ID を出す
     expect(wrapper.get('[data-kind="create:shaft"] .kind-name').text()).toBe('create:shaft')
-    // 回す・反転・コピーのボタンはまだ出さない
-    expect(wrapper.findAll('[data-action]').map((b) => b.attributes('data-action'))).toEqual(['erase', 'fill', 'replace'])
+    // コピーのボタンはまだ出さない
+    expect(wrapper.findAll('[data-action]').map((b) => b.attributes('data-action'))).toEqual([
+      'erase',
+      'rotate-right',
+      'rotate-left',
+      'mirror-x',
+      'mirror-z',
+      'fill',
+      'replace',
+    ])
   })
 
   it('座標を打つと範囲が変わる。最小と最大が逆なら入れ替える', async () => {
@@ -101,6 +109,26 @@ describe('SelectionPanel', () => {
     session.undo()
     expect(bp.get([0, 0, 0])?.key).toBe('create:shaft[axis=x]')
     expect(bp.get([0, 1, 0])?.key).toBe('minecraft:dirt')
+  })
+
+  it('「左右反転（X）」は範囲の中で写し、「回す（右）」ははみ出せば設計図を広げる。どちらも1回で元に戻る', async () => {
+    const { wrapper, session, bp, brush } = await setup()
+    await wrapper.get('[data-action="mirror-x"]').trigger('click')
+    expect(bp.get([0, 0, 0])?.key).toBe('minecraft:stone')
+    expect(bp.get([2, 0, 0])?.key).toBe('create:shaft[axis=x]')
+    expect(bp.get([2, 1, 0])?.key).toBe('minecraft:dirt')
+    session.undo()
+    expect(bp.get([0, 0, 0])?.key).toBe('create:shaft[axis=x]')
+
+    await wrapper.get('[data-action="rotate-right"]').trigger('click')
+    // 中心 [1,0,0] のまわりで x 0〜2 が z −1〜1 になるので、z が +1 ずれ、奥行きが 3 になる
+    expect(session.current.value!.blueprint.size).toEqual([4, 3, 3])
+    expect(bp.get([1, 0, 0])?.key).toBe('create:shaft[axis=z]')
+    expect(bp.get([1, 0, 2])?.key).toBe('minecraft:stone')
+    expect(brush.message).toBe('設計図を負の向きに広げたので、座標が z +1 ずれました')
+    session.undo()
+    expect(bp.size).toEqual([4, 3, 1])
+    expect(bp.get([0, 0, 0])?.key).toBe('create:shaft[axis=x]')
   })
 
   it('「置くブロックで塗る」は初期値で空きだけを塗る。外すと全部を塗る', async () => {

@@ -3,9 +3,13 @@
 // 結果（CalcResult）は structured clone で送れる素のデータだけで作る（クラスや関数を入れない）。
 
 import type { BlockState } from '../domain/blockState'
+import type { BlockTransform } from '../domain/blockTransform'
 import type { Blueprint } from '../domain/blueprint'
+import type { Box } from '../domain/box'
 import type { Direction } from '../domain/direction'
+import type { RawNbt } from '../domain/nbt'
 import type { Vec3 } from '../domain/vec3'
+import type { BlockEntityTransform } from '../edit/regionTransform'
 import type { RecipeBook } from '../io/modpack/recipes'
 import type { PortKindDef, VirtualPort } from './virtualPort'
 import type { Resolved } from './provenance'
@@ -114,6 +118,17 @@ export interface CalcPlugin {
    * 設計図は読むだけ
    */
   placementProblem?(bp: Blueprint, pos: Vec3, state: BlockState): string | null
+  /**
+   * ブロック状態の Mod 独自のプロパティを、範囲の回転・反転に合わせて変える（任意。#132）。
+   * バニラの向きのプロパティ（edit/stateTransform.ts）も含めて、変換したあとの状態を返す。知らないブロックなら null
+   */
+  transformState?(state: BlockState, t: BlockTransform): BlockState | null
+  /**
+   * 生データの中の座標を、ブロックの変換に合わせて書き直す（任意。#132）。state は変換の前の状態、
+   * from・to は変換の前と後のマス（設計図全体の座標）、source は変換する範囲。知らないブロックなら null（そのまま）。
+   * 範囲の外を指す位置が残ったら unresolved にする
+   */
+  transformBlockEntity?(state: BlockState, nbt: RawNbt, t: BlockTransform, from: Vec3, to: Vec3, source: Box): BlockEntityTransform | null
   /**
    * 置き方の補助（任意。#123）。3D で面をクリックしたとき、クリックしたブロックと当たった点から、置く位置と状態を返す。
    * 使わないなら null（ふつうに面の隣に置く）。設計図は読むだけ
