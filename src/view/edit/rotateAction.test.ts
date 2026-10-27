@@ -17,8 +17,8 @@ import { useToolStore } from '../stores/toolStore'
 const state = (id: string, properties: Record<string, string> = {}) =>
   new BlockState(ResourceLocation.parse(id), properties)
 
-function press(key: string, shiftKey = false): void {
-  window.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey }))
+function press(key: string, shiftKey = false, ctrlKey = false): void {
+  window.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, ctrlKey }))
 }
 
 let wrapper: VueWrapper | null = null
@@ -99,5 +99,36 @@ describe('R / Shift+R のキー', () => {
     await nextTick()
     expect(brush.message).toBeNull()
     expect(wrapper.find('[data-status="message"]').exists()).toBe(false)
+  })
+
+  it('2つ以上のマスの範囲なら範囲を回し、選択範囲も一緒に回る。ぶつかれば止め、Ctrl+R で上書きする（#132）', async () => {
+    const { session, tools, brush } = mountApp()
+    const bp = session.current.value!.blueprint
+    tools.setSelected([0, 0, 0])
+    tools.setSelectionBox({ min: [0, 0, 0], max: [1, 0, 0] })
+    press('r')
+    // 中心 [0,0,0] のまわりで、[1,0,0] の石が [0,0,1] へ。設計図は奥へ広がる
+    expect(bp.get([0, 0, 0])?.key).toBe('create:shaft[axis=z]')
+    expect(bp.get([0, 0, 1])?.key).toBe('minecraft:stone')
+    expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [0, 0, 1] })
+    expect(session.nextUndoLabel.value).toBe('範囲を回す（2 個）')
+
+    session.undo()
+    expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [1, 0, 0] })
+
+    // 縦に並んだシャフトを回すと、横の石に重なる
+    session.setBlueprint(
+      blueprintFixture({ size: [3, 1, 3] })
+        .place([1, 0, 0], 'create:shaft', { axis: 'z' })
+        .place([1, 0, 1], 'create:shaft', { axis: 'z' })
+        .place([2, 0, 1], 'minecraft:stone')
+        .toBlueprint(),
+    )
+    const bp2 = session.current.value!.blueprint
+    tools.setSelectionBox({ min: [1, 0, 0], max: [1, 0, 2] })
+    press('r')
+    expect(brush.message).toBe('動かす先にブロックがあります（1 個）。Ctrl を押しながら動かすと上書きします')
+    press('r', false, true)
+    expect(bp2.get([2, 0, 1])?.key).toBe('create:shaft[axis=x]')
   })
 })

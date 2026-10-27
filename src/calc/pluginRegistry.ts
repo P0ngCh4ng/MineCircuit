@@ -1,9 +1,14 @@
 // 計算プラグインの一覧と、まとめて走らせる処理。
 
 import type { BlockState } from '../domain/blockState'
+import type { BlockTransform } from '../domain/blockTransform'
 import type { Blueprint } from '../domain/blueprint'
+import type { Box } from '../domain/box'
 import type { Direction } from '../domain/direction'
+import type { RawNbt } from '../domain/nbt'
 import type { Vec3 } from '../domain/vec3'
+import type { BlockEntityTransform } from '../edit/regionTransform'
+import { transformVanillaState } from '../edit/stateTransform'
 import type { CalcModpack, CalcPlugin, CalcResult } from './calcPlugin'
 import { portsFor, type VirtualPort } from './virtualPort'
 
@@ -54,6 +59,24 @@ export class PluginRegistry {
   ): { pos: Vec3; state: BlockState } | null {
     for (const p of this.plugins.values()) {
       const r = p.placementHelper?.(bp, hit, state) ?? null
+      if (r) return r
+    }
+    return null
+  }
+
+  /** 範囲の回転・反転でのブロック状態。最初に答えたプラグインのもの。どれも答えなければバニラの規則 */
+  transformState(state: BlockState, t: BlockTransform): BlockState {
+    for (const p of this.plugins.values()) {
+      const r = p.transformState?.(state, t) ?? null
+      if (r) return r
+    }
+    return transformVanillaState(state, t)
+  }
+
+  /** 生データの中の座標の書き直し。最初に答えたプラグインのもの。どれも答えなければ null（そのまま） */
+  transformBlockEntity(state: BlockState, nbt: RawNbt, t: BlockTransform, from: Vec3, to: Vec3, source: Box): BlockEntityTransform | null {
+    for (const p of this.plugins.values()) {
+      const r = p.transformBlockEntity?.(state, nbt, t, from, to, source) ?? null
       if (r) return r
     }
     return null

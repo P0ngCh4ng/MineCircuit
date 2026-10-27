@@ -61,10 +61,10 @@ export const usePortStore = defineStore('port', () => {
     if (selectedId.value === id) selectedId.value = null
   }
 
-  /** 範囲を動かしたとき、すべての仮の入出力の位置を map で直す（面はそのまま） */
-  function relocate(map: (pos: Vec3) => Vec3): void {
+  /** 範囲を動かす・回す・反転したとき、すべての仮の入出力の位置と面を map で直す */
+  function relocate(map: (place: { pos: Vec3; face: Direction }) => { pos: Vec3; face: Direction }): void {
     if (calc.ports.length === 0) return
-    setPorts(calc.ports.map((p) => ({ ...p, pos: map(p.pos) })))
+    setPorts(calc.ports.map((p) => ({ ...p, ...map({ pos: p.pos, face: p.face }) })))
   }
 
   /** すべて消す（別の設計図を開いたときも） */

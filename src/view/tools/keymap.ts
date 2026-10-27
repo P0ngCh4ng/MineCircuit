@@ -7,7 +7,8 @@ import { TOOL_CATALOG } from './toolCatalog'
  */
 export type KeyAction =
   | { readonly type: 'tool'; readonly id: ToolId }
-  | { readonly type: 'rotateBrush'; readonly vertical: boolean }
+  /** R / Shift+R。範囲を選んでいれば範囲を回す（Shift は左回り）。overwrite は Ctrl を押しているとき */
+  | { readonly type: 'rotateBrush'; readonly vertical: boolean; readonly overwrite: boolean }
   | { readonly type: 'undo' }
   | { readonly type: 'redo' }
   | { readonly type: 'deleteSelection' }
@@ -66,13 +67,14 @@ export function resolveKeyAction(e: KeyInput): KeyAction | null {
     if (key === 'z' && !e.shiftKey) return { type: 'undo' }
     if (key === 'y' && !e.shiftKey) return { type: 'redo' }
     if (key === 'a' && !e.shiftKey) return { type: 'selectAll' }
+    if (key === 'r') return { type: 'rotateBrush', vertical: e.shiftKey, overwrite: true }
     return null
   }
   if (e.altKey) return null
 
   switch (key) {
     case 'r':
-      return { type: 'rotateBrush', vertical: e.shiftKey }
+      return { type: 'rotateBrush', vertical: e.shiftKey, overwrite: false }
     case 'delete':
       return { type: 'deleteSelection' }
     case 'escape':

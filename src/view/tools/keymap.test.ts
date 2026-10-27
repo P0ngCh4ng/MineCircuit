@@ -16,8 +16,10 @@ describe('resolveKeyAction', () => {
   })
 
   it('R は水平、Shift+R は縦に回す', () => {
-    expect(resolveKeyAction(k('r'))).toEqual({ type: 'rotateBrush', vertical: false })
-    expect(resolveKeyAction(k('R', { shiftKey: true }))).toEqual({ type: 'rotateBrush', vertical: true })
+    expect(resolveKeyAction(k('r'))).toEqual({ type: 'rotateBrush', vertical: false, overwrite: false })
+    expect(resolveKeyAction(k('R', { shiftKey: true }))).toEqual({ type: 'rotateBrush', vertical: true, overwrite: false })
+    // Ctrl+R は、範囲を回すときにほかのブロックを上書きする
+    expect(resolveKeyAction(k('r', { ctrlKey: true }))).toEqual({ type: 'rotateBrush', vertical: false, overwrite: true })
   })
 
   it('Ctrl+Z / Ctrl+Y（Mac は Cmd）で元に戻す・やり直す', () => {

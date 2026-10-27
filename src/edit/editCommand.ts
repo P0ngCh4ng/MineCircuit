@@ -1,4 +1,5 @@
 import type { BlockState } from '../domain/blockState'
+import type { BlockTransform } from '../domain/blockTransform'
 import type { Blueprint } from '../domain/blueprint'
 import type { CellValue, RawEntity } from '../domain/blockVolume'
 import type { Box } from '../domain/box'
@@ -36,14 +37,14 @@ export interface EntityChange {
 }
 
 /**
- * 範囲を動かした操作の、位置の対応。画面が選択範囲と仮の入出力を動かすのに使う（履歴には入れないもの）。
+ * 範囲を動かす・回す・反転する操作の、位置の対応。画面が選択範囲と仮の入出力を動かすのに使う（履歴には入れないもの）。
  * source は操作の前の座標、target は操作の後の座標
  */
 export interface Relocation {
   readonly source: Box
   readonly target: Box
-  /** 範囲の中のものの動き（shift を含まない） */
-  readonly translate: Vec3
+  /** 範囲の中のものの変換（shift を含まない。操作の前の座標で） */
+  readonly transform: BlockTransform
   /** 設計図全体の座標のずれ（負の向きに広げたとき） */
   readonly shift: Vec3
 }

@@ -1,8 +1,8 @@
-// 範囲を動かした操作に合わせて、選択範囲と仮の入出力を動かす（docs/design.md「範囲の編集」、#131）。
+// 範囲を動かす・回す・反転した操作に合わせて、選択範囲と仮の入出力を動かす（docs/design.md「範囲の編集」、#131・#132）。
 // どちらも画面の状態なので、履歴には入れず、操作を書いた・元に戻したときの合図（session.onRelocate）で直す。
 
 import { onBeforeUnmount } from 'vue'
-import { relocatePos } from '../../edit/regionMove'
+import { relocatePlace, relocatePos } from '../../edit/regionTransform'
 import { useDocumentSession } from '../document/documentSession'
 import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
@@ -19,7 +19,7 @@ export function useRelocationSync(): void {
       forward ? relocation.target : relocation.source,
       anchor ? relocatePos(relocation, anchor, forward) : undefined,
     )
-    ports.relocate((pos) => relocatePos(relocation, pos, forward))
+    ports.relocate((place) => relocatePlace(relocation, place, forward))
   })
   onBeforeUnmount(disconnect)
 }

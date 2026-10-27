@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 右パネルの「選択範囲」（#130）。docs/ui.md「右パネル『選択範囲』」「まとめて変える」。
 // 2つ以上のブロックが入る範囲を選んでいるときに出す（1つのときは BlockDetail）。
-// 範囲の座標と大きさ（数を打って直せる）、中のブロックの数と多い種類、消す・塗る・置き換えのボタン。
+// 範囲の座標と大きさ（数を打って直せる）、中のブロックの数と多い種類、消す・回す・反転する・塗る・置き換えのボタン（#132）。
 import { computed, ref } from 'vue'
 import { boxSize } from '../../domain/box'
 import { useDocumentSession } from '../document/documentSession'
@@ -122,6 +122,15 @@ function replace(): void {
 
       <div class="group">
         <button type="button" data-action="erase" title="Delete" @click="actions.erase()">消す</button>
+      </div>
+
+      <div class="group">
+        <button type="button" data-action="rotate-right" title="R（Ctrl+R で上書き）" @click="actions.rotate(1, false)">回す（右）</button>
+        <button type="button" data-action="rotate-left" title="Shift+R" @click="actions.rotate(3, false)">回す（左）</button>
+      </div>
+      <div class="group">
+        <button type="button" data-action="mirror-x" @click="actions.mirror('x')">左右反転（X）</button>
+        <button type="button" data-action="mirror-z" @click="actions.mirror('z')">前後反転（Z）</button>
       </div>
 
       <div class="group">

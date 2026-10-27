@@ -1,12 +1,16 @@
-// 置くときの向きと、置けるか（#119・#121。docs/ui.md「編集」）。
+// 置くときの向きと、置けるか（#119・#121。docs/ui.md「編集」）。範囲の回転・反転の規則（#132）も。
 // Mod ごとの規則は計算プラグインが持つので、画面は計算プラグインの一覧に聞くだけにする。
 // 計算そのものは Worker で行うので、ここの一覧は向きと規則を聞くためだけに使う。
 
 import { createBuiltinRegistry } from '../../calc/builtinPlugins'
 import type { BlockState } from '../../domain/blockState'
+import type { BlockTransform } from '../../domain/blockTransform'
 import type { Blueprint } from '../../domain/blueprint'
+import type { Box } from '../../domain/box'
 import type { Direction } from '../../domain/direction'
+import type { RawNbt } from '../../domain/nbt'
 import type { Vec3 } from '../../domain/vec3'
+import type { BlockEntityTransform } from '../../edit/regionTransform'
 
 const registry = createBuiltinRegistry()
 
@@ -27,4 +31,21 @@ export function placementHelper(
 /** pos に state を置けるか。ゲームで置けないなら理由、置けるなら null */
 export function placementProblem(bp: Blueprint, pos: Vec3, state: BlockState): string | null {
   return registry.placementProblem(bp, pos, state)
+}
+
+/** 範囲の回転・反転でのブロック状態（Mod 独自のプロパティは計算プラグインの規則、それ以外はバニラの規則） */
+export function transformBlockState(state: BlockState, t: BlockTransform): BlockState {
+  return registry.transformState(state, t)
+}
+
+/** 範囲の操作での生データの中の座標の書き直し。知らないブロックなら null */
+export function transformBlockEntity(
+  state: BlockState,
+  nbt: RawNbt,
+  t: BlockTransform,
+  from: Vec3,
+  to: Vec3,
+  source: Box,
+): BlockEntityTransform | null {
+  return registry.transformBlockEntity(state, nbt, t, from, to, source)
 }

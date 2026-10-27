@@ -394,11 +394,12 @@ function setBlockEntityTag(bp: Blueprint, pos: Vec3, key: string, tag: NbtTag, i
 ```ts
 interface Box { min: Vec3; max: Vec3 }                // 両端を含む。domain/box.ts
 
-// 変換。平行移動・y 軸まわりの 90° 回転・x / z の反転を、この順に組み合わせたもの
+// 変換（domain/blockTransform.ts）。pivot のまわりで先に反転し、次に回し、最後に translate だけ動かす。
+// マス p の行き先は pivot + 回転(反転(p − pivot)) + translate。ゲームが設計図を置くときと同じ順（反転 → 回転）
 interface BlockTransform {
   translate: Vec3
-  quarterTurns: 0 | 1 | 2 | 3                         // 上から見て右回りに 90° ずつ
-  mirror: 'none' | 'x' | 'z'
+  quarterTurns: 0 | 1 | 2 | 3                         // 上から見て右回りに 90° ずつ（north → east）
+  mirror: 'none' | 'x' | 'z'                          // 'x' は x を逆に（east ↔ west）、'z' は z を逆に（north ↔ south）
   pivot: Vec3                                         // 回転・反転の軸のマス
 }
 
@@ -411,8 +412,8 @@ function pasteClip(bp: Blueprint, clip: BlueprintClip, at: Vec3, t: BlockTransfo
 
 interface TransformOptions {
   overwrite: boolean                                  // 行き先のブロックを上書きするか
-  blockEntity: BlockEntityTransformer                 // 生データの中の座標を書き直す（下）
-  states: StateTransformer                            // ブロック状態の向きを回す・反転する（下）
+  blockEntity?: BlockEntityTransformer                // 生データの中の座標を書き直す（下）。省略なら生データはそのまま
+  states?: StateTransformer                           // ブロック状態の向きを回す・反転する（下）。省略ならバニラの規則
 }
 
 // 作れなかったときは理由。作れたときは操作と、動いた先の範囲
@@ -455,58 +456,72 @@ interface EntityChange { region: number; before: RawEntity[]; after: RawEntity[]
 - 負の向きにはみ出すときは、全リージョンの `offset` をずらして最小を 0 にする（位置か大きさが変わるリージョンの分だけ `RegionResize` を持つ）。
 - 大きさの上限は各辺 512。
 
-**範囲を動かす（#131）。** `moveRegion(bp, box, translate, { overwrite })`（`edit/regionMove.ts`）。回す・反転するが入ったら `transformRegion` にまとめる。
+**範囲を動かす・回す・反転する（#131・#132）。** `transformRegion(bp, box, t, opts)`（`edit/regionTransform.ts`）。動かすのは `moveRegion`（平行移動だけの `transformRegion`）。
+
+- 回す：範囲の中心のマス（中心が2つのマスの間なら小さい側）を `pivot` にする（`rotationAbout`）。
+- 反転：範囲の中で写す（`mirrorWithin`）。幅が偶数だと中心のマスでの反転は1マスずれるので、`translate` で範囲に戻す。
 
 - 範囲は1つのリージョンの中にあること（またがるなら断る）。行き先がリージョンの外なら、そのリージョンを広げる。広げた所がほかのリージョンに重なるなら断る。
 - 範囲の中の空きも写す（行き先は範囲の写しになる）。行き先にある範囲の外のブロックの数を数え、`overwrite` でなければ断る。
-- エンティティは、ブロックの位置（`blockPos`、なければ `pos`）が範囲の中なら一緒に動かす。`pos`・`blockPos` と、壁掛けの物（額縁・絵）の `nbt` の `TileX`・`TileY`・`TileZ` を同じだけ直す。`nbt` の `Pos` はゲームが置くときに `pos` から作り直すのでそのまま。リージョンの中身がずれるときは、範囲の外のエンティティもその分だけ直す。
-- 生データの中の座標は、平行移動では直さない（相対の位置は変わらない。位置そのものを持つ項目は #132 で `transformBlockEntity` を入れるときに直す）。
+- エンティティは、ブロックの位置（`blockPos`、なければ `pos`）が範囲の中なら一緒に変換する。`pos` はマスの中心が行き先のマスの中心に移るように、`blockPos` はマスとして変換し、壁掛けの物（額縁・絵）の `nbt` の `TileX`・`TileY`・`TileZ` は `blockPos` の動いた分だけ直す。`nbt` の `Pos` はゲームが置くときに `pos` から作り直すのでそのまま。リージョンの中身がずれるときは、範囲の外のエンティティもその分だけ直す。
+- 回転・反転では、エンティティの向きも変える。`nbt` の `Rotation` の yaw（0 が south、90 が west）は、x の反転で −yaw、z の反転で 180 − yaw、右回り 90° ごとに +90。額縁の `Facing`（上下を含む向きの番号、`Direction.get3DDataValue` の順）と、絵の `facing`・`Facing`（水平の向きの番号、`get2DDataValue` の順）も向きを変える。
+- 生データの中の座標は、ブロックごとに `blockEntity`（下の `BlockEntityTransformer`）で書き直す。平行移動でも呼ぶ（範囲の外を指す位置を知らせるため）。
 
 **選択範囲と仮の入出力を一緒に動かす。** 範囲を動かす操作は `relocation`（元の範囲・行き先の範囲・`translate`・`shift`）を持つ。画面の `DocumentSession` は、この操作を書いた・元に戻した・やり直したときに `onRelocate` で合図し、`view/edit/relocationSync.ts` が選択範囲と仮の入出力の位置を `relocatePos` で直す。どちらも履歴には入れない。
 
 ```ts
 interface EditCommand {
   // …上のもの
-  readonly relocation?: { source: Box; target: Box; translate: Vec3; shift: Vec3 }  // source は前の座標、target は後の座標
+  readonly relocation?: { source: Box; target: Box; transform: BlockTransform; shift: Vec3 }  // source は前の座標、target は後の座標
 }
 function relocatePos(r: Relocation, pos: Vec3, forward: boolean): Vec3
+function relocatePlace(r: Relocation, place: { pos: Vec3; face: Direction }, forward: boolean): { pos: Vec3; face: Direction }
 ```
+
+- 範囲の中の位置は `transform` と `shift`、外の位置は `shift` だけ動く。仮の入出力は面の向きも変える（`relocatePlace`）。
 
 **矢印キーの向き。** 2D は画面の上が −Z、右が +X。3D は、カメラの水平の向きに一番近い x・z の向きを上にし、右はその右回り 90°（`view/edit/moveDirection.ts`）。
 
 **操作の作り方。** 動かす・回す・貼り付けは、どれも「元のマスを空にし、行き先のマスに書く」変更の一覧にする。元と行き先が重なるときは、元を空にする変更を先に、行き先を書く変更を後に並べる（同じマスへの2回目の変更が勝つ）。元に戻すときは逆の順に書き戻すので、重なっても元に戻る。
 
-**ブロック状態の回転・反転（`StateTransformer`）。** 今の `rotateState`（`axis`・`facing`・`horizontal_facing`）に、反転（`mirrorState`）と、バニラの向きのプロパティを足す。
+**ブロック状態の回転・反転（`StateTransformer`）。** バニラの向きのプロパティは `transformVanillaState`（`edit/stateTransform.ts`）で変える。置くブロックを回す `rotateState`（R / Shift+R）とは別の関数にする（あちらは縦にする規則と、Modpack の取りうる値を持つため）。
 
-| プロパティ | 回転 | 反転 |
+| プロパティ | 回転（右回り 90° ごと） | 反転 |
 | --- | --- | --- |
-| `axis`（x・y・z） | x↔z | 変えない |
-| `facing`・`horizontal_facing` | 水平の向きを回す | x 反転なら east↔west、z 反転なら north↔south |
-| `rotation`（0〜15、看板など） | +4 ずつ | 16 − 値 などのゲームの規則 |
-| `shape`（階段・レール）、`hinge`（扉）、`north`/`east`/…（柵・壁・ガラス板の接続） | ゲームの規則の表で変える | 同じ |
-| Create の `axis_along_first`（ソーなど）、ベルトの `facing`・`slope` | Mod の規則 | Mod の規則 |
+| `axis`（x・y・z） | x ↔ z | 変えない |
+| `facing`・`horizontal_facing` | 水平の向きを回す（north → east → south → west）。up・down は変えない | x 反転なら east ↔ west、z 反転なら north ↔ south |
+| `rotation`（0〜15。看板・旗・頭。0 が south、4 が west） | +4 | x 反転なら 16 − r、z 反転なら 8 − r（16 の剰余） |
+| `north`・`east`・`south`・`west`（柵・壁・ガラス板・レッドストーンの接続、ツタ） | 値を回した向きの名前へ移す | 値を反転した向きの名前へ移す |
+| `shape`（階段：`straight`・`inner_left` など） | 変えない（`facing` が回る） | left ↔ right |
+| `shape`（レール：`north_south`・`south_east`・`ascending_north` など） | 向きの語を回す。2つの向きは north / south を先に並べる | 向きの語を反転する |
+| `hinge`（扉）、`type` の `left`・`right`（チェスト） | 変えない | left ↔ right |
+| `orientation`（ジグソー・クラフター：`up_east` など） | 向きの語を回す | 向きの語を反転する |
 
-- バニラの規則は Minecraft の `Rotation`・`Mirror` の規則を調べて表にする（#129 の子の Issue で）。Mod のブロックは、`facing`・`axis` の名前ならバニラと同じに扱い、それ以外のプロパティは計算プラグインの規則（下）に任せる。
-- 知らないプロパティは変えず、警告（`warnings`）に出す。
+- 反転は「向きを写し、左右を入れ替える」で決める。ゲームの階段は、向きの軸と反転の軸が違うときに `shape` の左右を変えない（置いたあと周りに合わせて直る）が、写した形が正しくなる方にそろえた。
+- Mod のブロックの独自のプロパティは、計算プラグインの `transformState` に任せる（Create は docs/create-stress.md「回転・反転」）。答えるプラグインがなければバニラの規則だけで変える。知らないプロパティは変えない。
 
 **生データの中の座標（`BlockEntityTransformer`）。** 生データには位置を持つ項目がある（Create の機械アームの `InteractionPoints` はアームからの相対位置、ベルトの `Controller` などは位置そのもの）。動かす・回すときに書き直す。Mod ごとの知識なので calc に置き、置くときの向き（`orientForPlacement`）と同じく、画面が計算プラグインの一覧から関数を作って edit の操作に渡す。
 
 ```ts
 interface CalcPlugin {
-  // 生データの中の座標を、ブロックの変換に合わせて書き直す（任意）。知らないブロックなら null（そのまま）
-  transformBlockEntity?(state: BlockState, nbt: RawNbt, t: BlockTransform, from: Vec3, to: Vec3): RawNbt | null
-  // ブロック状態の Mod 独自のプロパティを回す・反転する（任意）。知らないブロックなら null
+  // 生データの中の座標を、ブロックの変換に合わせて書き直す（任意）。知らないブロックなら null（そのまま）。
+  // state は変換の前の状態、from・to は変換の前と後のマス、source は変換する範囲
+  transformBlockEntity?(state: BlockState, nbt: RawNbt, t: BlockTransform, from: Vec3, to: Vec3, source: Box): BlockEntityTransform | null
+  // ブロック状態を回す・反転する（任意）。バニラの向きのプロパティも含めて変えた状態を返す。知らないブロックなら null
   transformState?(state: BlockState, t: BlockTransform): BlockState | null
 }
+interface BlockEntityTransform { nbt: RawNbt; unresolved: boolean }  // unresolved：範囲の外を指す位置が残った
 ```
 
-- どの項目が位置か（相対か絶対か）は Mod ごとに調べ、規則の書類に書く（Create は create-stress.md の「生データの項目」に足す）。
+- 画面は `view/edit/placementRules.ts` の `transformBlockState`・`transformBlockEntity` で、計算プラグインの一覧に順に聞く。
+- どの項目が位置か（相対か絶対か）は Mod ごとに調べ、規則の書類に書く（Create は create-stress.md「回転・反転」）。
+- 相対位置は向きだけを変換する（`transformVector`）。相手が範囲の外なら、相手は一緒に動かないので `unresolved` にし、操作の警告に「生データの座標を直せないブロックがあります（n 個）」と出す。
+- ワールド座標の項目（ベルトの `Controller` など）は、ゲームが置くときに作り直すので変えない。
 - 切り抜きを別の設計図に貼るときも同じ関数で直す。
-- 範囲の外のブロックを指す位置（範囲の外のベルトの `Controller` など）は書き直さず、警告に出す。
 
-**エンティティ。** 範囲の中にあるエンティティ（生データの `pos`・`blockPos`）は、ブロックと同じく動かす・回す・写す。向き（`Rotation`）も回す。
+**エンティティ。** 範囲の中にあるエンティティ（生データの `pos`・`blockPos`）は、ブロックと同じく動かす・回す・写す。向き（`Rotation` など）も回す（上の「範囲を動かす・回す・反転する」）。2マス以上の大きさの絵は、回すと基準のマスが変わることがあるが、直さない（ゲームで確かめていない）。
 
-**仮の入出力。** 動かしたブロックに付けた仮の入出力は、位置と面を変換に合わせて変える（画面の `portStore` が、操作の結果の変換を見て直す）。履歴には入れない（仮の入出力は設計図の変更ではないため）。
+**仮の入出力。** 動かしたブロックに付けた仮の入出力は、位置と面を変換に合わせて変える（画面の `portStore` が、操作の `relocation` を見て直す）。履歴には入れない（仮の入出力は設計図の変更ではないため）。
 
 **切り抜きの置き場所。** 切り抜きは画面のストアが持つ。OS のクリップボードには入れない（ほかのアプリとやりとりする形式がないため）。
 

@@ -6,11 +6,13 @@ import type { Box } from '../../domain/box'
 import type { Blueprint } from '../../domain/blueprint'
 import type { EditCommand } from '../../edit/editCommand'
 import type { Vec3 } from '../../domain/vec3'
+import { mirrorWithin, rotationAbout, translation, type BlockTransform, type QuarterTurns } from '../../domain/blockTransform'
 import { eraseRegion, fillRegion, replaceInRegion } from '../../edit/regionEdit'
-import { moveRegion } from '../../edit/regionMove'
+import { transformRegion, type TransformOptions } from '../../edit/regionTransform'
 import { useDocumentSession } from '../document/documentSession'
 import { useBrushStore } from '../stores/brushStore'
 import { useToolStore } from '../stores/toolStore'
+import { transformBlockEntity, transformBlockState } from './placementRules'
 
 export interface RegionActions {
   /** 範囲の中を消す。消したら true */
@@ -24,6 +26,10 @@ export interface RegionActions {
    * 選択範囲と仮の入出力は、session.onRelocate を受けて一緒に動く（relocationSync.ts）
    */
   move(d: Vec3, overwrite: boolean): boolean
+  /** 範囲を中心のマスのまわりに回す。turns は右回りの 90° の数（左回りは 3）。回したら true */
+  rotate(turns: QuarterTurns, overwrite: boolean): boolean
+  /** 範囲をその中で反転する（'x' は左右、'z' は前後）。反転したら true */
+  mirror(axis: 'x' | 'z'): boolean
   /** 設計図全体を選ぶ */
   selectAll(): void
 }
@@ -70,6 +76,21 @@ export function useRegionActions(): RegionActions {
     return true
   }
 
+  // 動かす・回す・反転する。向きと生データの中の座標は計算プラグインの規則で変える。
+  // 選択範囲と仮の入出力は、session.onRelocate を受けて一緒に動く（relocationSync.ts）
+  function transform(make: (box: Box) => BlockTransform, overwrite: boolean): boolean {
+    const opts: TransformOptions = { overwrite, states: transformBlockState, blockEntity: transformBlockEntity }
+    let warnings: readonly string[] = []
+    const done = run((bp, box) => {
+      const result = transformRegion(bp, box, make(box), opts)
+      if (!result.ok) return result.reason
+      warnings = result.warnings
+      return result.command
+    }, REGION_MESSAGES.noSelection)
+    if (done && warnings.length > 0) brush.setMessage(warnings.join('。'))
+    return done
+  }
+
   return {
     erase: () => run((bp, box) => eraseRegion(bp, box), REGION_MESSAGES.nothingToErase),
     fill(onlyEmpty) {
@@ -84,17 +105,9 @@ export function useRegionActions(): RegionActions {
         REGION_MESSAGES.nothingToReplace,
       )
     },
-    move(d, overwrite) {
-      let warning: string | null = null
-      const moved = run((bp, box) => {
-        const result = moveRegion(bp, box, d, { overwrite })
-        if (!result.ok) return result.reason
-        warning = result.warnings[0] ?? null
-        return result.command
-      }, REGION_MESSAGES.noSelection)
-      if (moved && warning) brush.setMessage(warning)
-      return moved
-    },
+    move: (d, overwrite) => transform(() => translation(d), overwrite),
+    rotate: (turns, overwrite) => transform((box) => rotationAbout(box, turns), overwrite),
+    mirror: (axis) => transform((box) => mirrorWithin(box, axis), false),
     selectAll() {
       const bp = session.current.value?.blueprint
       if (!bp) return
