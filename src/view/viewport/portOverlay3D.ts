@@ -1,5 +1,5 @@
 // 3D表示に重ねる仮の入出力の印（#70）。
-// つないだブロックの面の外側に、薄い板を置く。動力源は緑、負荷は橙、選んでいるものは大きく濃くする。
+// つないだブロックの面の外側に、薄い板を置く。動力源は緑、負荷は橙、物の入口は青、選んでいるものは大きく濃くする。
 // BlueprintScene とは別の THREE.Group にして、Viewport3D がシーンに足す。WebGL を使わないので、テストでも作れる。
 
 import * as THREE from 'three'
@@ -12,8 +12,12 @@ export const PORT_SOURCE_COLOR = 0x2e9d4f
 /** 負荷など、動力源でない印の色 */
 export const PORT_LOAD_COLOR = 0xc77c14
 
-/** 種類から印の色を決める。'source' を含む種類を動力源とみなす */
+/** 物の入口の印の色（#127） */
+export const PORT_ITEM_COLOR = 0x2f6fd0
+
+/** 種類から印の色を決める。'item-' で始まる種類は物の入口、'source' を含む種類を動力源とみなす */
 export function portColor(kind: string): number {
+  if (kind.startsWith('item-')) return PORT_ITEM_COLOR
   return kind.includes('source') ? PORT_SOURCE_COLOR : PORT_LOAD_COLOR
 }
 

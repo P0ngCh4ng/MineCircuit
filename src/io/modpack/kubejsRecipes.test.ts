@@ -19,12 +19,28 @@ describe('readKubeJsRecipes', () => {
       ['data/elsewhere/recipes/x.json', json({ type: 'create:milling' })],
     ])
     const result = await readKubeJsRecipes(source)
-    expect(result.recipes).toEqual([
+    expect(result.recipes).toMatchObject([
       { id: 'createastral:milling/grain', type: 'milling', items: ['minecraft:wheat'], tags: [], duration: 120 },
       { id: 'pack:deep/a/b/cut', type: 'cutting', items: [], tags: ['minecraft:logs'], duration: 0 },
     ])
     expect(result.problems).toEqual([])
     expect(result.scriptsChangeRecipes).toBe(false)
+  })
+
+  it('kubejs/data/<namespace>/tags/items/ と 1.21 の tags/item/ のアイテムのタグを読む。入れ子のタグはそのまま', async () => {
+    const source = new MemoryFileSource([
+      ['kubejs/data/forge/tags/items/ores/iron.json', json({ values: ['kubejs:iron_ore', { id: 'other:ore', required: false }] })],
+      ['kubejs/data/c/tags/item/ores.json', json({ replace: true, values: ['#c:ores/iron'] })],
+      ['kubejs/data/forge/tags/blocks/ores.json', json({ values: ['a:b'] })],
+      ['kubejs/data/forge/tags/items/broken.json', strToU8('{ broken')],
+    ])
+    const result = await readKubeJsRecipes(source)
+    expect(result.itemTags).toEqual({
+      'forge:ores/iron': { replace: false, values: ['kubejs:iron_ore', 'other:ore'] },
+      'c:ores': { replace: true, values: ['#c:ores/iron'] },
+    })
+    expect(result.problems).toHaveLength(1)
+    expect(result.problems[0]).toMatch(/^kubejs\/data\/forge\/tags\/items\/broken\.json: 読めません/)
   })
 
   it('server_scripts の ServerEvents.recipes（KubeJS 6）を見つける', async () => {
@@ -59,6 +75,7 @@ describe('readKubeJsRecipes', () => {
     expect(await readKubeJsRecipes(new MemoryFileSource([['mods/a.jar', new Uint8Array()]]))).toEqual({
       recipes: [],
       scriptsChangeRecipes: false,
+      itemTags: {},
       problems: [],
     })
   })

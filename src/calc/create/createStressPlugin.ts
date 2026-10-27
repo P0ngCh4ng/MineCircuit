@@ -2,6 +2,7 @@
 // 輸送量と処理時間（docs/create-throughput.md）もプローブに出す。
 
 import type { Blueprint } from '../../domain/blueprint'
+import type { Vec3 } from '../../domain/vec3'
 import type { RecipeBook } from '../../io/modpack/recipes'
 import { AssumptionLog } from '../assumptionLog'
 import type {
@@ -20,8 +21,10 @@ import { loadCreateConfig } from './createConfig'
 import { orientForPlacement, placementHelper, placementProblem } from './createPlacement'
 import { kineticThroughputValues, staticThroughputValues, type ThroughputEnv } from './createThroughput'
 import { CreateValueResolver } from './createValueResolver'
+import { itemPathValues, traceItemPaths, type ItemPathRecord } from './createItemPath'
 import {
   CREATE_STRESS_PLUGIN_ID,
+  ITEM_INPUT_PORT_KIND,
   KineticGraph,
   formatNumber,
   weakerSource,
@@ -51,6 +54,14 @@ export function createStressPlugin(): CalcPlugin {
           { key: 'impact', label: '1 RPM あたりの応力', unit: 'SU/RPM', defaultValue: 4, min: 0, optional: true },
         ],
       },
+      {
+        kind: ITEM_INPUT_PORT_KIND,
+        label: '物の入口',
+        description:
+          '面の向こうから物が入ってきます。物の通り道（ベルト・ファンネル・シュート・機械アームなど）をたどり、機械ごとに届く物とレシピを決めます。',
+        params: [{ key: 'rate', label: '入る数', unit: '個/秒', defaultValue: 1, min: 0 }],
+        itemParams: [{ key: 'item', label: 'アイテム' }],
+      },
     ],
     supports: (bp: Blueprint, _pack: CalcModpack | null) => bp.namespaces.has('create'),
     run: (bp: Blueprint, ctx: CalcContext) => runCreateStress(bp, ctx),
@@ -79,16 +90,53 @@ export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<
   const evaluation = graph.evaluate({ maxRotationSpeed: maxRotationSpeed.value, disableStress: disableStress.value })
   if (disableStress.value) log.add('設定で応力が切ってある（disableStress）ので、過負荷にならない')
 
-  const env: ThroughputEnv = { bp, values, recipes: await loadRecipes(ctx, log), log }
-  const allProbes = [...probes(graph, evaluation, env), ...staticProbes(bp, env)]
+  const recipes = await loadRecipes(ctx, log)
+  // 物の通り道（docs/create-throughput.md「物の通り道（#127）」）。届く物は、処理時間のレシピを決めるのにも使う
+  const path = traceItemPaths(
+    ctx.ports.filter((p) => p.kind === ITEM_INPUT_PORT_KIND),
+    { bp, recipes, log, rpmAt: runningSpeeds(graph, evaluation), bulkPressing: values.bulkPressing().value },
+  )
+  const env: ThroughputEnv = { bp, values, recipes, log, pathItems: (pos) => path.itemsAt(pos) }
+  const allProbes = withItemPath([...probes(graph, evaluation, env), ...staticProbes(bp, env)], path.records)
 
   return {
     summary: summarize(evaluation, disableStress.source),
-    issues: [...evaluation.issues, ...placementIssues(bp)],
+    issues: [...evaluation.issues, ...placementIssues(bp), ...path.issues],
     assumptions: log.list(),
     probes: allProbes,
     rotations: rotations(graph, evaluation, values),
   }
+}
+
+/** 回るブロックの、動いているときの回転数（過負荷・回転数が足りないなら 0）。回るブロックでなければ null */
+function runningSpeeds(graph: KineticGraph, ev: KineticEvaluation): (pos: Vec3) => number | null {
+  const speeds = new Map<string, number>()
+  graph.nodes.forEach((node, i) => {
+    if (node.portId !== null) return
+    const r = ev.nodes[i]!
+    const stopped = ev.networks[r.network]!.overloaded && r.theoreticalSpeed !== 0
+    const tooSlow = node.minSpeed > 0 && Math.abs(r.speed) < node.minSpeed
+    speeds.set(node.pos.join(','), stopped || tooSlow ? 0 : r.speed)
+  })
+  return (pos) => speeds.get(pos.join(',')) ?? null
+}
+
+/** 物の通り道の値をプローブに足す。同じ見出し（「レシピ」）は物の通り道の方で置き換える。プローブがない位置には足す */
+function withItemPath(list: CalcProbe[], records: readonly ItemPathRecord[]): CalcProbe[] {
+  const result = [...list]
+  for (const record of records) {
+    const values = itemPathValues(record)
+    if (values.length === 0) continue
+    const i = result.findIndex((p) => p.pos.join() === record.pos.join())
+    if (i < 0) {
+      result.push({ pos: [record.pos[0], record.pos[1], record.pos[2]], values })
+      continue
+    }
+    const probe = result[i]!
+    const labels = new Set(values.map((v) => v.label))
+    result[i] = { ...probe, values: [...probe.values.filter((v) => !labels.has(v.label)), ...values] }
+  }
+  return result
 }
 
 /** Modpack のレシピ（docs/create-throughput.md「レシピ」）。読めなければ null（初期値で計算する） */

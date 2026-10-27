@@ -119,8 +119,18 @@ describe('計算の Worker', () => {
       recipeBook: async () => {
         asked++
         return {
-          recipes: [{ id: 'create:milling/wheat', type: 'milling', items: ['minecraft:wheat'], tags: [], duration: 150 }],
+          recipes: [
+            {
+              id: 'create:milling/wheat',
+              type: 'milling',
+              items: ['minecraft:wheat'],
+              tags: [],
+              duration: 150,
+              results: [{ item: 'create:wheat_flour', count: 1, chance: 1 }],
+            },
+          ],
           scriptsChangeRecipes: true,
+          itemTags: { 'forge:crops/wheat': ['minecraft:wheat'] },
         }
       },
     }
@@ -128,18 +138,21 @@ describe('計算の Worker', () => {
       ...noopCalcPlugin(),
       run: async (_bp, ctx) => {
         const book = await ctx.pack?.recipeBook?.()
-        const text = book ? `${book.recipes.map((r) => `${r.id}=${r.duration}`).join()}/${book.scriptsChangeRecipes}` : ''
+        const text = book
+          ? `${book.recipes.map((r) => `${r.id}=${r.duration}>${r.results.map((x) => x.item).join('+')}`).join()}/${book.scriptsChangeRecipes}` +
+            `/${Object.entries(book.itemTags).map(([tag, items]) => `${tag}=${items.join('+')}`).join()}`
+          : ''
         return { summary: [{ label: 'レシピ', value: resolved(text, 'modpack') }], issues: [], assumptions: [] }
       },
     }
     const [o] = await new WorkerCalcBackend(fakeWorker(new PluginRegistry([recipes]))).run({ blueprint: bp, pack, ports: [] })
     expect(asked).toBe(1)
-    expect(o.status === 'ok' && o.result.summary[0].value.value).toBe('create:milling/wheat=150/true')
+    expect(o.status === 'ok' && o.result.summary[0].value.value).toBe('create:milling/wheat=150>create:wheat_flour/true/forge:crops/wheat=minecraft:wheat')
 
     // recipeBook を持たない Modpack では空のレシピ
     const noRecipes: CalcModpack = { hasNamespace: () => true, config: async () => null }
     const [o2] = await new WorkerCalcBackend(fakeWorker(new PluginRegistry([recipes]))).run({ blueprint: bp, pack: noRecipes, ports: [] })
-    expect(o2.status === 'ok' && o2.result.summary[0].value.value).toBe('/false')
+    expect(o2.status === 'ok' && o2.result.summary[0].value.value).toBe('/false/')
   })
 
   it('レシピを読めなかったら、そのプラグインの error になる', async () => {

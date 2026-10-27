@@ -1,18 +1,21 @@
 <script setup lang="ts">
 // 右パネルの仮の入出力（#70）。置く種類の選択と、置いた仮の入出力の一覧（値の変更と削除）。
 // 仮の入出力のツールを使っている間と、1つ以上置いている間だけ出す。
-import { computed } from 'vue'
-import type { PortParamDef, VirtualPort } from '../../calc/virtualPort'
+import { computed, ref } from 'vue'
+import type { PortItemParamDef, PortParamDef, VirtualPort } from '../../calc/virtualPort'
 import { DIRECTIONS, isDirection } from '../../domain/direction'
 import { useCalcStore } from '../stores/calcStore'
+import { useModpackContentStore } from '../stores/modpackContent'
 import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import {
   FACE_LABELS,
   findPortKind,
+  itemCandidates,
   parsePortNumber,
   portKindKey,
   withPortFace,
+  withPortItem,
   withPortLabel,
   withPortParam,
 } from './portModel'
@@ -22,6 +25,7 @@ import { useJumpTo } from './useProbeTool'
 const tools = useToolStore()
 const store = usePortStore()
 const calc = useCalcStore()
+const content = useModpackContentStore()
 const jumpTo = useJumpTo()
 
 const active = computed(() => tools.activeToolId === 'port')
@@ -51,6 +55,41 @@ function onParamChange(port: VirtualPort, def: PortParamDef, e: Event): void {
     return
   }
   store.update(withPortParam(port, def.key, value))
+}
+
+/** アイテムの欄の定義（#127） */
+function itemDefs(port: VirtualPort): readonly PortItemParamDef[] {
+  return findPortKind(store.options, port)?.def.itemParams ?? []
+}
+
+/**
+ * アイテムの欄に打っている途中の文字（`<port の id>/<欄>` → 文字）。候補（datalist）は打っている文字で絞る。
+ * 打つたびに候補が変わって画面を描き直すので、途中の文字を持っておかないと、欄が元の値に戻ってしまう
+ */
+const itemDrafts = ref<Record<string, string>>({})
+const itemText = ref('')
+const candidates = computed(() => itemCandidates(content.pack, itemText.value))
+
+function itemDraftKey(port: VirtualPort, def: PortItemParamDef): string {
+  return `${port.id}/${def.key}`
+}
+
+function onItemInput(port: VirtualPort, def: PortItemParamDef, e: Event): void {
+  const text = (e.target as HTMLInputElement).value
+  itemDrafts.value = { ...itemDrafts.value, [itemDraftKey(port, def)]: text }
+  itemText.value = text
+}
+
+/** 候補の名前を選んだときは、その ID にする。名前と ID の両方を打てる */
+function itemIdOf(text: string): string {
+  const t = text.trim()
+  return candidates.value.find((c) => c.name === t)?.id ?? t
+}
+
+function onItemChange(port: VirtualPort, def: PortItemParamDef, e: Event): void {
+  const { [itemDraftKey(port, def)]: _done, ...rest } = itemDrafts.value
+  itemDrafts.value = rest
+  store.update(withPortItem(port, def.key, itemIdOf((e.target as HTMLInputElement).value)))
 }
 
 function onFaceChange(port: VirtualPort, e: Event): void {
@@ -127,6 +166,18 @@ function selectPort(port: VirtualPort): void {
             />
             <span v-if="def.unit" class="unit">{{ def.unit }}</span>
           </label>
+          <label v-for="def in itemDefs(port)" :key="`item-${def.key}`">
+            {{ def.label }}
+            <input
+              type="text"
+              list="port-item-candidates"
+              :data-item="def.key"
+              :value="itemDrafts[itemDraftKey(port, def)] ?? port.items?.[def.key] ?? ''"
+              :placeholder="content.pack ? '名前か ID（minecraft:wheat）' : 'ID（minecraft:wheat）'"
+              @input="onItemInput(port, def, $event)"
+              @change="onItemChange(port, def, $event)"
+            />
+          </label>
           <label>
             メモ
             <input type="text" data-field="label" :value="port.label ?? ''" placeholder="外の水車列 など" @change="onLabelChange(port, $event)" />
@@ -134,6 +185,9 @@ function selectPort(port: VirtualPort): void {
         </div>
       </li>
     </ul>
+    <datalist id="port-item-candidates">
+      <option v-for="c in candidates" :key="c.id" :value="c.name">{{ c.id }}</option>
+    </datalist>
     <p class="note">
       仮の入出力は設計図（.nbt）には書き込みません。別の設計図を開くと消えます。
       <button v-if="store.ports.length > 0" type="button" data-action="clear-ports" @click="store.clear()">すべて消す</button>
@@ -187,6 +241,10 @@ h2 {
 
 .port[data-kind='rotation-load'] {
   border-left-color: #c77c14;
+}
+
+.port[data-kind^='item-'] {
+  border-left-color: #2f6fd0;
 }
 
 .port.selected {

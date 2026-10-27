@@ -100,12 +100,12 @@ describe('scanJar のレシピ', () => {
           ingredients: [{ tag: 'c:ores/iron' }],
           processingTime: 250,
         }),
-        'data/create/recipes/pressing/iron.json': JSON.stringify({ type: 'create:pressing', ingredients: [{ item: 'a:b' }] }),
+        'data/create/recipes/mechanical_crafting/iron.json': JSON.stringify({ type: 'create:mechanical_crafting', key: {} }),
         'data/minecraft/recipes/bread.json': JSON.stringify({ type: 'minecraft:crafting_shaped', key: {} }),
         'data/create/tags/items/x.json': JSON.stringify({ type: 'create:milling' }),
       },
     }))
-    expect(s.recipes).toEqual([
+    expect(s.recipes).toMatchObject([
       { id: 'create:crushing/ore', type: 'crushing', items: [], tags: ['c:ores/iron'], duration: 250 },
       { id: 'create:milling/wheat', type: 'milling', items: ['minecraft:wheat'], tags: [], duration: 150 },
     ])
@@ -135,16 +135,51 @@ describe('scanJar のレシピ', () => {
       files: { 'data/create/recipes/milling/wheat.json': milling('outer:wheat', 99) },
       nestedJars: { 'inner-1.jar': inner },
     }))
-    expect([...s.recipes].sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+    expect([...s.recipes].sort((a, b) => a.id.localeCompare(b.id))).toMatchObject([
       { id: 'create:milling/wheat', type: 'milling', items: ['outer:wheat'], tags: [], duration: 99 },
       { id: 'inner:milling/only_inner', type: 'milling', items: ['inner:x'], tags: [], duration: 20 },
     ])
   })
 
+  it('data/<namespace>/tags/items/ と 1.21 の tags/item/ のアイテムのタグを読む。ブロックのタグと壊れたタグは捨てる', () => {
+    const s = scanJar('tags.jar', fakeJar({
+      files: {
+        'data/forge/tags/items/ores/iron.json': JSON.stringify({ values: ['create:raw_zinc', { id: 'create:zinc_ore', required: false }] }),
+        'data/c/tags/item/ingots.json': JSON.stringify({ replace: true, values: ['#c:ingots/zinc', 'stick'] }),
+        'data/forge/tags/blocks/ores.json': JSON.stringify({ values: ['a:b'] }),
+        'data/forge/tags/items/broken.json': '{ broken',
+      },
+    }))
+    expect(s.itemTags).toEqual({
+      'forge:ores/iron': { replace: false, values: ['create:raw_zinc', 'create:zinc_ore'] },
+      'c:ingots': { replace: true, values: ['#c:ingots/zinc', 'minecraft:stick'] },
+    })
+    expect(s.problems).toEqual([])
+  })
+
+  it('jar の中の jar のアイテムのタグは、外の jar のタグのあとに足す', () => {
+    const inner = fakeJar({
+      files: {
+        'data/forge/tags/items/ores.json': JSON.stringify({ values: ['inner:ore'] }),
+        'data/inner/tags/items/only.json': JSON.stringify({ values: ['inner:x'] }),
+      },
+    })
+    const s = scanJar('outer.jar', fakeJar({
+      files: { 'data/forge/tags/items/ores.json': JSON.stringify({ values: ['outer:ore'] }) },
+      nestedJars: { 'inner-1.jar': inner },
+    }))
+    expect(s.itemTags).toEqual({
+      'forge:ores': { replace: false, values: ['outer:ore', 'inner:ore'] },
+      'inner:only': { replace: false, values: ['inner:x'] },
+    })
+  })
+
   it('isWantedJarEntry はレシピの JSON を取り出し、ほかの data/ は取り出さない', () => {
     expect(isWantedJarEntry('data/create/recipes/milling/wheat.json')).toBe(true)
     expect(isWantedJarEntry('data/create/recipe/milling/wheat.json')).toBe(true)
-    expect(isWantedJarEntry('data/create/tags/items/x.json')).toBe(false)
+    expect(isWantedJarEntry('data/create/tags/items/x.json')).toBe(true)
+    expect(isWantedJarEntry('data/create/tags/item/x.json')).toBe(true)
+    expect(isWantedJarEntry('data/create/tags/blocks/x.json')).toBe(false)
     expect(isWantedJarEntry('data/create/loot_tables/x.json')).toBe(false)
     expect(isWantedJarEntry('data/create/recipes/x.nbt')).toBe(false)
   })

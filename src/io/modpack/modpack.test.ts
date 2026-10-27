@@ -7,11 +7,11 @@ import { MemoryFileSource } from '../memoryFileSource'
 import type { ProcessingRecipe } from './recipes'
 
 function recipe(id: string, duration: number): ProcessingRecipe {
-  return { id, type: 'milling', items: ['minecraft:wheat'], tags: [], duration }
+  return { id, type: 'milling', items: ['minecraft:wheat'], tags: [], duration, results: [] }
 }
 
 function summary(jar: string, partial: Partial<JarSummary>): JarSummary {
-  return { jar, mods: [], namespaces: [], lang: { ja_jp: {}, en_us: {} }, blockStates: {}, problems: [], assets: [], recipes: [], ...partial }
+  return { jar, mods: [], namespaces: [], lang: { ja_jp: {}, en_us: {} }, blockStates: {}, problems: [], assets: [], recipes: [], itemTags: {}, ...partial }
 }
 
 describe('Modpack', () => {
@@ -64,7 +64,7 @@ describe('Modpack', () => {
       null,
       null,
       {},
-      { recipes: [recipe('create:milling/a', 10), recipe('kubejs:milling/c', 70)], scriptsChangeRecipes: true },
+      { recipes: [recipe('create:milling/a', 10), recipe('kubejs:milling/c', 70)], scriptsChangeRecipes: true, itemTags: {} },
     )
     const book = await pack.recipeBook()
     expect(Object.fromEntries(book.recipes.map((r) => [r.id, r.duration]))).toEqual({
@@ -78,7 +78,40 @@ describe('Modpack', () => {
 
   it('KubeJS のレシピがなければ jar のレシピだけで、スクリプトはレシピを変えていない扱い', async () => {
     const pack = new Modpack([summary('a.jar', { recipes: [recipe('create:milling/wheat', 100)] })], null)
-    expect(await pack.recipeBook()).toEqual({ recipes: [recipe('create:milling/wheat', 100)], scriptsChangeRecipes: false })
+    expect(await pack.recipeBook()).toEqual({ recipes: [recipe('create:milling/wheat', 100)], scriptsChangeRecipes: false, itemTags: {} })
+  })
+
+  it('アイテムのタグを Minecraft 本体 → jar の順 → kubejs/data/ の順にまとめ、入れ子のタグを平らにする', async () => {
+    const vanilla = summary('client.jar', {
+      itemTags: { 'minecraft:logs': { replace: false, values: ['minecraft:oak_log', '#minecraft:birch_logs'] }, 'minecraft:birch_logs': { replace: false, values: ['minecraft:birch_log'] } },
+    })
+    const pack = new Modpack(
+      [
+        summary('a.jar', {
+          itemTags: {
+            'forge:ores/iron': { replace: false, values: ['minecraft:iron_ore'] },
+            'forge:ores': { replace: false, values: ['#forge:ores/iron', '#forge:ores/unknown'] },
+            'minecraft:logs': { replace: false, values: ['a:log'] },
+          },
+        }),
+        summary('b.jar', { itemTags: { 'forge:ores/iron': { replace: false, values: ['b:iron_ore'] } } }),
+      ],
+      null,
+      [],
+      [],
+      [],
+      {
+        status: { kind: 'found', version: '1.20.1', where: 'Modpack', jarPath: 'versions/1.20.1/1.20.1.jar', jaJp: false },
+        assets: { version: '1.20.1', source: new MemoryFileSource([]), jarPath: 'versions/1.20.1/1.20.1.jar', summary: vanilla, jaJp: {} },
+      },
+      null,
+      {},
+      { recipes: [], scriptsChangeRecipes: false, itemTags: { 'forge:ores/iron': { replace: true, values: ['kubejs:iron_ore'] } } },
+    )
+    const { itemTags } = await pack.recipeBook()
+    expect(itemTags['minecraft:logs']).toEqual(['minecraft:oak_log', 'minecraft:birch_log', 'a:log'])
+    expect(itemTags['forge:ores/iron']).toEqual(['kubejs:iron_ore'])
+    expect(itemTags['forge:ores']).toEqual(['kubejs:iron_ore'])
   })
 })
 
@@ -86,5 +119,22 @@ describe('jarKeyPrefix', () => {
   it('同じ jar の鍵に共通の前半を返す', () => {
     expect(jarKeyPrefix('v1|create-6.0.jar|100|200')).toBe('v1|create-6.0.jar|')
     expect(jarKeyPrefix('v1|a.jar|3|h0000abcd')).toBe('v1|a.jar|')
+  })
+})
+
+describe('Modpack.itemIds（#127）', () => {
+  it('翻訳のアイテムとブロックの名前から ID を作る。説明文などのキーは入れない', () => {
+    const pack = new Modpack(
+      [
+        summary('a.jar', {
+          lang: {
+            ja_jp: { 'item.create.wheat_flour': '小麦粉', 'block.create.millstone': '石臼' },
+            en_us: { 'item.create.wheat_flour': 'Wheat Flour', 'entity.create.seat': 'Seat' },
+          },
+        }),
+      ],
+      null,
+    )
+    expect(pack.itemIds()).toEqual(['create:millstone', 'create:wheat_flour'])
   })
 })

@@ -100,18 +100,28 @@ export class WorkerCalcBackend implements CalcBackend {
   private async answerRecipes(requestId: number, callId: number): Promise<void> {
     const pack = this.pending.get(requestId)?.pack ?? null
     try {
-      const book = pack?.recipeBook ? await pack.recipeBook() : { recipes: [], scriptsChangeRecipes: false }
+      const book = pack?.recipeBook ? await pack.recipeBook() : emptyRecipeBook()
       // structured clone で送れる素のデータにする
       const plain: RecipeBook = {
-        recipes: book.recipes.map((r) => ({ ...r, items: [...r.items], tags: [...r.tags] })),
+        recipes: book.recipes.map((r) => ({
+          ...r,
+          items: [...r.items],
+          tags: [...r.tags],
+          results: r.results.map((x) => ({ ...x })),
+        })),
         scriptsChangeRecipes: book.scriptsChangeRecipes,
+        itemTags: Object.fromEntries(Object.entries(book.itemTags).map(([tag, items]) => [tag, [...items]])),
       }
       this.port.postMessage({ type: 'recipes-reply', callId, book: plain })
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e)
-      this.port.postMessage({ type: 'recipes-reply', callId, book: { recipes: [], scriptsChangeRecipes: false }, error })
+      this.port.postMessage({ type: 'recipes-reply', callId, book: emptyRecipeBook(), error })
     }
   }
+}
+
+function emptyRecipeBook(): RecipeBook {
+  return { recipes: [], scriptsChangeRecipes: false, itemTags: {} }
 }
 
 function packInfo(request: CalcRequest): PackInfo {

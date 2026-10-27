@@ -4,6 +4,7 @@
 import type { CalcPlugin } from '../../calc/calcPlugin'
 import type { PortKindDef, VirtualPort } from '../../calc/virtualPort'
 import type { Blueprint } from '../../domain/blueprint'
+import { ResourceLocation } from '../../domain/resourceLocation'
 import { DIRECTIONS, directionVector, type Direction } from '../../domain/direction'
 import { addVec3, equalsVec3, type Vec3 } from '../../domain/vec3'
 
@@ -64,6 +65,47 @@ export function withPortParam(port: VirtualPort, key: string, value: number | nu
   if (value === null) delete params[key]
   else params[key] = value
   return { ...port, params }
+}
+
+/** アイテムの欄を1つ変えた仮の入出力。空なら、その欄を消す（#127） */
+export function withPortItem(port: VirtualPort, key: string, item: string): VirtualPort {
+  const items: Record<string, string> = { ...port.items }
+  const id = item.trim()
+  if (id === '') delete items[key]
+  else items[key] = id.includes(':') ? id : `minecraft:${id}`
+  const { items: _old, ...rest } = port
+  return Object.keys(items).length === 0 ? rest : { ...rest, items }
+}
+
+/** アイテムの候補を出すための Modpack の部分（io/modpack の Modpack が満たす） */
+export interface ItemCandidatePack {
+  /** 翻訳にあるアイテムとブロックの ID（`namespace:path`） */
+  itemIds(): readonly string[]
+  displayName(id: ResourceLocation, lang: 'ja_jp' | 'en_us'): string | null
+}
+
+/** アイテムの候補1つ分 */
+export interface ItemCandidate {
+  readonly id: string
+  /** 画面に出す名前（日本語 → 英語 → ID） */
+  readonly name: string
+}
+
+/** 名前か ID に text を含むアイテムを、最大 limit 個。text が空なら空 */
+export function itemCandidates(pack: ItemCandidatePack | null, text: string, limit = 50): ItemCandidate[] {
+  const t = text.trim().toLowerCase()
+  if (!pack || t === '') return []
+  const out: ItemCandidate[] = []
+  for (const id of pack.itemIds()) {
+    const colon = id.indexOf(':')
+    if (colon < 0) continue
+    const loc = new ResourceLocation(id.slice(0, colon), id.slice(colon + 1))
+    const name = pack.displayName(loc, 'ja_jp') ?? pack.displayName(loc, 'en_us') ?? id
+    if (!id.toLowerCase().includes(t) && !name.toLowerCase().includes(t)) continue
+    out.push({ id, name })
+    if (out.length >= limit) break
+  }
+  return out
 }
 
 /** 面を変えた仮の入出力 */

@@ -261,6 +261,8 @@ export class KineticGraph {
     // 仮の入出力：面の向こうにノードを置き、シャフトとして r = 1 でつなぐ
     const portFaces = new Set<string>()
     for (const port of ports) {
+      // 物の入口（#127）は回転とつながないので、軸の口は要らない
+      if (port.kind === ITEM_INPUT_PORT_KIND) continue
       const target = at(port.pos)
       const node = target === undefined ? null : nodes[target]
       if (target === undefined || !node || !node.shaftFaces.includes(port.face)) {
@@ -607,7 +609,7 @@ function chainConnects(a: ChainInfo, b: ChainInfo, d: Direction): boolean {
 }
 
 /** ベルトの次の区間の位置（BeltBlock.nextSegmentPosition の規則） */
-function nextBeltSegment(pos: Vec3, state: BlockState): Vec3 | null {
+export function nextBeltSegment(pos: Vec3, state: BlockState): Vec3 | null {
   const facing = state.properties.facing
   const dir = (['north', 'south', 'east', 'west'] as const).find((f) => f === facing)
   if (!dir) return null
@@ -778,7 +780,12 @@ function makePortNode(port: VirtualPort, log: AssumptionLog): KineticNode | null
       source: null,
     }
   }
+  // 物の入口（#127）は回転と関係ない。物の通り道の計算（createItemPath.ts）で使う
+  if (port.kind === ITEM_INPUT_PORT_KIND) return null
   log.add(`仮の入出力の種類 ${port.kind} は Create の応力では使えないので、計算に入れていない`, port.pos)
   return null
 }
+
+/** 仮の入出力「物の入口」の種類（#127） */
+export const ITEM_INPUT_PORT_KIND = 'item-input'
 

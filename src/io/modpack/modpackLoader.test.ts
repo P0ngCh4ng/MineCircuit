@@ -322,7 +322,7 @@ describe('ModpackLoader（KubeJS のレシピ）', () => {
     ])
     const pack = await new ModpackLoader(source).load()
     const book = await pack.recipeBook()
-    expect(book.recipes).toEqual([{ id: 'kubejs:milling/wheat', type: 'milling', items: ['minecraft:wheat'], tags: [], duration: 150 }])
+    expect(book.recipes).toMatchObject([{ id: 'kubejs:milling/wheat', type: 'milling', items: ['minecraft:wheat'], tags: [], duration: 150 }])
     expect(book.scriptsChangeRecipes).toBe(true)
     expect(pack.problems).toEqual([])
   })
@@ -335,8 +335,31 @@ describe('ModpackLoader（KubeJS のレシピ）', () => {
     ])
     const pack = await new ModpackLoader(source).load()
     const book = await pack.recipeBook()
-    expect(book).toEqual({ recipes: [], scriptsChangeRecipes: false })
+    expect(book).toEqual({ recipes: [], scriptsChangeRecipes: false, itemTags: {} })
     expect(pack.problems.map((p) => p.jar)).toEqual(['kubejs/data'])
+  })
+})
+
+describe('ModpackLoader（アイテムのタグ）', () => {
+  it('jar と kubejs/data/ のアイテムのタグをまとめ、入れ子のタグを平らにして recipeBook で返す', async () => {
+    const tagJar = fakeJar({
+      forgeMods: [{ modId: 'ores', version: '1.0' }],
+      files: {
+        'data/forge/tags/items/ores.json': JSON.stringify({ values: ['#forge:ores/zinc'] }),
+        'data/forge/tags/items/ores/zinc.json': JSON.stringify({ values: ['ores:zinc_ore'] }),
+      },
+    })
+    const source = new MemoryFileSource([
+      ['mods/a.jar', gearJar()],
+      ['mods/ores.jar', tagJar],
+      ['kubejs/data/forge/tags/items/ores/zinc.json', strToU8(JSON.stringify({ values: ['kubejs:zinc_ore'] }))],
+    ])
+    const pack = await new ModpackLoader(source).load()
+    const { itemTags } = await pack.recipeBook()
+    expect(itemTags).toEqual({
+      'forge:ores': ['ores:zinc_ore', 'kubejs:zinc_ore'],
+      'forge:ores/zinc': ['ores:zinc_ore', 'kubejs:zinc_ore'],
+    })
   })
 })
 
