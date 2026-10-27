@@ -60,6 +60,9 @@ class FakeContext implements EditToolContext {
   placementProblem(bp: Blueprint, pos: Vec3, s: BlockState): string | null {
     return registry.placementProblem(bp, pos, s)
   }
+  placementHelper(bp: Blueprint, hit: { pos: Vec3; face: Direction; point: Vec3 }, s: BlockState) {
+    return registry.placementHelper(bp, hit, s)
+  }
 }
 
 const registry = createBuiltinRegistry()
@@ -246,5 +249,24 @@ describe('PlaceTool：設置の規則（#121）', () => {
     expect(ctx.ghostBlocked).toBe(false)
     tool.onClick(diagonal, NO_SHIFT)
     expect(bp.get([1, 1, 0])?.key).toBe('create:cogwheel[axis=z]')
+  })
+})
+
+describe('PlaceTool：置き方の補助（#123）', () => {
+  it('小さい歯車で大きい歯車の面をクリックすると、噛み合う斜めに置く。見本もそこに出す。Alt なら補助を使わない', () => {
+    const bp = blueprintFixture({ size: [4, 1, 4] }).place([1, 0, 1], 'create:large_cogwheel', { axis: 'y' }).toBlueprint()
+    const ctx = new FakeContext(bp)
+    ctx.brushState = state('create:cogwheel', { axis: 'x' })
+    const tool = new PlaceTool(ctx)
+    // 上の面の、東南寄りの所をクリック
+    const target = { pos: [1, 0, 1], face: 'up', point: [1.9, 1, 1.7], empty: false } as PickTarget
+    tool.onHover(target)
+    expect(ctx.ghost).toEqual([2, 0, 2])
+    expect(ctx.ghostBlocked).toBe(false)
+    tool.onClick(target, NO_SHIFT)
+    expect(bp.get([2, 0, 2])?.key).toBe('create:cogwheel[axis=y]')
+    // Alt：補助を使わず面の隣（上）に、欄の向きのまま
+    tool.onClick(target, { shift: false, alt: true })
+    expect(bp.get([1, 1, 1])).toBeNull()
   })
 })

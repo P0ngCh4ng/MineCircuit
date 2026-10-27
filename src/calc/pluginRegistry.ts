@@ -46,6 +46,19 @@ export class PluginRegistry {
     return null
   }
 
+  /** 置き方の補助。最初に位置を返したプラグインのもの。どれも使わなければ null */
+  placementHelper(
+    bp: Blueprint,
+    hit: { readonly pos: Vec3; readonly face: Direction; readonly point: Vec3 },
+    state: BlockState,
+  ): { pos: Vec3; state: BlockState } | null {
+    for (const p of this.plugins.values()) {
+      const r = p.placementHelper?.(bp, hit, state) ?? null
+      if (r) return r
+    }
+    return null
+  }
+
   all(): CalcPlugin[] {
     return [...this.plugins.values()]
   }

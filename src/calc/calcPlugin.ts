@@ -108,6 +108,15 @@ export interface CalcPlugin {
    * 設計図は読むだけ
    */
   placementProblem?(bp: Blueprint, pos: Vec3, state: BlockState): string | null
+  /**
+   * 置き方の補助（任意。#123）。3D で面をクリックしたとき、クリックしたブロックと当たった点から、置く位置と状態を返す。
+   * 使わないなら null（ふつうに面の隣に置く）。設計図は読むだけ
+   */
+  placementHelper?(
+    bp: Blueprint,
+    hit: { readonly pos: Vec3; readonly face: Direction; readonly point: Vec3 },
+    state: BlockState,
+  ): { pos: Vec3; state: BlockState } | null
 }
 
 /** 空の結果 */

@@ -32,6 +32,12 @@ export interface EditToolContext {
   orient(bp: Blueprint, pos: Vec3, state: BlockState, from: Direction | null): BlockState
   /** pos に state を置けるか（#121）。ゲームで置けないなら理由、置けるなら null */
   placementProblem(bp: Blueprint, pos: Vec3, state: BlockState): string | null
+  /** 置き方の補助（#123）。3D で面をクリックしたとき、置く位置と状態。使わないなら null */
+  placementHelper(
+    bp: Blueprint,
+    hit: { readonly pos: Vec3; readonly face: Direction; readonly point: Vec3 },
+    state: BlockState,
+  ): { pos: Vec3; state: BlockState } | null
 }
 
 /** 範囲の外を指したときの知らせ */

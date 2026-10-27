@@ -1,3 +1,5 @@
+import type { BlockState } from '../../domain/blockState'
+import type { Blueprint } from '../../domain/blueprint'
 import { directionVector, oppositeDirection, type Direction } from '../../domain/direction'
 import type { Vec3 } from '../../domain/vec3'
 import { placeBlock } from '../../edit/editCommand'
@@ -40,15 +42,28 @@ export class PlaceTool implements Tool {
 
   onHover(target: PickTarget | null): void {
     const bp = this.ctx.blueprint()
-    const cell = target ? placeCell(target, { shift: false }) : null
     const brush = this.ctx.brush()
+    const plan = target && bp && brush ? this.plan(bp, target, brush, { shift: false }) : null
     // 見本は、空いているマスにだけ出す。設置の規則で置けないなら赤くする（#121）
-    if (!target || !bp || !cell || !brush || !isInside(bp, cell.pos) || (!cell.replace && bp.get(cell.pos) !== null)) {
+    if (!bp || !plan || !isInside(bp, plan.pos) || (!plan.replace && bp.get(plan.pos) !== null)) {
       this.ctx.setGhost(null)
       return
     }
-    const state = this.ctx.orient(bp, cell.pos, brush, fromOf(target, cell))
-    this.ctx.setGhost(cell.pos, this.ctx.placementProblem(bp, cell.pos, state) !== null)
+    this.ctx.setGhost(plan.pos, this.ctx.placementProblem(bp, plan.pos, plan.state) !== null)
+  }
+
+  /**
+   * 置く位置と状態を決める。3D で面をクリックしたときは置き方の補助（#123）を先に聞き、
+   * なければ面の隣に置いて、隣とつながる向きに合わせる（#119）。Alt なら補助も向き合わせも使わない
+   */
+  private plan(bp: Blueprint, target: PickTarget, brush: BlockState, mods: PickModifiers): PlaceCell & { state: BlockState } {
+    if (!mods.alt && !mods.shift && target.face !== undefined && target.point !== undefined && !target.empty) {
+      const helped = this.ctx.placementHelper(bp, { pos: target.pos, face: target.face, point: target.point }, brush)
+      if (helped) return { pos: helped.pos, replace: false, state: helped.state }
+    }
+    const cell = placeCell(target, mods)
+    const state = mods.alt ? brush : this.ctx.orient(bp, cell.pos, brush, fromOf(target, cell))
+    return { ...cell, state }
   }
 
   onClick(target: PickTarget, mods: PickModifiers): void {
@@ -59,7 +74,7 @@ export class PlaceTool implements Tool {
       this.ctx.notify(NO_BRUSH_MESSAGE)
       return
     }
-    const { pos, replace } = placeCell(target, mods)
+    const { pos, replace, state: placed } = this.plan(bp, target, state, mods)
     if (!isInside(bp, pos)) {
       this.ctx.notify(outOfRangeMessage(bp))
       return
@@ -69,8 +84,6 @@ export class PlaceTool implements Tool {
       return
     }
     this.ctx.notify(null)
-    // 隣とつながる向きに合わせる（#119）。3D で面をクリックしたときは、その面のブロックの側を優先する。Alt なら合わせない
-    const placed = mods.alt ? state : this.ctx.orient(bp, pos, state, fromOf(target, { pos, replace }))
     // ゲームで置けない所には置かない（#121）
     const problem = this.ctx.placementProblem(bp, pos, placed)
     if (problem) {

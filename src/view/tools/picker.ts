@@ -126,7 +126,10 @@ export function pick3D(ray: PickRay, scene: PickScene3D): PickTarget | null {
   const hit = castRay(ray, scene)
   const floor = scene.layer === null ? null : pickLayerFloor(ray, scene.size, scene.layer)
   if (hit && (!floor || hit.t <= floor.t)) {
-    return hit.face === undefined ? { pos: hit.pos, empty: false } : { pos: hit.pos, face: hit.face, empty: false }
+    if (hit.face === undefined) return { pos: hit.pos, empty: false }
+    const { origin: o, direction: d } = ray
+    const point: Vec3 = [o[0] + d[0] * hit.t, o[1] + d[1] * hit.t, o[2] + d[2] * hit.t]
+    return { pos: hit.pos, face: hit.face, point, empty: false }
   }
   if (floor) return { pos: floor.pos, empty: !scene.isSolid(floor.pos) }
   return null

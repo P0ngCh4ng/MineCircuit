@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { blueprintFixture, state } from '../../../tests/fixtures/blueprintFixture'
-import { LARGE_COG_NEXT_TO_SMALL, NEXT_TO_LARGE_COG, orientForPlacement, placementProblem } from './createPlacement'
+import { LARGE_COG_NEXT_TO_SMALL, NEXT_TO_LARGE_COG, orientForPlacement, placementHelper, placementProblem } from './createPlacement'
 
 describe('orientForPlacement（Create）', () => {
   it('シャフトの端に置くシャフトは、同じ軸にする。つながる相手がなければ変えない', () => {
@@ -84,5 +84,41 @@ describe('placementProblem（Create の歯車）', () => {
       .toBlueprint()
     // 噛み合う axis=y は大きい歯車の横なので置けない。x なら東西の隣は調べないので置けるが、つながらないので変えない
     expect(orientForPlacement(bp, [1, 0, 0], small('z'), null)).toBeNull()
+  })
+})
+
+describe('placementHelper（Create の歯車の置き方の補助）', () => {
+  const small = state('create:cogwheel', { axis: 'z' })
+  const large = state('create:large_cogwheel', { axis: 'z' })
+
+  it('大きさが違う：当たった点に近い向きと別の軸の向きの斜めに、同じ軸で置く', () => {
+    const bp = blueprintFixture({ size: [5, 1, 5] }).place([2, 0, 2], 'create:large_cogwheel', { axis: 'y' }).toBlueprint()
+    // 上の面の東寄り・南寄り（東が一番近い）→ 東 + 南
+    const r = placementHelper(bp, { pos: [2, 0, 2], face: 'up', point: [2.95, 1, 2.7] }, small)
+    expect(r).toEqual({ pos: [3, 0, 3], state: state('create:cogwheel', { axis: 'y' }) })
+    // 北西寄り → 西が一番近く、次に北
+    expect(placementHelper(bp, { pos: [2, 0, 2], face: 'up', point: [2.05, 1, 2.3] }, small)?.pos).toEqual([1, 0, 1])
+  })
+
+  it('小さい歯車どうし：当たった点に近い向きの横に、同じ軸で置く', () => {
+    const bp = blueprintFixture({ size: [3, 3, 1] }).place([1, 1, 0], 'create:cogwheel', { axis: 'z' }).toBlueprint()
+    expect(placementHelper(bp, { pos: [1, 1, 0], face: 'south', point: [1.1, 1.5, 1] }, small)?.pos).toEqual([0, 1, 0])
+    expect(placementHelper(bp, { pos: [1, 1, 0], face: 'south', point: [1.5, 1.95, 1] }, small)?.pos).toEqual([1, 2, 0])
+  })
+
+  it('大きい歯車どうし：軸の向きに1つずらした斜めに、軸を直角にして置く', () => {
+    const bp = blueprintFixture({ size: [4, 4, 4] }).place([1, 1, 1], 'create:large_cogwheel', { axis: 'y' }).toBlueprint()
+    // 上の面（軸の向きは上が近い）の東寄り → 東 + 上、軸は x
+    const r = placementHelper(bp, { pos: [1, 1, 1], face: 'up', point: [1.95, 2, 1.5] }, large)
+    expect(r).toEqual({ pos: [2, 2, 1], state: state('create:large_cogwheel', { axis: 'x' }) })
+  })
+
+  it('真ん中の軸に当たったとき、歯車でないもの、ケース入りの歯車を置くときは使わない。置ける位置がなければ使わない', () => {
+    const bp = blueprintFixture({ size: [3, 1, 3] }).place([1, 0, 1], 'create:large_cogwheel', { axis: 'y' }).toBlueprint()
+    expect(placementHelper(bp, { pos: [1, 0, 1], face: 'up', point: [1.5, 1, 1.5] }, small)).toBeNull()
+    expect(placementHelper(bp, { pos: [1, 0, 1], face: 'up', point: [1.9, 1, 1.7] }, state('create:shaft', { axis: 'y' }))).toBeNull()
+    expect(placementHelper(bp, { pos: [1, 0, 1], face: 'up', point: [1.9, 1, 1.7] }, state('create:andesite_encased_cogwheel', { axis: 'y' }))).toBeNull()
+    const full = blueprintFixture({ size: [1, 1, 1] }).place([0, 0, 0], 'create:large_cogwheel', { axis: 'y' }).toBlueprint()
+    expect(placementHelper(full, { pos: [0, 0, 0], face: 'up', point: [0.9, 1, 0.7] }, small)).toBeNull()
   })
 })
