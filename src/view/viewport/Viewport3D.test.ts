@@ -86,7 +86,7 @@ describe('Viewport3D', () => {
     const canvas = wrapper.get('canvas').element
     // (1, *, 0) の列：上の段の軸に当たる
     canvas.dispatchEvent(pointer('pointermove', 1, 0))
-    expect(tools.hoverTarget).toEqual({ pos: [1, 1, 0], face: 'up', empty: false })
+    expect(tools.hoverTarget).toMatchObject({ pos: [1, 1, 0], face: 'up', empty: false })
     expect(tools.hoveredPos).toEqual([1, 1, 0])
 
     canvas.dispatchEvent(pointer('pointerdown', 1, 0, { buttons: 1 }))

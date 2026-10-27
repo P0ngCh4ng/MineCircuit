@@ -15,6 +15,15 @@ export function orientForPlacement(bp: Blueprint, pos: Vec3, state: BlockState, 
   return registry.orientForPlacement(bp, pos, state, from)
 }
 
+/** 置き方の補助（3D で面をクリックしたとき）。置く位置と状態。使わないなら null */
+export function placementHelper(
+  bp: Blueprint,
+  hit: { readonly pos: Vec3; readonly face: Direction; readonly point: Vec3 },
+  state: BlockState,
+): { pos: Vec3; state: BlockState } | null {
+  return registry.placementHelper(bp, hit, state)
+}
+
 /** pos に state を置けるか。ゲームで置けないなら理由、置けるなら null */
 export function placementProblem(bp: Blueprint, pos: Vec3, state: BlockState): string | null {
   return registry.placementProblem(bp, pos, state)

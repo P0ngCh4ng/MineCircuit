@@ -12,7 +12,7 @@ import type { EditToolContext } from '../tools/editToolContext'
 import { EraseTool } from '../tools/eraseTool'
 import { PickTool } from '../tools/pickTool'
 import { PlaceTool } from '../tools/placeTool'
-import { orientForPlacement, placementProblem } from './placementRules'
+import { orientForPlacement, placementHelper, placementProblem } from './placementRules'
 
 /** 画面のストアと DocumentSession から EditToolContext を作る。部品の setup の中で呼ぶ */
 export function useEditToolContext(): EditToolContext {
@@ -39,6 +39,7 @@ export function useEditToolContext(): EditToolContext {
     setGhost: (pos, blocked) => brush.setGhost(pos, blocked),
     orient: orientForPlacement,
     placementProblem,
+    placementHelper,
     revealLayer(y) {
       if (layerVisibility(view.layerDisplay, y) === 'solid') return
       view.setLayerHidden(y, false)

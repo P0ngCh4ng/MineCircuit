@@ -516,6 +516,9 @@ interface CalcPlugin {
   // その場所に置けるか（任意）。ゲームで置けない（置いても外れる）なら理由、置けるなら null。
   // 置く・回す前に画面が聞く。置く向きを自動で選ぶときは、置けない向きを候補から外す。計算では、規則に合わないブロックを issues に出す
   placementProblem?(bp: Blueprint, pos: Vec3, state: BlockState): string | null
+  // 置き方の補助（任意。3D で面をクリックしたとき）。クリックしたブロックと当たった点から、置く位置と状態を返す。
+  // 使わないなら null（ふつうに面の隣に置く）。Create は歯車の補助（CogwheelBlockItem の helper と同じ）
+  placementHelper?(bp: Blueprint, hit: { pos: Vec3; face: Direction; point: Vec3 }, state: BlockState): { pos: Vec3; state: BlockState } | null
 }
 
 interface CalcContext {

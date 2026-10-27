@@ -90,7 +90,7 @@ describe('pickLayerFloor', () => {
 describe('pick3D', () => {
   it('ブロックに当たれば、ブロックと面を返す', () => {
     const s = scene([4, 4, 4], [[1, 0, 1]], 1)
-    expect(pick3D({ origin: [1.5, 10, 1.5], direction: [0, -1, 0] }, s)).toEqual({ pos: [1, 0, 1], face: 'up', empty: false })
+    expect(pick3D({ origin: [1.5, 10, 1.5], direction: [0, -1, 0] }, s)).toEqual({ pos: [1, 0, 1], face: 'up', point: [1.5, 1, 1.5], empty: false })
   })
 
   it('当たらなければ、今の段の床の空きマスを返す', () => {
@@ -121,5 +121,14 @@ describe('pick2D', () => {
   it('マス目の外は null', () => {
     expect(pick2D(9, 30, grid, s)).toBeNull()
     expect(pick2D(10 + 16 * 4, 30, grid, s)).toBeNull()
+  })
+})
+
+describe('pick3D の当たった点（#123）', () => {
+  it('面に当たったときは、当たった点のワールド座標を返す', () => {
+    const scene = { size: [3, 3, 3] as const, layer: null, isSolid: (p: readonly number[]) => p[0] === 1 && p[1] === 1 && p[2] === 1 }
+    const hit = pick3D({ origin: [1.25, 10, 1.75], direction: [0, -1, 0] }, scene)
+    expect(hit?.face).toBe('up')
+    expect(hit?.point?.map((v) => Math.round(v * 1000) / 1000)).toEqual([1.25, 2, 1.75])
   })
 })

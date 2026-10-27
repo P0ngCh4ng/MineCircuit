@@ -14,6 +14,8 @@ export interface PickTarget {
   readonly pos: Vec3
   /** 3D で当たった面。2D と床の空きマスでは undefined */
   readonly face?: Direction
+  /** 3D で当たった点（ワールド座標。ブロックの角が整数）。面に当たったときだけ */
+  readonly point?: Vec3
   /** 空きマスなら true */
   readonly empty: boolean
 }

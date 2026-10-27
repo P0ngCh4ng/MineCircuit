@@ -295,9 +295,9 @@ describe('BlueprintScene', () => {
     expect(scene.pick({ origin: [1.5, 10, 1.5], direction: [0, -1, 0] })).toBeNull()
     scene.setBlueprint(sample())
     // 真上から (1, *, 1) の列を見る：真ん中の段の石に上から当たる
-    expect(scene.pick({ origin: [1.5, 10, 1.5], direction: [0, -1, 0] })).toEqual({ pos: [1, 1, 1], face: 'up', empty: false })
+    expect(scene.pick({ origin: [1.5, 10, 1.5], direction: [0, -1, 0] })).toMatchObject({ pos: [1, 1, 1], face: 'up', empty: false })
     scene.setLayerDisplay(display(0, 'ghostAbove'))
-    expect(scene.pick({ origin: [1.5, 10, 1.5], direction: [0, -1, 0] })).toEqual({ pos: [1, 0, 1], face: 'up', empty: false })
+    expect(scene.pick({ origin: [1.5, 10, 1.5], direction: [0, -1, 0] })).toMatchObject({ pos: [1, 0, 1], face: 'up', empty: false })
     // 何もない列は今の段の床の空きマス
     expect(scene.pick({ origin: [0.5, 10, 2.5], direction: [0, -1, 0] })).toEqual({ pos: [0, 0, 2], empty: true })
   })

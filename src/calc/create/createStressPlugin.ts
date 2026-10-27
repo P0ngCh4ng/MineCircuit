@@ -15,7 +15,7 @@ import type {
 } from '../calcPlugin'
 import { resolved, type Provenance } from '../provenance'
 import { loadCreateConfig } from './createConfig'
-import { orientForPlacement, placementProblem } from './createPlacement'
+import { orientForPlacement, placementHelper, placementProblem } from './createPlacement'
 import { CreateValueResolver } from './createValueResolver'
 import {
   CREATE_STRESS_PLUGIN_ID,
@@ -53,6 +53,7 @@ export function createStressPlugin(): CalcPlugin {
     run: (bp: Blueprint, ctx: CalcContext) => runCreateStress(bp, ctx),
     orientForPlacement,
     placementProblem,
+    placementHelper,
   }
 }
 
