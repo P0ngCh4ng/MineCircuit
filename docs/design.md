@@ -377,13 +377,117 @@ function eraseBlock(bp: Blueprint, pos: Vec3): EditCommand | null
 function rotateBlock(bp: Blueprint, pos: Vec3, vertical: boolean): EditCommand | null
 // 生データの項目 key を tag にする。生データがなければ initial の写しから作る
 function setBlockEntityTag(bp: Blueprint, pos: Vec3, key: string, tag: NbtTag, initial: RawNbt | null, label: string | null): EditCommand | null
-// 後で: fillRegion, copyRegion, rotateRegion, resizeBlueprint
+// 範囲の操作は下の「範囲の編集」
 ```
 
 - 新しく置いたブロックは `blockEntity: null`。計算では値の出どころの仕組みで初期値を使う
 - 回転では生データ（nbt）をそのまま引き継ぐ
 - 生データの項目を変える操作は、元の生データを書き換えず、写しを作って項目だけを差し替える。元に戻すと元の生データ（同じもの）を書き戻す。どのブロックのどの項目を変えられるか、生データがないときに何を入れるかは、Mod ごとの知識なので calc に置く（`calc/blockSettings.ts` の `blockSettingsFor`）。画面はそれを表示するだけ
-- 範囲の外への配置は、範囲の拡張（`resizeBlueprint`）を作るまでは受け付けない
+- 置くツールで範囲の外へ置くことは受け付けない。設計図を広げるのは範囲の操作（動かす・回す・貼り付け）だけ
+
+### 範囲の編集（#129）
+
+画面の操作は [ui.md](ui.md)「範囲の選択と一括操作」。
+
+**選択範囲は画面の状態。** 選択範囲（`SelectionBox`：最小と最大の角）は view のストアが持つ。edit の操作は箱を引数で受け取るだけで、選択を覚えない。
+
+```ts
+interface Box { min: Vec3; max: Vec3 }                // 両端を含む。domain/box.ts
+
+// 変換。平行移動・y 軸まわりの 90° 回転・x / z の反転を、この順に組み合わせたもの
+interface BlockTransform {
+  translate: Vec3
+  quarterTurns: 0 | 1 | 2 | 3                         // 上から見て右回りに 90° ずつ
+  mirror: 'none' | 'x' | 'z'
+  pivot: Vec3                                         // 回転・反転の軸のマス
+}
+
+// 範囲の操作を作る関数。Blueprint は変えず、操作だけを返す
+function eraseRegion(bp: Blueprint, box: Box): EditCommand | null
+function fillRegion(bp: Blueprint, box: Box, state: BlockState, onlyEmpty: boolean): EditCommand | null
+function replaceInRegion(bp: Blueprint, box: Box, from: BlockState, to: BlockState, keepOrientation: boolean): EditCommand | null
+function transformRegion(bp: Blueprint, box: Box, t: BlockTransform, opts: TransformOptions): RegionEditResult
+function pasteClip(bp: Blueprint, clip: BlueprintClip, at: Vec3, t: BlockTransform, opts: TransformOptions): RegionEditResult
+
+interface TransformOptions {
+  overwrite: boolean                                  // 行き先のブロックを上書きするか
+  blockEntity: BlockEntityTransformer                 // 生データの中の座標を書き直す（下）
+  states: StateTransformer                            // ブロック状態の向きを回す・反転する（下）
+}
+
+// 作れなかったときは理由。作れたときは操作と、動いた先の範囲
+type RegionEditResult =
+  | { ok: true; command: EditCommand; box: Box; warnings: string[] }
+  | { ok: false; reason: string }
+
+// 切り抜き。範囲の最小の角からの相対位置で持つ。空きマスは持たない
+interface BlueprintClip {
+  size: Vec3
+  cells: { pos: Vec3; cell: CellValue }[]
+  entities: RawEntity[]                               // 位置は切り抜きの中の相対位置に直したもの
+  dataVersion: number
+}
+function copyRegion(bp: Blueprint, box: Box): BlueprintClip
+```
+
+**操作の形を広げる。** 今の `EditCommand` はマスの変更だけを持つ。範囲の操作のために、設計図の大きさとエンティティの変更も持てるようにする。
+
+```ts
+interface EditCommand {
+  readonly label: string
+  readonly changes: CellChange[]
+  readonly resize?: RegionResize[]                    // 先に大きさを変えてから changes を書く。元に戻すときは逆
+  readonly entities?: EntityChange[]
+}
+
+interface RegionResize {
+  region: number                                      // Blueprint.regions の番号
+  before: { offset: Vec3; size: Vec3 }
+  after: { offset: Vec3; size: Vec3 }
+}
+
+interface EntityChange { region: number; before: RawEntity[]; after: RawEntity[] }  // リージョンのエンティティを丸ごと差し替える
+```
+
+- `BlockVolume` に `resize(offset, size)` を足す。中身の配列を作り直し、重なる所を写す。呼んでよいのは `setCell` と同じく edit の `EditHistory` だけ。
+- 負の向きにはみ出すときは、全リージョンの `offset` をずらして最小を 0 にする（`RegionResize` を全リージョン分持つ）。仮の入出力の位置と選択範囲も同じだけずらす（画面が `EditHistory.onChange` のあとで直す）。
+- 大きさの上限は各辺 512。
+
+**操作の作り方。** 動かす・回す・貼り付けは、どれも「元のマスを空にし、行き先のマスに書く」変更の一覧にする。元と行き先が重なるときは、元を空にする変更を先に、行き先を書く変更を後に並べる（同じマスへの2回目の変更が勝つ）。元に戻すときは逆の順に書き戻すので、重なっても元に戻る。
+
+**ブロック状態の回転・反転（`StateTransformer`）。** 今の `rotateState`（`axis`・`facing`・`horizontal_facing`）に、反転（`mirrorState`）と、バニラの向きのプロパティを足す。
+
+| プロパティ | 回転 | 反転 |
+| --- | --- | --- |
+| `axis`（x・y・z） | x↔z | 変えない |
+| `facing`・`horizontal_facing` | 水平の向きを回す | x 反転なら east↔west、z 反転なら north↔south |
+| `rotation`（0〜15、看板など） | +4 ずつ | 16 − 値 などのゲームの規則 |
+| `shape`（階段・レール）、`hinge`（扉）、`north`/`east`/…（柵・壁・ガラス板の接続） | ゲームの規則の表で変える | 同じ |
+| Create の `axis_along_first`（ソーなど）、ベルトの `facing`・`slope` | Mod の規則 | Mod の規則 |
+
+- バニラの規則は Minecraft の `Rotation`・`Mirror` の規則を調べて表にする（#129 の子の Issue で）。Mod のブロックは、`facing`・`axis` の名前ならバニラと同じに扱い、それ以外のプロパティは計算プラグインの規則（下）に任せる。
+- 知らないプロパティは変えず、警告（`warnings`）に出す。
+
+**生データの中の座標（`BlockEntityTransformer`）。** 生データには位置を持つ項目がある（Create の機械アームの `InteractionPoints` はアームからの相対位置、ベルトの `Controller` などは位置そのもの）。動かす・回すときに書き直す。Mod ごとの知識なので calc に置き、置くときの向き（`orientForPlacement`）と同じく、画面が計算プラグインの一覧から関数を作って edit の操作に渡す。
+
+```ts
+interface CalcPlugin {
+  // 生データの中の座標を、ブロックの変換に合わせて書き直す（任意）。知らないブロックなら null（そのまま）
+  transformBlockEntity?(state: BlockState, nbt: RawNbt, t: BlockTransform, from: Vec3, to: Vec3): RawNbt | null
+  // ブロック状態の Mod 独自のプロパティを回す・反転する（任意）。知らないブロックなら null
+  transformState?(state: BlockState, t: BlockTransform): BlockState | null
+}
+```
+
+- どの項目が位置か（相対か絶対か）は Mod ごとに調べ、規則の書類に書く（Create は create-stress.md の「生データの項目」に足す）。
+- 切り抜きを別の設計図に貼るときも同じ関数で直す。
+- 範囲の外のブロックを指す位置（範囲の外のベルトの `Controller` など）は書き直さず、警告に出す。
+
+**エンティティ。** 範囲の中にあるエンティティ（生データの `pos`・`blockPos`）は、ブロックと同じく動かす・回す・写す。向き（`Rotation`）も回す。
+
+**仮の入出力。** 動かしたブロックに付けた仮の入出力は、位置と面を変換に合わせて変える（画面の `portStore` が、操作の結果の変換を見て直す）。履歴には入れない（仮の入出力は設計図の変更ではないため）。
+
+**切り抜きの置き場所。** 切り抜きは画面のストアが持つ。OS のクリップボードには入れない（ほかのアプリとやりとりする形式がないため）。
 
 ### 履歴
 
@@ -399,6 +503,8 @@ class EditHistory {
   readonly onChange: Signal<void>  // 画面・集計・計算の再実行の合図
 }
 ```
+
+- 範囲の操作（`resize`・`entities` を持つ操作）は、やり直すときは 大きさ → エンティティ → マス の順に書き、元に戻すときは マス（逆の順）→ エンティティ → 大きさ の順に書き戻す。
 
 変更のたびに、集計（ブロック数）、3D表示、計算を更新する。計算は変更が続く間は待ち、止まってから Web Worker で走らせる。
 
