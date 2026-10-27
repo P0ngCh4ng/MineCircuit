@@ -76,12 +76,12 @@ function boxOf(region: BlockVolume): Box {
   return { min: o, max: [o[0] + region.size[0] - 1, o[1] + region.size[1] - 1, o[2] + region.size[2] - 1] }
 }
 
-function boxesOverlap(a: Box, b: Box): boolean {
+export function boxesOverlap(a: Box, b: Box): boolean {
   for (let i = 0; i < 3; i++) if (a.max[i]! < b.min[i]! || b.max[i]! < a.min[i]!) return false
   return true
 }
 
-function translateBox(box: Box, d: Vec3): Box {
+export function translateBox(box: Box, d: Vec3): Box {
   return { min: addVec3(box.min, d), max: addVec3(box.max, d) }
 }
 
@@ -92,11 +92,11 @@ function unionBox(a: Box, b: Box): Box {
   }
 }
 
-function sameVec3(a: Vec3, b: Vec3): boolean {
+export function sameVec3(a: Vec3, b: Vec3): boolean {
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]
 }
 
-function cellOf(bp: Blueprint, pos: Vec3): CellValue {
+export function cellOf(bp: Blueprint, pos: Vec3): CellValue {
   const loc = bp.locate(pos)
   return (loc && loc.region.cellAt(loc.local[0], loc.local[1], loc.local[2])) ?? EMPTY_CELL
 }
@@ -120,15 +120,9 @@ export function transformRegion(bp: Blueprint, box: Box, t: BlockTransform, opts
   }
   const region = bp.regions[regionIndex]!
   const target = transformBox(t, box)
-
-  // 広げたあとのリージョンの範囲（今の座標）。ほかのリージョンに重なれば断る
-  const grown = unionBox(boxOf(region), target)
-  for (let i = 0; i < 3; i++) {
-    if (grown.max[i]! - grown.min[i]! + 1 > MAX_BLUEPRINT_SIDE) return { ok: false, reason: MOVE_MESSAGES.tooLarge }
-  }
-  if (bp.regions.some((r, i) => i !== regionIndex && boxesOverlap(boxOf(r), grown))) {
-    return { ok: false, reason: MOVE_MESSAGES.overlapsRegion }
-  }
+  const growth = planGrowth(bp, regionIndex, target)
+  if (typeof growth === 'string') return { ok: false, reason: growth }
+  const { shift, resize, afterOffset, contentShift } = growth
 
   // 行き先にある範囲の外のブロック
   let blocked = 0
@@ -136,23 +130,6 @@ export function transformRegion(bp: Blueprint, box: Box, t: BlockTransform, opts
     if (!boxContains(box, pos) && cellOf(bp, pos).state !== null) blocked++
   })
   if (blocked > 0 && !opts.overwrite) return { ok: false, reason: MOVE_MESSAGES.blocked(blocked) }
-
-  // 全体のずれ。最小の角を 0 にそろえる
-  const shift: Vec3 = [Math.max(0, -grown.min[0]), Math.max(0, -grown.min[1]), Math.max(0, -grown.min[2])]
-  const resize: RegionResize[] = []
-  bp.regions.forEach((r, i) => {
-    const before = { offset: r.offset, size: r.size }
-    const after =
-      i === regionIndex
-        ? {
-            offset: addVec3(grown.min, shift),
-            size: [grown.max[0] - grown.min[0] + 1, grown.max[1] - grown.min[1] + 1, grown.max[2] - grown.min[2] + 1] as Vec3,
-          }
-        : { offset: addVec3(r.offset, shift), size: r.size }
-    if (!sameVec3(before.offset, after.offset) || !sameVec3(before.size, after.size)) {
-      resize.push({ region: i, before, after, shift })
-    }
-  })
 
   // 行き先に書く中身。向きと生データの中の座標を変える
   const states = opts.states ?? transformVanillaState
@@ -191,9 +168,6 @@ export function transformRegion(bp: Blueprint, box: Box, t: BlockTransform, opts
 
   // エンティティ（リージョンの中の座標で持つ）。範囲の中のものは変換し、リージョンの中身がずれるならそれも足す
   const entities: EntityChange[] = []
-  const r = resize.find((x) => x.region === regionIndex)
-  const afterOffset = r ? r.after.offset : region.offset
-  const contentShift = r ? subVec3(addVec3(r.before.offset, shift), r.after.offset) : ZERO
   let movedEntity = false
   const after = region.entities.map((e) => {
     const local = entityBlockPos(e)
@@ -229,13 +203,66 @@ export function transformRegion(bp: Blueprint, box: Box, t: BlockTransform, opts
   return { ok: true, command, box: translateBox(target, shift), warnings }
 }
 
+/** 行き先を入れるために、リージョンを広げる計画 */
+export interface RegionGrowth {
+  /** 設計図全体の座標のずれ（負の向きに広げたとき） */
+  readonly shift: Vec3
+  readonly resize: RegionResize[]
+  /** 広げたあとのリージョンの offset */
+  readonly afterOffset: Vec3
+  /** リージョンの中の座標のずれ（中身とエンティティが動く分） */
+  readonly contentShift: Vec3
+}
+
+/**
+ * リージョン regionIndex を、行き先 target（今の座標）が入るように広げる計画を作る。
+ * 各辺の上限を超える・ほかのリージョンに重なるなら、断る理由を返す
+ */
+export function planGrowth(bp: Blueprint, regionIndex: number, target: Box): RegionGrowth | string {
+  const region = bp.regions[regionIndex]!
+  const grown = unionBox(boxOf(region), target)
+  for (let i = 0; i < 3; i++) {
+    if (grown.max[i]! - grown.min[i]! + 1 > MAX_BLUEPRINT_SIDE) return MOVE_MESSAGES.tooLarge
+  }
+  if (bp.regions.some((r, i) => i !== regionIndex && boxesOverlap(boxOf(r), grown))) return MOVE_MESSAGES.overlapsRegion
+
+  // 全体のずれ。最小の角を 0 にそろえる
+  const shift: Vec3 = [Math.max(0, -grown.min[0]), Math.max(0, -grown.min[1]), Math.max(0, -grown.min[2])]
+  const resize: RegionResize[] = []
+  bp.regions.forEach((r, i) => {
+    const before = { offset: r.offset, size: r.size }
+    const after =
+      i === regionIndex
+        ? {
+            offset: addVec3(grown.min, shift),
+            size: [grown.max[0] - grown.min[0] + 1, grown.max[1] - grown.min[1] + 1, grown.max[2] - grown.min[2] + 1] as Vec3,
+          }
+        : { offset: addVec3(r.offset, shift), size: r.size }
+    if (!sameVec3(before.offset, after.offset) || !sameVec3(before.size, after.size)) {
+      resize.push({ region: i, before, after, shift })
+    }
+  })
+  const r = resize.find((x) => x.region === regionIndex)
+  return {
+    shift,
+    resize,
+    afterOffset: r ? r.after.offset : region.offset,
+    contentShift: r ? subVec3(addVec3(r.before.offset, shift), r.after.offset) : ZERO,
+  }
+}
+
+/** リージョンの範囲（設計図全体の座標） */
+export function regionBox(region: BlockVolume): Box {
+  return boxOf(region)
+}
+
 // 平行移動だけで、生データを直す関数もないなら、中身はそのまま写せる
 function isPureTranslationWithoutHooks(t: BlockTransform, opts: TransformOptions): boolean {
   return isPureTranslation(t) && !opts.blockEntity
 }
 
 // 「設計図を負の向きに広げたので、座標が x +2・z +1 ずれました」
-function shiftMessage(shift: Vec3): string {
+export function shiftMessage(shift: Vec3): string {
   const parts = (['x', 'y', 'z'] as const).flatMap((axis, i) => (shift[i] ? [`${axis} +${shift[i]}`] : []))
   return `設計図を負の向きに広げたので、座標が ${parts.join('・')} ずれました`
 }
@@ -359,17 +386,18 @@ export interface RelocatedPlace {
 
 /**
  * 範囲の操作の前後で、位置 pos がどこへ移るか。forward が false なら元に戻すときの向き。
- * 範囲の中のものは変換と shift、外のものは shift だけ動く
+ * 範囲の中のものは変換と shift、外のものは shift だけ動く。source が null（貼り付け）なら、どれも shift だけ動く
  */
 export function relocatePos(r: Relocation, pos: Vec3, forward: boolean): Vec3 {
-  if (forward) return addVec3(boxContains(r.source, pos) ? transformPos(r.transform, pos) : pos, r.shift)
+  if (forward) return addVec3(r.source && boxContains(r.source, pos) ? transformPos(r.transform, pos) : pos, r.shift)
   const unshifted = subVec3(pos, r.shift)
-  return boxContains(r.target, pos) ? inverseTransformPos(r.transform, unshifted) : unshifted
+  return r.source && boxContains(r.target, pos) ? inverseTransformPos(r.transform, unshifted) : unshifted
 }
 
 /** relocatePos と同じく位置を移し、範囲の中のものは面の向きも変える */
 export function relocatePlace(r: Relocation, place: RelocatedPlace, forward: boolean): RelocatedPlace {
   const pos = relocatePos(r, place.pos, forward)
+  if (!r.source) return { pos, face: place.face }
   const inside = forward ? boxContains(r.source, place.pos) : boxContains(r.target, place.pos)
   if (!inside || !HORIZONTAL_DIRECTIONS.includes(place.face)) return { pos, face: place.face }
   return { pos, face: forward ? transformDirection(r.transform, place.face) : inverseTransformDirection(r.transform, place.face) }

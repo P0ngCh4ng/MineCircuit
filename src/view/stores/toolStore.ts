@@ -3,7 +3,7 @@ import { markRaw, ref, shallowRef } from 'vue'
 import { boxFromCorners, singleCellBox, type Box } from '../../domain/box'
 import type { Vec3 } from '../../domain/vec3'
 import { SelectTool } from '../tools/selectTool'
-import type { PickModifiers, PickTarget, Tool, ToolId } from '../tools/tool'
+import type { PickModifiers, PickTarget, Tool, ToolId, ToolOverride } from '../tools/tool'
 import { ToolController } from '../tools/toolController'
 
 /**
@@ -88,6 +88,11 @@ export const useToolStore = defineStore('tool', () => {
     hoveredPos.value = pos
   }
 
+  /** 今のツールの代わりにマウスを受け取るもの（貼り付けの見本。#133）。null で外す */
+  function setOverride(next: ToolOverride | null): void {
+    controller.setOverride(next)
+  }
+
   // 選択ツールは最初から使える。ほかのツールは各 Issue で register する
   register(new SelectTool({ setSelected, extendSelection, setHovered }))
 
@@ -107,5 +112,6 @@ export const useToolStore = defineStore('tool', () => {
     extendSelection,
     setSelectionBox,
     setHovered,
+    setOverride,
   }
 })

@@ -49,6 +49,14 @@ describe('resolveKeyAction', () => {
     expect(resolveKeyAction(k('ArrowUp', { altKey: true }))).toBeNull()
   })
 
+  it('Ctrl+C / X / V / D でコピー・切り取り・貼り付け・複製（#133）', () => {
+    expect(resolveKeyAction(k('c', { ctrlKey: true }))).toEqual({ type: 'copySelection' })
+    expect(resolveKeyAction(k('X', { metaKey: true }))).toEqual({ type: 'cutSelection' })
+    expect(resolveKeyAction(k('v', { ctrlKey: true }))).toEqual({ type: 'paste' })
+    expect(resolveKeyAction(k('d', { ctrlKey: true }))).toEqual({ type: 'duplicateSelection' })
+    expect(resolveKeyAction(k('v', { ctrlKey: true, shiftKey: true }))).toBeNull()
+  })
+
   it('Ctrl+A（Mac は Cmd+A）で全体を選び、F で範囲を塗る', () => {
     expect(resolveKeyAction(k('a', { ctrlKey: true }))).toEqual({ type: 'selectAll' })
     expect(resolveKeyAction(k('A', { metaKey: true }))).toEqual({ type: 'selectAll' })
@@ -68,7 +76,7 @@ describe('resolveKeyAction', () => {
   })
 
   it('Ctrl や Alt と一緒のツールキー、割り当てのないキー、IME の変換中は無視する', () => {
-    expect(resolveKeyAction(k('v', { ctrlKey: true }))).toBeNull()
+    expect(resolveKeyAction(k('b', { ctrlKey: true }))).toBeNull()
     expect(resolveKeyAction(k('b', { altKey: true }))).toBeNull()
     expect(resolveKeyAction(k('B', { shiftKey: true }))).toBeNull()
     expect(resolveKeyAction(k('q'))).toBeNull()

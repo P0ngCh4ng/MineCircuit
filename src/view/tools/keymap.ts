@@ -22,6 +22,11 @@ export type KeyAction =
   | { readonly type: 'fillSelection' }
   /** 範囲を1マス動かす（矢印キー、Shift+PageUp / PageDown）。overwrite は Ctrl を押しているとき */
   | { readonly type: 'moveSelection'; readonly direction: MoveDirection; readonly overwrite: boolean }
+  /** 範囲のコピー・切り取り・貼り付け・複製（Ctrl+C / X / V / D。#133） */
+  | { readonly type: 'copySelection' }
+  | { readonly type: 'cutSelection' }
+  | { readonly type: 'paste' }
+  | { readonly type: 'duplicateSelection' }
 
 /** 範囲を動かす向き。up〜right は画面の上下左右、raise / lower は1段上・下 */
 export type MoveDirection = 'up' | 'down' | 'left' | 'right' | 'raise' | 'lower'
@@ -67,6 +72,10 @@ export function resolveKeyAction(e: KeyInput): KeyAction | null {
     if (key === 'z' && !e.shiftKey) return { type: 'undo' }
     if (key === 'y' && !e.shiftKey) return { type: 'redo' }
     if (key === 'a' && !e.shiftKey) return { type: 'selectAll' }
+    if (key === 'c' && !e.shiftKey) return { type: 'copySelection' }
+    if (key === 'x' && !e.shiftKey) return { type: 'cutSelection' }
+    if (key === 'v' && !e.shiftKey) return { type: 'paste' }
+    if (key === 'd' && !e.shiftKey) return { type: 'duplicateSelection' }
     if (key === 'r') return { type: 'rotateBrush', vertical: e.shiftKey, overwrite: true }
     return null
   }

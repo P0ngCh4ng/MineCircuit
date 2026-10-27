@@ -25,6 +25,8 @@ export interface PickModifiers {
   readonly shift: boolean
   /** Alt。置くツールでは、隣に合わせて向きを変えない（#119） */
   readonly alt?: boolean
+  /** Ctrl（Mac は Cmd）。貼り付けでは、重なるブロックを上書きする（#133） */
+  readonly ctrl?: boolean
 }
 
 /**
@@ -41,4 +43,13 @@ export interface Tool {
   activate?(): void
   /** 別のツールに切り替わるとき（任意）。途中の状態（計測の1点目など）を片付ける */
   deactivate?(): void
+}
+
+/**
+ * 今のツールの代わりに、しばらくマウスの移動とクリックを受け取るもの（貼り付けの見本。#133）。
+ * ToolController.setOverride で差し込み、外すと今のツールに戻る
+ */
+export interface ToolOverride {
+  onHover(target: PickTarget | null): void
+  onClick(target: PickTarget, mods: PickModifiers): void
 }

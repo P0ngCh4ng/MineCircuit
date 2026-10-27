@@ -11,6 +11,7 @@ import { useBrushStore } from '../stores/brushStore'
 import { useCalcStore } from '../stores/calcStore'
 import { useProbeStore } from '../stores/probeStore'
 import { useMeasureStore } from '../stores/measureStore'
+import { usePasteStore } from '../stores/pasteStore'
 import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
@@ -19,6 +20,7 @@ import { BlueprintScene } from './blueprintScene'
 import { CalcOverlay3D } from './calcOverlay3D'
 import { RotationOverlay3D } from './rotationOverlay3D'
 import { PortOverlay3D } from './portOverlay3D'
+import { PasteOverlay3D } from './pasteOverlay3D'
 import { SelectionOverlay3D } from './selectionOverlay3D'
 import { createViewportRenderer, type SceneRenderer, type SceneRendererFactory } from './viewportRenderer'
 import { currentThemeName, viewportTheme, watchThemeName } from './viewportTheme'
@@ -45,6 +47,7 @@ const calc = useCalcStore()
 const probe = useProbeStore()
 const measures = useMeasureStore()
 const ports = usePortStore()
+const paste = usePasteStore()
 const appearance = useAppearanceStore()
 
 const host = ref<HTMLDivElement | null>(null)
@@ -72,6 +75,9 @@ scene.scene.add(portOverlay.group)
 // 選択範囲の箱の線（#130）
 const selectionOverlay = new SelectionOverlay3D()
 scene.scene.add(selectionOverlay.group)
+// 貼り付けの見本（#133）
+const pasteOverlay = new PasteOverlay3D()
+scene.scene.add(pasteOverlay.group)
 let renderer: SceneRenderer | null = null
 let resizeObserver: ResizeObserver | null = null
 let stopTheme: (() => void) | null = null
@@ -108,7 +114,7 @@ function onPointerUp(e: PointerEvent): void {
   if (!start || e.button !== 0) return
   if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > CLICK_TOLERANCE) return
   const target = pickAt(e)
-  if (target) tools.click(target, { shift: e.shiftKey, alt: e.altKey })
+  if (target) tools.click(target, { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey })
   // クリックで設計図が変わることがあるので、マウスの下を調べ直す
   tools.hover(pickAt(e))
 }
@@ -225,6 +231,15 @@ onMounted(() => {
       },
       { immediate: true },
     ),
+    // 貼り付けの見本（#133）
+    watch(
+      () => [paste.cells, paste.box, paste.blocked] as const,
+      ([cells, box, blocked]) => {
+        pasteOverlay.update(cells, box, blocked)
+        render()
+      },
+      { immediate: true },
+    ),
     // 計算結果の印（#31）
     watch(
       () => [probe.networkPositions, calc.issuePositions, view.layerDisplay] as const,
@@ -276,10 +291,11 @@ onBeforeUnmount(() => {
   rotationOverlay.dispose()
   portOverlay.dispose()
   selectionOverlay.dispose()
+  pasteOverlay.dispose()
   tools.hover(null)
 })
 
-defineExpose({ scene, calcOverlay, rotationOverlay, portOverlay, selectionOverlay })
+defineExpose({ scene, calcOverlay, rotationOverlay, portOverlay, selectionOverlay, pasteOverlay })
 </script>
 
 <template>

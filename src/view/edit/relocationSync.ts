@@ -1,4 +1,4 @@
-// 範囲を動かす・回す・反転した操作に合わせて、選択範囲と仮の入出力を動かす（docs/design.md「範囲の編集」、#131・#132）。
+// 範囲を動かす・回す・反転する・貼る操作に合わせて、選択範囲と仮の入出力を動かす（docs/design.md「範囲の編集」、#131〜#133）。
 // どちらも画面の状態なので、履歴には入れず、操作を書いた・元に戻したときの合図（session.onRelocate）で直す。
 
 import { onBeforeUnmount } from 'vue'
@@ -14,7 +14,8 @@ export function useRelocationSync(): void {
   const ports = usePortStore()
 
   const disconnect = session.onRelocate.connect(({ relocation, forward }) => {
-    const anchor = tools.selectedPos
+    // 貼り付け（source が null）は、貼った所を選び、元に戻したら選択を解除する（#133）
+    const anchor = relocation.source ? tools.selectedPos : null
     tools.setSelectionBox(
       forward ? relocation.target : relocation.source,
       anchor ? relocatePos(relocation, anchor, forward) : undefined,

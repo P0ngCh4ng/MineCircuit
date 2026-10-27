@@ -65,13 +65,15 @@ describe('SelectionPanel', () => {
     ])
     // Modpack がなければ名前の代わりに ID を出す
     expect(wrapper.get('[data-kind="create:shaft"] .kind-name').text()).toBe('create:shaft')
-    // コピーのボタンはまだ出さない
     expect(wrapper.findAll('[data-action]').map((b) => b.attributes('data-action'))).toEqual([
       'erase',
       'rotate-right',
       'rotate-left',
       'mirror-x',
       'mirror-z',
+      'copy',
+      'cut',
+      'duplicate',
       'fill',
       'replace',
     ])

@@ -38,10 +38,10 @@ export interface EntityChange {
 
 /**
  * 範囲を動かす・回す・反転する操作の、位置の対応。画面が選択範囲と仮の入出力を動かすのに使う（履歴には入れないもの）。
- * source は操作の前の座標、target は操作の後の座標
+ * source は操作の前の座標、target は操作の後の座標。貼り付けは source が null（範囲の中で動くものはなく、shift だけを当てる）
  */
 export interface Relocation {
-  readonly source: Box
+  readonly source: Box | null
   readonly target: Box
   /** 範囲の中のものの変換（shift を含まない。操作の前の座標で） */
   readonly transform: BlockTransform
