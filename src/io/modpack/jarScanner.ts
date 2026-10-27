@@ -1,5 +1,5 @@
 // Mod の jar（zip）1つを開き、必要なファイルだけを取り出してまとめる。
-// 取り出すのは Mod の情報、翻訳ファイル（ja_jp / en_us）、ブロック状態の定義だけ。Java のコードは読まない。
+// 取り出すのは Mod の情報、翻訳ファイル（ja_jp / en_us）、ブロック状態の定義、Create の処理のレシピだけ。Java のコードは読まない。
 // 時間がかかるので、画面では Web Worker の中で呼ぶ（workers/jarScan.worker.ts）。
 
 import { inflateSync, unzipSync, type UnzipFileInfo } from 'fflate'
@@ -14,6 +14,7 @@ import {
   type ModInfo,
 } from './modMetadata'
 import type { ExtractedZip } from './partialZip'
+import { RECIPE_PATH, readProcessingRecipe, type ProcessingRecipe } from './recipes'
 
 /** JSON の値 */
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
@@ -46,6 +47,8 @@ export interface JarSummary {
    * 中身は持たず、必要なときに jar から読む（io/assets/modpackAssetReader.ts）。jar の中の jar の分は含まない
    */
   readonly assets: string[]
+  /** Create の処理のレシピ（`data/<namespace>/recipes/`。処理時間の計算に使う種類だけ。recipes.ts） */
+  readonly recipes: ProcessingRecipe[]
 }
 
 /** jar の中の jar（Forge の JarJar、Fabric の jars）を読む深さ */
@@ -61,9 +64,15 @@ const NAME_KEY = /^(block|item|entity|fluid)\.[^.]+\.[^.]+$/
 
 const METADATA_FILES = new Set([FORGE_MODS_TOML, NEOFORGE_MODS_TOML, FABRIC_MOD_JSON, MANIFEST])
 
-/** jar の中で読むファイルか（Mod の情報、翻訳、ブロック状態の定義、jar の中の jar） */
+/** jar の中で読むファイルか（Mod の情報、翻訳、ブロック状態の定義、jar の中の jar、レシピ） */
 export function isWantedJarEntry(name: string): boolean {
-  return METADATA_FILES.has(name) || LANG_PATH.test(name) || BLOCKSTATE_PATH.test(name) || NESTED_JAR_PATH.test(name)
+  return (
+    METADATA_FILES.has(name) ||
+    LANG_PATH.test(name) ||
+    BLOCKSTATE_PATH.test(name) ||
+    NESTED_JAR_PATH.test(name) ||
+    RECIPE_PATH.test(name)
+  )
 }
 
 /** 見た目の資産の索引に入れるファイルか（`assets/<namespace>/` の models/・blockstates/・textures/ の下。フォルダは除く） */
@@ -118,7 +127,7 @@ export function parseLenientJson(source: string): unknown {
 }
 
 function emptySummary(jar: string): JarSummary {
-  return { jar, mods: [], namespaces: [], lang: { ja_jp: {}, en_us: {} }, blockStates: {}, problems: [], assets: [] }
+  return { jar, mods: [], namespaces: [], lang: { ja_jp: {}, en_us: {} }, blockStates: {}, problems: [], assets: [], recipes: [] }
 }
 
 /** 翻訳ファイルの JSON から、名前のキーだけを取り出す */
@@ -194,6 +203,8 @@ export function scanJarContent(jar: string, content: JarContent): JarSummary {
 function summarize(jar: string, files: Record<string, Uint8Array>, namespaces: Set<string>, depth: number): JarSummary {
   const summary = emptySummary(jar)
   const problems = summary.problems
+  // jar の中の jar のレシピ。名前の順では META-INF/ が data/ より前に来るので、外の jar のレシピを読み終えてから足す
+  const nestedRecipes: ProcessingRecipe[] = []
   const read = (name: string): string | null => (files[name] ? text(files[name]) : null)
 
   // Mod の情報
@@ -226,22 +237,42 @@ function summarize(jar: string, files: Record<string, Uint8Array>, namespaces: S
       }
       continue
     }
+    const recipe = RECIPE_PATH.exec(name)
+    if (recipe) {
+      // Create の処理のレシピだけを残す。ほかのレシピは中身を見ずに捨てる。読めないレシピは問題にしない（計算は初期値で続く）
+      const source = text(data)
+      if (!source.includes('"create:')) continue
+      try {
+        const r = readProcessingRecipe(`${recipe[1]}:${recipe[2]}`, parseLenientJson(source))
+        if (r) summary.recipes.push(r)
+      } catch {
+        // 読めないレシピは使わない
+      }
+      continue
+    }
     if (NESTED_JAR_PATH.test(name) && depth < MAX_NESTED_DEPTH) {
       const nestedName = `${jar}!/${name}`
       try {
-        mergeInto(summary, scan(nestedName, data, depth + 1), namespaces)
+        mergeInto(summary, scan(nestedName, data, depth + 1), namespaces, nestedRecipes)
       } catch (e) {
         problems.push(`${name}: jar として読めません（${e instanceof Error ? e.message : String(e)}）`)
       }
     }
   }
 
+  // 同じ ID のレシピは外の jar のもの、中の jar どうしなら先に読んだものを使う
+  const seen = new Set(summary.recipes.map((r) => r.id))
+  for (const r of nestedRecipes) {
+    if (seen.has(r.id)) continue
+    seen.add(r.id)
+    summary.recipes.push(r)
+  }
   summary.namespaces.push(...[...namespaces].sort())
   return summary
 }
 
-/** jar の中の jar の結果を、外の jar の結果に足す。外の jar にあるものを優先する */
-function mergeInto(target: JarSummary, nested: JarSummary, namespaces: Set<string>): void {
+/** jar の中の jar の結果を、外の jar の結果に足す。外の jar にあるものを優先する。レシピは nestedRecipes に置き、summarize の最後に足す */
+function mergeInto(target: JarSummary, nested: JarSummary, namespaces: Set<string>, nestedRecipes: ProcessingRecipe[]): void {
   target.mods.push(...nested.mods)
   for (const ns of nested.namespaces) namespaces.add(ns)
   for (const code of LANG_CODES) {
@@ -250,5 +281,6 @@ function mergeInto(target: JarSummary, nested: JarSummary, namespaces: Set<strin
   for (const [id, def] of Object.entries(nested.blockStates)) {
     if (!(id in target.blockStates)) target.blockStates[id] = def
   }
+  nestedRecipes.push(...nested.recipes)
   target.problems.push(...nested.problems.map((p) => `${nested.jar}: ${p}`))
 }

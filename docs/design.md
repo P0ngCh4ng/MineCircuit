@@ -563,6 +563,15 @@ class CreateStressPlugin implements CalcPlugin {
 
 `KineticGraph` はCreate用に解釈したデータで、プラグインの中だけで使う。回転のつながり、数値、計算の手順は [create-stress.md](create-stress.md) に書く。
 
+### 輸送量と処理時間（#125）
+
+同じプラグインが、回転数を求めたあとで、物を運ぶブロックの輸送量と機械の処理時間をプローブに足す（`createThroughput.ts`）。規則は [create-throughput.md](create-throughput.md)。
+
+- レシピの処理時間を使う機械（石臼・粉砕ホイール・ソー・ミキサー）のために、`CalcModpack` に `recipeBook?(): Promise<RecipeBook>` を足す。持たない実装もあるので省略できる。
+- レシピは jar の読み込みのときに `data/<namespace>/recipes/`（1.21 は `recipe/`）から、Create の処理の種類だけを材料と処理時間に縮めて `JarSummary.recipes` に入れる。形を変えたので保存の版を 3 にした。
+- Modpack の `kubejs/data/` のレシピは jar より優先する。`kubejs/server_scripts/` のスクリプトのレシピは読めないので、レシピを変えるスクリプトがあることだけを調べ、仮定に載せる。
+- Worker の中のプラグインは、画面側の Modpack に `recipes` で問い合わせる（`config`・`list` と同じ形）。
+
 ## ゲームとの行き来
 
 書き出した `.nbt` は、Modpackの `schematics` フォルダに置けばCreateで読み込めるはず（未確認）。ゲームに持ち込むと、次のものが欠ける可能性がある。

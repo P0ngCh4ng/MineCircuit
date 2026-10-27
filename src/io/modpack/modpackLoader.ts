@@ -11,6 +11,7 @@ import { isDirectoryEntry, type FileSource, type FileStat } from '../fileSource'
 import { isWantedJarEntry, scanJarContent, type JarContent, type JarSummary } from './jarScanner'
 import { readMachineAppearances } from './customMachinery'
 import { KUBEJS_STARTUP_DIR, readKubeJsStartup } from './kubejs'
+import { KUBEJS_DATA_DIR, readKubeJsRecipes } from './kubejsRecipes'
 import { findLangPacks, hasNames, langPackFromSummary, readFolderLangPack, type LangPack, type LangPackLocation } from './langPacks'
 import { Modpack, type ModpackProblem } from './modpack'
 import { MODS_DIR } from './modpackFolder'
@@ -75,7 +76,7 @@ export interface ModpackLoaderOptions {
 /**
  * 保存した結果の形を変えたら上げる。上げると、保存した結果はすべて読み直しになる。
  */
-export const JAR_SUMMARY_FORMAT = 2
+export const JAR_SUMMARY_FORMAT = 3
 
 /** 読み込みを途中でやめたときのエラー */
 export class ModpackLoadAbortedError extends Error {
@@ -184,6 +185,8 @@ export class ModpackLoader {
     this.throwIfAborted()
     const kubejs = await readKubeJsStartup(this.source)
     for (const message of kubejs.problems) problems.push({ jar: KUBEJS_STARTUP_DIR, message })
+    const kubejsRecipes = await readKubeJsRecipes(this.source)
+    for (const message of kubejsRecipes.problems) problems.push({ jar: KUBEJS_DATA_DIR, message })
     const machines = await readMachineAppearances(this.source)
     for (const message of machines.problems) problems.push({ jar: 'Custom Machinery の機械', message })
 
@@ -194,7 +197,7 @@ export class ModpackLoader {
 
     this.throwIfAborted()
     this.onProgress?.({ done: total, total, fromCache, current: null })
-    return new Modpack(summaries, this.source, problems, langPacks, assetPacks, vanilla.result, kubejs, machines.machines)
+    return new Modpack(summaries, this.source, problems, langPacks, assetPacks, vanilla.result, kubejs, machines.machines, kubejsRecipes)
   }
 
   /**
@@ -280,6 +283,7 @@ export class ModpackLoader {
           blockStates: {},
           problems: [],
           assets: [],
+          recipes: [],
         }
         try {
           await this.cache.put(key, summary)

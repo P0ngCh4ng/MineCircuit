@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { strToU8 } from 'fflate'
 import { fakeJar } from '../../../tests/fixtures/fakeJar'
-import { parseLenientJson, pickNames, scanJar } from './jarScanner'
+import { isWantedJarEntry, parseLenientJson, pickNames, scanJar } from './jarScanner'
 
 describe('scanJar', () => {
   it('Forge の Mod の情報・表示名・ブロック状態の定義を読む', () => {
@@ -84,5 +84,68 @@ describe('scanJar', () => {
 
   it('zip でなければエラーを投げる', () => {
     expect(() => scanJar('bad.jar', strToU8('not a zip'))).toThrow()
+  })
+})
+
+describe('scanJar のレシピ', () => {
+  const milling = (item: string, processingTime?: number): string =>
+    JSON.stringify({ type: 'create:milling', ingredients: [{ item }], results: [{ item: 'x:y' }], processingTime })
+
+  it('data/<namespace>/recipes/ と 1.21 の recipe/ の Create の処理のレシピを読む。ほかのレシピは捨てる', () => {
+    const s = scanJar('create.jar', fakeJar({
+      files: {
+        'data/create/recipes/milling/wheat.json': milling('minecraft:wheat', 150),
+        'data/create/recipe/crushing/ore.json': JSON.stringify({
+          type: 'create:crushing',
+          ingredients: [{ tag: 'c:ores/iron' }],
+          processingTime: 250,
+        }),
+        'data/create/recipes/pressing/iron.json': JSON.stringify({ type: 'create:pressing', ingredients: [{ item: 'a:b' }] }),
+        'data/minecraft/recipes/bread.json': JSON.stringify({ type: 'minecraft:crafting_shaped', key: {} }),
+        'data/create/tags/items/x.json': JSON.stringify({ type: 'create:milling' }),
+      },
+    }))
+    expect(s.recipes).toEqual([
+      { id: 'create:crushing/ore', type: 'crushing', items: [], tags: ['c:ores/iron'], duration: 250 },
+      { id: 'create:milling/wheat', type: 'milling', items: ['minecraft:wheat'], tags: [], duration: 150 },
+    ])
+    expect(s.problems).toEqual([])
+  })
+
+  it('壊れたレシピの JSON は使わず、problems にも書かない', () => {
+    const s = scanJar('a.jar', fakeJar({
+      files: {
+        'data/create/recipes/milling/broken.json': '{ "type": "create:milling", broken',
+        'data/other/recipes/broken.json': '{ broken',
+        'data/create/recipes/milling/ok.json': milling('a:b'),
+      },
+    }))
+    expect(s.recipes.map((r) => r.id)).toEqual(['create:milling/ok'])
+    expect(s.problems).toEqual([])
+  })
+
+  it('jar の中の jar のレシピも読み、同じ ID なら外の jar のものを使う', () => {
+    const inner = fakeJar({
+      files: {
+        'data/create/recipes/milling/wheat.json': milling('inner:wheat', 10),
+        'data/inner/recipes/milling/only_inner.json': milling('inner:x', 20),
+      },
+    })
+    const s = scanJar('outer.jar', fakeJar({
+      files: { 'data/create/recipes/milling/wheat.json': milling('outer:wheat', 99) },
+      nestedJars: { 'inner-1.jar': inner },
+    }))
+    expect([...s.recipes].sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+      { id: 'create:milling/wheat', type: 'milling', items: ['outer:wheat'], tags: [], duration: 99 },
+      { id: 'inner:milling/only_inner', type: 'milling', items: ['inner:x'], tags: [], duration: 20 },
+    ])
+  })
+
+  it('isWantedJarEntry はレシピの JSON を取り出し、ほかの data/ は取り出さない', () => {
+    expect(isWantedJarEntry('data/create/recipes/milling/wheat.json')).toBe(true)
+    expect(isWantedJarEntry('data/create/recipe/milling/wheat.json')).toBe(true)
+    expect(isWantedJarEntry('data/create/tags/items/x.json')).toBe(false)
+    expect(isWantedJarEntry('data/create/loot_tables/x.json')).toBe(false)
+    expect(isWantedJarEntry('data/create/recipes/x.nbt')).toBe(false)
   })
 })

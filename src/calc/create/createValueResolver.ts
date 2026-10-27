@@ -4,7 +4,7 @@
 
 import { candidate, resolveWith, resolved, type Resolved } from '../provenance'
 import type { CreateServerConfig } from './createConfig'
-import { DEFAULT_CAPACITY, DEFAULT_IMPACT, DEFAULT_KINETICS } from './createDefaults'
+import { DEFAULT_CAPACITY, DEFAULT_IMPACT, DEFAULT_KINETICS, DEFAULT_LOGISTICS } from './createDefaults'
 
 export class CreateValueResolver {
   /** config がなければ内蔵の初期値だけを使う */
@@ -36,6 +36,16 @@ export class CreateValueResolver {
   /** 「高速」の下限 */
   fastSpeed(): Resolved<number> {
     return this.setting((c) => c.fastSpeed, DEFAULT_KINETICS.fastSpeed)
+  }
+
+  /** ファンネルが取り出す間隔（tick）。docs/create-throughput.md「設定ファイルの項目」 */
+  extractionTimer(): Resolved<number> {
+    return this.setting((c) => c.extractionTimer, DEFAULT_LOGISTICS.extractionTimer)
+  }
+
+  /** プレスがスタックごと押すか */
+  bulkPressing(): Resolved<boolean> {
+    return this.setting((c) => c.bulkPressing, DEFAULT_LOGISTICS.bulkPressing)
   }
 
   private stressValue(

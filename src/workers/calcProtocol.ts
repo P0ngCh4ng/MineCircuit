@@ -1,6 +1,7 @@
 // 計算の Worker と画面の間でやりとりするメッセージ。どれも structured clone で送れる素のデータ。
 
 import type { BlueprintSnapshot } from '../calc/blueprintSnapshot'
+import type { RecipeBook } from '../io/modpack/recipes'
 import type { PluginOutcome } from '../calc/pluginRegistry'
 import type { VirtualPort } from '../calc/virtualPort'
 
@@ -36,6 +37,14 @@ export type ToCalcWorker =
       /** 読めなかったときの理由 */
       readonly error?: string
     }
+  | {
+      /** 'recipes' の返事 */
+      readonly type: 'recipes-reply'
+      readonly callId: number
+      readonly book: RecipeBook
+      /** 読めなかったときの理由 */
+      readonly error?: string
+    }
 
 /** Worker → 画面 */
 export type FromCalcWorker =
@@ -55,4 +64,10 @@ export type FromCalcWorker =
       readonly requestId: number
       readonly callId: number
       readonly path: string
+    }
+  | {
+      /** プラグインが Modpack のレシピを見たい */
+      readonly type: 'recipes'
+      readonly requestId: number
+      readonly callId: number
     }

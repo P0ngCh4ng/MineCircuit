@@ -1,6 +1,8 @@
 // Create の応力の計算プラグイン（docs/create-stress.md、docs/design.md「例：Createの応力プラグイン」）。
+// 輸送量と処理時間（docs/create-throughput.md）もプローブに出す。
 
 import type { Blueprint } from '../../domain/blueprint'
+import type { RecipeBook } from '../../io/modpack/recipes'
 import { AssumptionLog } from '../assumptionLog'
 import type {
   CalcContext,
@@ -16,6 +18,7 @@ import type {
 import { resolved, type Provenance } from '../provenance'
 import { loadCreateConfig } from './createConfig'
 import { orientForPlacement, placementHelper, placementProblem } from './createPlacement'
+import { kineticThroughputValues, staticThroughputValues, type ThroughputEnv } from './createThroughput'
 import { CreateValueResolver } from './createValueResolver'
 import {
   CREATE_STRESS_PLUGIN_ID,
@@ -28,7 +31,7 @@ import {
 export function createStressPlugin(): CalcPlugin {
   return {
     id: CREATE_STRESS_PLUGIN_ID,
-    label: 'Create の応力',
+    label: 'Create の応力と処理',
     portKinds: [
       {
         kind: 'rotation-source',
@@ -76,13 +79,43 @@ export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<
   const evaluation = graph.evaluate({ maxRotationSpeed: maxRotationSpeed.value, disableStress: disableStress.value })
   if (disableStress.value) log.add('設定で応力が切ってある（disableStress）ので、過負荷にならない')
 
+  const env: ThroughputEnv = { bp, values, recipes: await loadRecipes(ctx, log), log }
+  const allProbes = [...probes(graph, evaluation, env), ...staticProbes(bp, env)]
+
   return {
     summary: summarize(evaluation, disableStress.source),
     issues: [...evaluation.issues, ...placementIssues(bp)],
     assumptions: log.list(),
-    probes: probes(graph, evaluation),
+    probes: allProbes,
     rotations: rotations(graph, evaluation, values),
   }
+}
+
+/** Modpack のレシピ（docs/create-throughput.md「レシピ」）。読めなければ null（初期値で計算する） */
+async function loadRecipes(ctx: CalcContext, log: AssumptionLog): Promise<RecipeBook | null> {
+  const pack = ctx.pack
+  if (!pack?.recipeBook) return null
+  try {
+    return await pack.recipeBook()
+  } catch {
+    log.add('Modpack のレシピを読めなかったので、処理時間は Create の初期値で計算した')
+    return null
+  }
+}
+
+/** 回らないブロック（ファンネル・シュート）のプローブ。回転のネットワークはない */
+function staticProbes(bp: Blueprint, env: ThroughputEnv): CalcProbe[] {
+  const result: CalcProbe[] = []
+  bp.regions.forEach((region) => {
+    const [ox, oy, oz] = region.offset
+    region.forEachBlock((x, y, z, state) => {
+      if (state.id.namespace !== 'create') return
+      const pos: [number, number, number] = [x + ox, y + oy, z + oz]
+      const values = staticThroughputValues(pos, state.id.toString(), env)
+      if (values) result.push({ pos, values })
+    })
+  })
+  return result
 }
 
 /** 設置の規則に合わないブロック（ゲームでは外れて落ちる）。今は歯車だけ（#121） */
@@ -154,7 +187,7 @@ function rotations(graph: KineticGraph, ev: KineticEvaluation, values: CreateVal
 }
 
 /** ブロックごとの値（プローブ用）。仮の入出力のノードは含めない */
-function probes(graph: KineticGraph, ev: KineticEvaluation): CalcProbe[] {
+function probes(graph: KineticGraph, ev: KineticEvaluation, env: ThroughputEnv): CalcProbe[] {
   const numbers = new Map<number, number>()
   ev.networks.forEach((net, i) => {
     if (net.active) numbers.set(i, numbers.size + 1)
@@ -188,6 +221,16 @@ function probes(graph: KineticGraph, ev: KineticEvaluation): CalcProbe[] {
         ),
       })
     }
+    // 輸送量・処理時間（docs/create-throughput.md）。過負荷なら止まっている
+    const stopped = net.overloaded && r.theoreticalSpeed !== 0
+    values.push(
+      ...kineticThroughputValues(
+        node.pos,
+        node.id,
+        { rpm: stopped ? 0 : r.speed, source: r.speedSource, minSpeed: node.minSpeed },
+        env,
+      ),
+    )
     const number = numbers.get(r.network)
     if (number !== undefined) {
       values.push({
