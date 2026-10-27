@@ -14,6 +14,8 @@ import { EraseTool } from '../tools/eraseTool'
 import { PickTool } from '../tools/pickTool'
 import { PlaceTool } from '../tools/placeTool'
 import { orientForPlacement, placementHelper, placementProblem } from './placementRules'
+import type { MoveDirection } from '../tools/keymap'
+import { moveVector } from './moveDirection'
 import { useRegionActions } from './regionActions'
 
 /** 画面のストアと DocumentSession から EditToolContext を作る。部品の setup の中で呼ぶ */
@@ -60,6 +62,8 @@ export interface EditKeyActions {
   fillSelection(): boolean
   /** Ctrl+A。設計図全体を選ぶ */
   selectAll(): void
+  /** 矢印キー・Shift+PageUp / PageDown。範囲を1マス動かす。Ctrl なら上書き。動かしたら true */
+  moveSelection(direction: MoveDirection, overwrite: boolean): boolean
 }
 
 /**
@@ -71,6 +75,7 @@ export function useEditTools(): EditKeyActions {
   const tools = useToolStore()
   const session = useDocumentSession()
   const region = useRegionActions()
+  const view = useViewStore()
 
   tools.register(new PlaceTool(ctx))
   tools.register(new EraseTool(ctx))
@@ -93,6 +98,10 @@ export function useEditTools(): EditKeyActions {
     selectAll() {
       if (!session.current.value) return
       region.selectAll()
+    },
+    moveSelection(direction, overwrite) {
+      if (!session.current.value) return false
+      return region.move(moveVector(direction, view.mode, view.getCameraHeading()), overwrite)
     },
   }
 }

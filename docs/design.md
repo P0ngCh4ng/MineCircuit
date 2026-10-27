@@ -449,9 +449,30 @@ interface RegionResize {
 interface EntityChange { region: number; before: RawEntity[]; after: RawEntity[] }  // リージョンのエンティティを丸ごと差し替える
 ```
 
-- `BlockVolume` に `resize(offset, size)` を足す。中身の配列を作り直し、重なる所を写す。呼んでよいのは `setCell` と同じく edit の `EditHistory` だけ。
-- 負の向きにはみ出すときは、全リージョンの `offset` をずらして最小を 0 にする（`RegionResize` を全リージョン分持つ）。仮の入出力の位置と選択範囲も同じだけずらす（画面が `EditHistory.onChange` のあとで直す）。
+- `RegionResize` は、設計図全体の座標のずれ `shift`（負の向きに広げたとき。どのリージョンでも同じ値）も持つ。リージョンの中身は、リージョンの中の座標で `before.offset + shift − after.offset` だけずれる。
+- `BlockVolume` に `resize(offset, size, shift)` を足す。中身の配列を作り直し、中身を `shift` だけずらして写す。エンティティは変えない（`setEntities` で別に差し替える）。呼んでよいのは `setCell` と同じく edit の `EditHistory` だけ。
+- `changes` の位置は、大きさを変えたあとの座標。
+- 負の向きにはみ出すときは、全リージョンの `offset` をずらして最小を 0 にする（位置か大きさが変わるリージョンの分だけ `RegionResize` を持つ）。
 - 大きさの上限は各辺 512。
+
+**範囲を動かす（#131）。** `moveRegion(bp, box, translate, { overwrite })`（`edit/regionMove.ts`）。回す・反転するが入ったら `transformRegion` にまとめる。
+
+- 範囲は1つのリージョンの中にあること（またがるなら断る）。行き先がリージョンの外なら、そのリージョンを広げる。広げた所がほかのリージョンに重なるなら断る。
+- 範囲の中の空きも写す（行き先は範囲の写しになる）。行き先にある範囲の外のブロックの数を数え、`overwrite` でなければ断る。
+- エンティティは、ブロックの位置（`blockPos`、なければ `pos`）が範囲の中なら一緒に動かす。`pos`・`blockPos` と、壁掛けの物（額縁・絵）の `nbt` の `TileX`・`TileY`・`TileZ` を同じだけ直す。`nbt` の `Pos` はゲームが置くときに `pos` から作り直すのでそのまま。リージョンの中身がずれるときは、範囲の外のエンティティもその分だけ直す。
+- 生データの中の座標は、平行移動では直さない（相対の位置は変わらない。位置そのものを持つ項目は #132 で `transformBlockEntity` を入れるときに直す）。
+
+**選択範囲と仮の入出力を一緒に動かす。** 範囲を動かす操作は `relocation`（元の範囲・行き先の範囲・`translate`・`shift`）を持つ。画面の `DocumentSession` は、この操作を書いた・元に戻した・やり直したときに `onRelocate` で合図し、`view/edit/relocationSync.ts` が選択範囲と仮の入出力の位置を `relocatePos` で直す。どちらも履歴には入れない。
+
+```ts
+interface EditCommand {
+  // …上のもの
+  readonly relocation?: { source: Box; target: Box; translate: Vec3; shift: Vec3 }  // source は前の座標、target は後の座標
+}
+function relocatePos(r: Relocation, pos: Vec3, forward: boolean): Vec3
+```
+
+**矢印キーの向き。** 2D は画面の上が −Z、右が +X。3D は、カメラの水平の向きに一番近い x・z の向きを上にし、右はその右回り 90°（`view/edit/moveDirection.ts`）。
 
 **操作の作り方。** 動かす・回す・貼り付けは、どれも「元のマスを空にし、行き先のマスに書く」変更の一覧にする。元と行き先が重なるときは、元を空にする変更を先に、行き先を書く変更を後に並べる（同じマスへの2回目の変更が勝つ）。元に戻すときは逆の順に書き戻すので、重なっても元に戻る。
 

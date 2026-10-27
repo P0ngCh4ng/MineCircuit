@@ -16,8 +16,9 @@ import {
   type ShallowRef,
 } from 'vue'
 import type { Blueprint } from '../../domain/blueprint'
-import type { EditCommand } from '../../edit/editCommand'
+import type { EditCommand, Relocation } from '../../edit/editCommand'
 import { EditHistory } from '../../edit/editHistory'
+import { Signal } from '../../edit/signal'
 import { BlueprintReadError } from '../../io/readers/blueprintReader'
 import { readBlueprint } from '../../io/readers/readBlueprint'
 
@@ -27,6 +28,12 @@ export interface BlueprintDocument {
   readonly history: EditHistory
   /** 開いたファイルの名前。新規の設計図では Blueprint.name と同じ */
   readonly fileName: string
+}
+
+/** 範囲を動かした操作を書いた・元に戻した合図。forward が false なら元に戻した */
+export interface RelocationEvent {
+  readonly relocation: Relocation
+  readonly forward: boolean
 }
 
 /** 開くファイル。ブラウザの File と同じ形（テストでは偽物を渡せる） */
@@ -77,6 +84,8 @@ export interface DocumentSession {
   redo(): EditCommand | null
   /** お知らせを消す */
   clearError(): void
+  /** 範囲を動かした操作の apply・undo・redo のあとに呼ぶ。選択範囲と仮の入出力を一緒に動かすのに使う */
+  readonly onRelocate: Signal<RelocationEvent>
 }
 
 function openErrorMessage(fileName: string, e: unknown): string {
@@ -92,6 +101,12 @@ export function createDocumentSession(): DocumentSession {
   const opening = ref(false)
   const error = ref<string | null>(null)
   let disconnect: (() => void) | null = null
+  const onRelocate = new Signal<RelocationEvent>()
+
+  function relocated(cmd: EditCommand | null, forward: boolean): EditCommand | null {
+    if (cmd?.relocation) onRelocate.emit({ relocation: cmd.relocation, forward })
+    return cmd
+  }
   // 読んでいる途中で次のファイルを開いたら、前の結果は捨てる
   let openToken = 0
 
@@ -167,13 +182,15 @@ export function createDocumentSession(): DocumentSession {
       const doc = current.value
       if (!doc || !cmd) return false
       doc.history.apply(cmd)
+      relocated(cmd, true)
       return true
     },
-    undo: () => current.value?.history.undo() ?? null,
-    redo: () => current.value?.history.redo() ?? null,
+    undo: () => relocated(current.value?.history.undo() ?? null, false),
+    redo: () => relocated(current.value?.history.redo() ?? null, true),
     clearError() {
       error.value = null
     },
+    onRelocate,
   }
 }
 

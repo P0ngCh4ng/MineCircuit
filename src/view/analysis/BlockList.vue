@@ -29,6 +29,7 @@ const scope = ref<CountScope>('all')
 
 /** 今の段（y）。設計図の高さに収める */
 const layer = computed(() => {
+  void session.version.value
   const bp = session.current.value?.blueprint
   return bp ? clampLayer(layers.current, bp.size[1]) : 0
 })

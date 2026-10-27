@@ -19,6 +19,18 @@ export type KeyAction =
   | { readonly type: 'selectAll' }
   /** 範囲を置くブロックで塗る（F） */
   | { readonly type: 'fillSelection' }
+  /** 範囲を1マス動かす（矢印キー、Shift+PageUp / PageDown）。overwrite は Ctrl を押しているとき */
+  | { readonly type: 'moveSelection'; readonly direction: MoveDirection; readonly overwrite: boolean }
+
+/** 範囲を動かす向き。up〜right は画面の上下左右、raise / lower は1段上・下 */
+export type MoveDirection = 'up' | 'down' | 'left' | 'right' | 'raise' | 'lower'
+
+const ARROW_KEYS: ReadonlyMap<string, MoveDirection> = new Map([
+  ['arrowup', 'up'],
+  ['arrowdown', 'down'],
+  ['arrowleft', 'left'],
+  ['arrowright', 'right'],
+])
 
 /** KeyboardEvent のうち使う部分。テストで偽物を渡せるようにする */
 export interface KeyInput {
@@ -41,6 +53,14 @@ export function resolveKeyAction(e: KeyInput): KeyAction | null {
   const key = e.key.toLowerCase()
   // Mac の Cmd も Ctrl と同じに扱う
   const ctrl = e.ctrlKey || e.metaKey
+
+  if (!e.altKey) {
+    const arrow = ARROW_KEYS.get(key)
+    if (arrow && !e.shiftKey) return { type: 'moveSelection', direction: arrow, overwrite: ctrl }
+    if (e.shiftKey && (key === 'pageup' || key === 'pagedown')) {
+      return { type: 'moveSelection', direction: key === 'pageup' ? 'raise' : 'lower', overwrite: ctrl }
+    }
+  }
 
   if (ctrl && !e.altKey) {
     if (key === 'z' && !e.shiftKey) return { type: 'undo' }

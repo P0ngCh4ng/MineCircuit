@@ -1,6 +1,7 @@
 import type { BlockState } from '../domain/blockState'
 import type { Blueprint } from '../domain/blueprint'
-import type { CellValue } from '../domain/blockVolume'
+import type { CellValue, RawEntity } from '../domain/blockVolume'
+import type { Box } from '../domain/box'
 import type { NbtTag, RawNbt } from '../domain/nbt'
 import type { Vec3 } from '../domain/vec3'
 import { nbtEquals } from '../io/nbt/nbtEquals'
@@ -14,11 +15,50 @@ export interface CellChange {
   readonly after: CellValue
 }
 
+/**
+ * リージョンの位置と大きさの変更（範囲の操作で設計図を広げるとき）。
+ * 設計図全体の座標は shift だけずれる（負の向きに広げたとき）。リージョンの中身もそれに合わせて写す
+ */
+export interface RegionResize {
+  /** Blueprint.regions の番号 */
+  readonly region: number
+  readonly before: { readonly offset: Vec3; readonly size: Vec3 }
+  readonly after: { readonly offset: Vec3; readonly size: Vec3 }
+  /** 設計図全体の座標のずれ（どのリージョンでも同じ値） */
+  readonly shift: Vec3
+}
+
+/** リージョンのエンティティを丸ごと差し替える変更 */
+export interface EntityChange {
+  readonly region: number
+  readonly before: readonly RawEntity[]
+  readonly after: readonly RawEntity[]
+}
+
+/**
+ * 範囲を動かした操作の、位置の対応。画面が選択範囲と仮の入出力を動かすのに使う（履歴には入れないもの）。
+ * source は操作の前の座標、target は操作の後の座標
+ */
+export interface Relocation {
+  readonly source: Box
+  readonly target: Box
+  /** 範囲の中のものの動き（shift を含まない） */
+  readonly translate: Vec3
+  /** 設計図全体の座標のずれ（負の向きに広げたとき） */
+  readonly shift: Vec3
+}
+
 /** 編集の操作。元に戻せる変更1つ */
 export interface EditCommand {
   /** 「shaft を置く」。元に戻すボタンのツールチップに出す */
   readonly label: string
+  /** マスの変更。pos は resize のあとの座標 */
   readonly changes: readonly CellChange[]
+  /** 先に大きさを変えてから changes を書く。元に戻すときは逆 */
+  readonly resize?: readonly RegionResize[]
+  readonly entities?: readonly EntityChange[]
+  /** 範囲を動かした操作なら、位置の対応 */
+  readonly relocation?: Relocation
 }
 
 // ラベルに出すブロックの名前。ID の path（create:shaft → shaft）

@@ -146,3 +146,31 @@ describe('BlockVolume', () => {
     ).toThrow()
   })
 })
+
+describe('BlockVolume.resize', () => {
+  it('中身を shift だけずらして写し、はみ出す所は捨て、新しい所は空きにする', () => {
+    const v = new BlockVolume({ name: 'main', size: [2, 1, 1] })
+    v.setCell(0, 0, 0, { state: stone, blockEntity: nbt.compound({ a: nbt.int(1) }) })
+    v.setCell(1, 0, 0, { state: shaftX, blockEntity: null })
+    v.resize([0, 0, 0], [3, 1, 2], [1, 0, 1])
+    expect(v.size).toEqual([3, 1, 2])
+    expect(v.get(0, 0, 0)).toBeNull()
+    expect(v.get(1, 0, 1)).toBe(stone)
+    expect(v.blockEntityAt(1, 0, 1)).toEqual(nbt.compound({ a: nbt.int(1) }))
+    expect(v.get(2, 0, 1)).toBe(shaftX)
+    // 戻す
+    v.resize([0, 0, 0], [2, 1, 1], [-1, 0, -1])
+    expect(v.get(0, 0, 0)).toBe(stone)
+    expect(v.get(1, 0, 0)).toBe(shaftX)
+    expect(v.blockEntityAt(0, 0, 0)).toEqual(nbt.compound({ a: nbt.int(1) }))
+  })
+
+  it('位置を変え、エンティティは setEntities で差し替える', () => {
+    const v = new BlockVolume({ name: 'main', size: [1, 1, 1], entities: [nbt.compound()] })
+    v.resize([2, 0, 0], [1, 1, 1], [0, 0, 0])
+    expect(v.offset).toEqual([2, 0, 0])
+    expect(v.entities).toHaveLength(1)
+    v.setEntities([])
+    expect(v.entities).toEqual([])
+  })
+})

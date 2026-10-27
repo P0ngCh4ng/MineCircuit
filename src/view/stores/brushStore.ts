@@ -77,12 +77,14 @@ export const useBrushStore = defineStore('brush', () => {
     },
   )
 
-  // 選択が変わったら、前のブロックについての知らせは消す
+  // 選択が変わったら、前のブロックについての知らせは消す。
+  // 選択を変えた操作がすぐ後に出す知らせ（範囲を動かしたときの座標のずれ）を消さないよう、その場で消す
   watch(
     () => tools.selectedPos,
     () => {
       message.value = null
     },
+    { flush: 'sync' },
   )
 
   return { state, message, ghostPos, ghostBlocked, setFromBlock, rotate, setMessage, setGhost }
