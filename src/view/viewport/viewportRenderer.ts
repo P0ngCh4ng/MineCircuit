@@ -17,6 +17,8 @@ export const CAMERA_FOV = 45
 export interface SceneRenderer {
   /** マウスでカメラを動かし始めたとき */
   onUserMove: (() => void) | null
+  /** カメラの水平の向き [x, z] が変わったとき */
+  onHeadingChange?: ((x: number, z: number) => void) | null
   resize(width: number, height: number): void
   requestRender(): void
   showView(view: CameraView, size: Vec3): void
@@ -58,8 +60,20 @@ export class ViewportRenderer implements SceneRenderer {
     // 左ドラッグで回す、右ドラッグで動かす、ホイールで拡大・縮小
     this.controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }
     this.controls.screenSpacePanning = true
-    this.controls.addEventListener('change', () => this.requestRender())
+    this.controls.addEventListener('change', () => {
+      this.requestRender()
+      this.notifyHeading()
+    })
     this.controls.addEventListener('start', () => this.onUserMove?.())
+  }
+
+  /** カメラの水平の向き [x, z] が変わったとき（矢印キーで範囲を動かす向きに使う） */
+  onHeadingChange: ((x: number, z: number) => void) | null = null
+
+  private notifyHeading(): void {
+    const t = this.controls.target
+    const p = this.camera.position
+    this.onHeadingChange?.(t.x - p.x, t.z - p.z)
   }
 
   /** 描画の大きさを表示部分に合わせる（CSS ピクセル） */
@@ -96,6 +110,7 @@ export class ViewportRenderer implements SceneRenderer {
     this.controls.maxDistance = radius * 25
     this.controls.update()
     this.requestRender()
+    this.notifyHeading()
   }
 
   /** 視点を切り替え、設計図全体を表示する */

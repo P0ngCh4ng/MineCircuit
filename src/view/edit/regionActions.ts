@@ -5,7 +5,9 @@ import type { BlockState } from '../../domain/blockState'
 import type { Box } from '../../domain/box'
 import type { Blueprint } from '../../domain/blueprint'
 import type { EditCommand } from '../../edit/editCommand'
+import type { Vec3 } from '../../domain/vec3'
 import { eraseRegion, fillRegion, replaceInRegion } from '../../edit/regionEdit'
+import { moveRegion } from '../../edit/regionMove'
 import { useDocumentSession } from '../document/documentSession'
 import { useBrushStore } from '../stores/brushStore'
 import { useToolStore } from '../stores/toolStore'
@@ -17,6 +19,11 @@ export interface RegionActions {
   fill(onlyEmpty: boolean): boolean
   /** 範囲の中の from を置くブロックにする。変えたら true */
   replace(from: BlockState, keepOrientation: boolean): boolean
+  /**
+   * 範囲を d だけ動かす。overwrite なら行き先のブロックを上書きする。動かしたら true。
+   * 選択範囲と仮の入出力は、session.onRelocate を受けて一緒に動く（relocationSync.ts）
+   */
+  move(d: Vec3, overwrite: boolean): boolean
   /** 設計図全体を選ぶ */
   selectAll(): void
 }
@@ -76,6 +83,17 @@ export function useRegionActions(): RegionActions {
         (bp, box) => (brush.state ? replaceInRegion(bp, box, from, brush.state, keepOrientation) : REGION_MESSAGES.noBrush),
         REGION_MESSAGES.nothingToReplace,
       )
+    },
+    move(d, overwrite) {
+      let warning: string | null = null
+      const moved = run((bp, box) => {
+        const result = moveRegion(bp, box, d, { overwrite })
+        if (!result.ok) return result.reason
+        warning = result.warnings[0] ?? null
+        return result.command
+      }, REGION_MESSAGES.noSelection)
+      if (moved && warning) brush.setMessage(warning)
+      return moved
     },
     selectAll() {
       const bp = session.current.value?.blueprint

@@ -25,7 +25,11 @@ export function useLayerNavigation(): LayerNavigation {
   const session = useDocumentSession()
   const layers = useLayerStore()
 
-  const height = computed(() => session.current.value?.blueprint.size[1] ?? 0)
+  // 範囲を動かすと設計図の高さが変わるので、編集のたびに読み直す
+  const height = computed(() => {
+    void session.version.value
+    return session.current.value?.blueprint.size[1] ?? 0
+  })
   const current = computed(() => clampLayer(layers.current, height.value))
   const canUp = computed(() => current.value < height.value - 1)
   const canDown = computed(() => height.value > 0 && current.value > 0)

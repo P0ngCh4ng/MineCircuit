@@ -72,6 +72,18 @@ export const useViewStore = defineStore('view', () => {
     request('fit')
   }
 
+  /**
+   * 3D のカメラが向いている水平の向き [x, z]（長さは問わない）。矢印キーで範囲を動かす向きに使う。
+   * 毎フレーム変わりうるのでリアクティブにしない
+   */
+  let cameraHeading: readonly [number, number] = [-1, -1]
+  function setCameraHeading(x: number, z: number): void {
+    cameraHeading = [x, z]
+  }
+  function getCameraHeading(): readonly [number, number] {
+    return cameraHeading
+  }
+
   /** マウスでカメラを動かしたとき（3D表示から呼ぶ） */
   function cameraMoved(): void {
     cameraView.value = null
@@ -140,6 +152,8 @@ export const useViewStore = defineStore('view', () => {
     setView,
     fitAll,
     cameraMoved,
+    setCameraHeading,
+    getCameraHeading,
     setGrid,
     toggleGrid,
     setAxes,

@@ -49,22 +49,28 @@ const blueprint = computed(() => {
   return session.current.value?.blueprint ?? null
 })
 
+/** 設計図の大きさ。範囲を動かすと変わるので、編集のたびに読み直す（blueprint は同じものなので変化を拾えない） */
+const size = computed(() => {
+  void session.version.value
+  return session.current.value?.blueprint.size ?? null
+})
+
 /** マス目の置き方。描くときと、マウスの位置をマスに直すときに使う */
 const layout = computed<GridLayout2D | null>(() => {
-  const bp = blueprint.value
-  if (!bp || width.value === 0 || height.value === 0) return null
-  return layoutGrid2D(width.value, height.value, bp.size)
+  const s = size.value
+  if (!s || width.value === 0 || height.value === 0) return null
+  return layoutGrid2D(width.value, height.value, s)
 })
 
 /** 今の段（設計図の高さに収める） */
 const layer = computed(() => {
-  const bp = blueprint.value
-  return bp ? clampLayer(layers.current, bp.size[1]) : 0
+  const s = size.value
+  return s ? clampLayer(layers.current, s[1]) : 0
 })
 
 const layerLabel = computed(() => {
-  const bp = blueprint.value
-  return bp ? `段 ${layer.value + 1} / ${bp.size[1]}` : ''
+  const s = size.value
+  return s ? `段 ${layer.value + 1} / ${s[1]}` : ''
 })
 
 function draw(): void {

@@ -34,6 +34,19 @@ describe('resolveKeyAction', () => {
     expect(resolveKeyAction(k('Escape'))).toEqual({ type: 'clearSelection' })
   })
 
+  it('矢印キーで範囲を水平に、Shift+PageUp / PageDown で上下に動かす。Ctrl で上書き', () => {
+    expect(resolveKeyAction(k('ArrowUp'))).toEqual({ type: 'moveSelection', direction: 'up', overwrite: false })
+    expect(resolveKeyAction(k('ArrowLeft', { ctrlKey: true }))).toEqual({ type: 'moveSelection', direction: 'left', overwrite: true })
+    expect(resolveKeyAction(k('PageUp', { shiftKey: true }))).toEqual({ type: 'moveSelection', direction: 'raise', overwrite: false })
+    expect(resolveKeyAction(k('PageDown', { shiftKey: true, ctrlKey: true }))).toEqual({
+      type: 'moveSelection',
+      direction: 'lower',
+      overwrite: true,
+    })
+    expect(resolveKeyAction(k('ArrowUp', { shiftKey: true }))).toBeNull()
+    expect(resolveKeyAction(k('ArrowUp', { altKey: true }))).toBeNull()
+  })
+
   it('Ctrl+A（Mac は Cmd+A）で全体を選び、F で範囲を塗る', () => {
     expect(resolveKeyAction(k('a', { ctrlKey: true }))).toEqual({ type: 'selectAll' })
     expect(resolveKeyAction(k('A', { metaKey: true }))).toEqual({ type: 'selectAll' })

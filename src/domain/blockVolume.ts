@@ -58,14 +58,11 @@ export function cellIndex(size: Vec3, x: number, y: number, z: number): number {
  * 1つのリージョンのブロック配置。読み込んだものを全部持つ。
  * 座標はリージョンの中のもの（0 始まり）。設計図全体の座標は Blueprint で扱う。
  *
- * 書き換える関数は setCell と stateIndex だけ。呼んでよいのは edit 層の操作だけ
+ * 書き換える関数は setCell・stateIndex・resize・setEntities だけ。呼んでよいのは edit 層の操作だけ
  * （CLAUDE.md の設計のルール 6）。画面や計算プラグインは読む関数だけを使う。
  */
 export class BlockVolume {
   readonly name: string
-  readonly offset: Vec3
-  readonly size: Vec3
-  readonly entities: readonly RawEntity[]
   readonly extra: RawNbt
   /** `palettes` 形式の .nbt で、先頭より後ろのパレット（生データ）。ふつうは空 */
   readonly alternatePalettes: readonly (readonly RawNbt[])[]
@@ -73,10 +70,13 @@ export class BlockVolume {
   private readonly paletteList: BlockState[]
   /** BlockState.key → パレット番号。同じ状態が2つあるときは先のもの */
   private readonly paletteLookup = new Map<string, number>()
+  private offsetValue: Vec3
+  private sizeValue: Vec3
+  private entityList: readonly RawEntity[]
   /** 位置ごとのパレット番号。空きは -1 */
-  private readonly cells: Int32Array
+  private cells: Int32Array
   /** セル番号 → ブロックエンティティの生データ */
-  private readonly blockEntities: Map<number, RawNbt>
+  private blockEntities: Map<number, RawNbt>
 
   constructor(init: BlockVolumeInit) {
     const size = init.size
@@ -85,9 +85,9 @@ export class BlockVolume {
     }
     const count = size[0] * size[1] * size[2]
     this.name = init.name
-    this.offset = init.offset ?? [0, 0, 0]
-    this.size = size
-    this.entities = init.entities ?? []
+    this.offsetValue = init.offset ?? [0, 0, 0]
+    this.sizeValue = size
+    this.entityList = init.entities ?? []
     this.extra = init.extra ?? { type: 'compound', value: new Map() }
     this.alternatePalettes = init.alternatePalettes ?? []
 
@@ -116,6 +116,21 @@ export class BlockVolume {
         throw new Error(`リージョン "${init.name}" のブロックエンティティの位置 ${index} が範囲の外です。`)
       }
     }
+  }
+
+  /** 設計図全体の中での位置。範囲の操作で設計図を広げると変わる */
+  get offset(): Vec3 {
+    return this.offsetValue
+  }
+
+  /** 大きさ。範囲の操作で設計図を広げると変わる */
+  get size(): Vec3 {
+    return this.sizeValue
+  }
+
+  /** エンティティ（額縁など）の生データ。中身は解釈しない */
+  get entities(): readonly RawEntity[] {
+    return this.entityList
   }
 
   /** 設計図に出てくるブロック状態の一覧。使われていない状態が残ることがある */
@@ -200,5 +215,45 @@ export class BlockVolume {
     this.paletteList.push(state)
     this.paletteLookup.set(state.key, index)
     return index
+  }
+
+  /**
+   * 位置を offset、大きさを size にする。中身（ブロックと生データ）は、リージョンの中の座標で shift だけずらして写す。
+   * 新しい大きさからはみ出す所は捨て、新しくできた所は空きにする。エンティティは変えない（setEntities で別に直す）。
+   * 編集用。呼んでよいのは edit 層の EditHistory だけ。
+   */
+  resize(offset: Vec3, size: Vec3, shift: Vec3): void {
+    if (!size.every((n) => Number.isInteger(n) && n >= 0)) {
+      throw new Error(`リージョン "${this.name}" の新しい大きさ [${size.join(', ')}] が正しくありません。`)
+    }
+    const old = this.sizeValue
+    const cells = new Int32Array(size[0] * size[1] * size[2]).fill(EMPTY_INDEX)
+    const blockEntities = new Map<number, RawNbt>()
+    let i = 0
+    for (let y = 0; y < old[1]; y++) {
+      for (let z = 0; z < old[2]; z++) {
+        for (let x = 0; x < old[0]; x++, i++) {
+          const p = this.cells[i]!
+          if (p === EMPTY_INDEX) continue
+          const j = cellIndex(size, x + shift[0], y + shift[1], z + shift[2])
+          if (j < 0) continue
+          cells[j] = p
+          const be = this.blockEntities.get(i)
+          if (be) blockEntities.set(j, be)
+        }
+      }
+    }
+    this.offsetValue = [offset[0], offset[1], offset[2]]
+    this.sizeValue = [size[0], size[1], size[2]]
+    this.cells = cells
+    this.blockEntities = blockEntities
+  }
+
+  /**
+   * エンティティを丸ごと差し替える。
+   * 編集用。呼んでよいのは edit 層の EditHistory だけ。
+   */
+  setEntities(entities: readonly RawEntity[]): void {
+    this.entityList = entities
   }
 }

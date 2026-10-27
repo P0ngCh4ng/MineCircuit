@@ -1,7 +1,7 @@
 import type { Blueprint } from '../domain/blueprint'
-import type { CellValue } from '../domain/blockVolume'
+import type { BlockVolume, CellValue } from '../domain/blockVolume'
 import type { Vec3 } from '../domain/vec3'
-import type { EditCommand } from './editCommand'
+import type { EditCommand, RegionResize } from './editCommand'
 import { Signal } from './signal'
 
 // 設計図全体の座標 pos に cell を書き込む。BlockVolume.setCell を呼ぶのはここだけ（設計のルール 6）
@@ -11,6 +11,46 @@ function writeCell(bp: Blueprint, pos: Vec3, cell: CellValue): void {
     throw new Error(`位置 [${pos.join(', ')}] は設計図の範囲の外です。範囲の中を指定してください。`)
   }
   loc.region.setCell(loc.local[0], loc.local[1], loc.local[2], cell)
+}
+
+// リージョンの中身のずれ。設計図全体のずれから、リージョンの位置の変化を引いたもの
+function contentShift(r: RegionResize): Vec3 {
+  return [
+    r.before.offset[0] + r.shift[0] - r.after.offset[0],
+    r.before.offset[1] + r.shift[1] - r.after.offset[1],
+    r.before.offset[2] + r.shift[2] - r.after.offset[2],
+  ]
+}
+
+// 大きさ → エンティティ → マス の順に書く
+function writeForward(bp: Blueprint, cmd: EditCommand): void {
+  for (const r of cmd.resize ?? []) {
+    regionAt(bp, r.region).resize(r.after.offset, r.after.size, contentShift(r))
+  }
+  for (const e of cmd.entities ?? []) regionAt(bp, e.region).setEntities(e.after)
+  for (const change of cmd.changes) writeCell(bp, change.pos, change.after)
+}
+
+// マス（逆の順）→ エンティティ → 大きさ の順に書き戻す
+function writeBackward(bp: Blueprint, cmd: EditCommand): void {
+  // 同じマスを2回変える操作でも元に戻るよう、逆の順に書き戻す
+  for (let i = cmd.changes.length - 1; i >= 0; i--) {
+    const change = cmd.changes[i]!
+    writeCell(bp, change.pos, change.before)
+  }
+  for (const e of cmd.entities ?? []) regionAt(bp, e.region).setEntities(e.before)
+  const resize = cmd.resize ?? []
+  for (let i = resize.length - 1; i >= 0; i--) {
+    const r = resize[i]!
+    const s = contentShift(r)
+    regionAt(bp, r.region).resize(r.before.offset, r.before.size, [-s[0], -s[1], -s[2]])
+  }
+}
+
+function regionAt(bp: Blueprint, index: number): BlockVolume {
+  const region = bp.regions[index]
+  if (!region) throw new Error(`リージョン ${index} がありません。`)
+  return region
 }
 
 /**
@@ -27,7 +67,7 @@ export class EditHistory {
 
   /** after を書き込み、元に戻す側に積む。やり直す側は空にする */
   apply(cmd: EditCommand): void {
-    for (const change of cmd.changes) writeCell(this.bp, change.pos, change.after)
+    writeForward(this.bp, cmd)
     this.undoStack.push(cmd)
     this.redoStack.length = 0
     this.onChange.emit()
@@ -37,11 +77,7 @@ export class EditHistory {
   undo(): EditCommand | null {
     const cmd = this.undoStack.pop()
     if (!cmd) return null
-    // 同じマスを2回変える操作でも元に戻るよう、逆の順に書き戻す
-    for (let i = cmd.changes.length - 1; i >= 0; i--) {
-      const change = cmd.changes[i]
-      writeCell(this.bp, change.pos, change.before)
-    }
+    writeBackward(this.bp, cmd)
     this.redoStack.push(cmd)
     this.onChange.emit()
     return cmd
@@ -51,7 +87,7 @@ export class EditHistory {
   redo(): EditCommand | null {
     const cmd = this.redoStack.pop()
     if (!cmd) return null
-    for (const change of cmd.changes) writeCell(this.bp, change.pos, change.after)
+    writeForward(this.bp, cmd)
     this.undoStack.push(cmd)
     this.onChange.emit()
     return cmd

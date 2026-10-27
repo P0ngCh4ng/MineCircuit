@@ -131,6 +131,7 @@ onMounted(() => {
     return
   }
   renderer.onUserMove = () => view.cameraMoved()
+  renderer.onHeadingChange = (x, z) => view.setCameraHeading(x, z)
 
   const el = host.value!
   renderer.resize(el.clientWidth, el.clientHeight)

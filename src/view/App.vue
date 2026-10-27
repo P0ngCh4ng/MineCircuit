@@ -5,6 +5,7 @@ import { watch } from 'vue'
 import { useProbeTool } from './calc/useProbeTool'
 import { usePortTool } from './calc/usePortTool'
 import { useDocumentSession } from './document/documentSession'
+import { useRelocationSync } from './edit/relocationSync'
 import { useRotateAction } from './edit/rotateAction'
 import { useEditTools } from './edit/useEditTools'
 import LayerPanel from './layers/LayerPanel.vue'
@@ -27,6 +28,8 @@ const rotate = useRotateAction()
 const edit = useEditTools()
 useProbeTool()
 usePortTool()
+// 範囲を動かしたら、選択範囲と仮の入出力も一緒に動かす
+useRelocationSync()
 // Modpack と設計図に合わせて、ブロックの見た目（テクスチャ）を用意する
 useAppearanceSync()
 
@@ -46,6 +49,7 @@ useKeyboardShortcuts({
   deleteSelection: () => edit.deleteSelected(),
   fillSelection: () => edit.fillSelection(),
   selectAll: () => edit.selectAll(),
+  moveSelection: (a) => edit.moveSelection(a.direction, a.overwrite),
   toggleGrid: () => view.toggleGrid(),
 })
 </script>
