@@ -5,6 +5,7 @@ import { watch } from 'vue'
 import { useProbeTool } from './calc/useProbeTool'
 import { usePortTool } from './calc/usePortTool'
 import { useDocumentSession } from './document/documentSession'
+import { usePasteModeSync, useClipboardActions } from './edit/clipboardActions'
 import { useRelocationSync } from './edit/relocationSync'
 import { useRotateAction } from './edit/rotateAction'
 import { useEditTools } from './edit/useEditTools'
@@ -26,6 +27,9 @@ const view = useViewStore()
 const session = useDocumentSession()
 const rotate = useRotateAction()
 const edit = useEditTools()
+const clipboard = useClipboardActions()
+// 貼り付けの見本は、ツールを切り替えたらやめる（#133）
+usePasteModeSync(clipboard)
 useProbeTool()
 usePortTool()
 // 範囲を動かしたら、選択範囲と仮の入出力も一緒に動かす
@@ -42,15 +46,21 @@ watch(session.current, (doc) => {
 
 useKeyboardShortcuts({
   tool: (a) => tools.setTool(a.id),
-  clearSelection: () => tools.setSelected(null),
+  // 貼り付けの途中なら、貼り付けをやめる
+  clearSelection: () => clipboard.cancel() || tools.setSelected(null),
   undo: () => session.undo(),
   redo: () => session.redo(),
-  rotateBrush: (a) => rotate(a.vertical, a.overwrite),
+  // 貼り付けの見本を出していれば、見本を回す
+  rotateBrush: (a) => clipboard.rotatePreview(a.vertical ? 3 : 1) || rotate(a.vertical, a.overwrite),
   deleteSelection: () => edit.deleteSelected(),
   fillSelection: () => edit.fillSelection(),
   selectAll: () => edit.selectAll(),
   moveSelection: (a) => edit.moveSelection(a.direction, a.overwrite),
   toggleGrid: () => view.toggleGrid(),
+  copySelection: () => clipboard.copy(),
+  cutSelection: () => clipboard.cut(),
+  paste: () => clipboard.paste(),
+  duplicateSelection: () => clipboard.duplicate(),
 })
 </script>
 

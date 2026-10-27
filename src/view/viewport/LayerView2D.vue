@@ -10,6 +10,7 @@ import { useCalcStore } from '../stores/calcStore'
 import { clampLayer, useLayerStore } from '../stores/layerStore'
 import { useProbeStore } from '../stores/probeStore'
 import { useMeasureStore } from '../stores/measureStore'
+import { usePasteStore } from '../stores/pasteStore'
 import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
@@ -19,7 +20,7 @@ import { ANALYSIS_COLORS_2D, drawAnalysisOverlay2D } from './analysisOverlay2D'
 import { clampedCell2D, dragSelectionBox, insideGrid2D, isDrag2D, type Cell2D } from './dragSelect2D'
 import { layoutGrid2D } from './layerGrid2D'
 import { drawPortOverlay2D } from './portOverlay2D'
-import { DARK_THEME_2D, drawLayer2D, drawSelectionBox2D, LIGHT_THEME_2D } from './layerRenderer2D'
+import { DARK_THEME_2D, drawLayer2D, drawPastePreview2D, drawSelectionBox2D, LIGHT_THEME_2D } from './layerRenderer2D'
 import { createTextureCellPainter } from './textureCellPainter2D'
 
 const props = withDefaults(defineProps<{ showGrid?: boolean }>(), { showGrid: true })
@@ -34,6 +35,7 @@ const calc = useCalcStore()
 const probe = useProbeStore()
 const measures = useMeasureStore()
 const ports = usePortStore()
+const paste = usePasteStore()
 const appearance = useAppearanceStore()
 /** テクスチャで描く（#85）。色で描くとき、見た目がないときは null */
 const cellPainter = computed(() => createTextureCellPainter(appearance.active))
@@ -115,7 +117,22 @@ function draw(): void {
   )
   // 仮の入出力（#70）
   drawPortOverlay2D(ctx, grid, layer.value, ports.ports, ports.selectedId)
+  // 貼り付けの見本（#133）
+  drawPastePreview2D(
+    ctx,
+    grid,
+    layer.value,
+    paste.cells.map((c) => ({ pos: c.pos, id: c.state.id.toString() })),
+    paste.box,
+    paste.blocked,
+  )
 }
+// 貼り付けの見本が変わったら描き直す（#133）
+watch(
+  () => [paste.cells, paste.box, paste.blocked],
+  () => draw(),
+  { flush: 'post' },
+)
 
 // 見た目と「テクスチャ／色」が変わったら描き直す（#85）
 watch(cellPainter, () => draw(), { flush: 'post' })
@@ -264,7 +281,7 @@ function onClick(e: MouseEvent): void {
     return
   }
   const target = pickAt(e)
-  if (target) tools.click(target, { shift: e.shiftKey, alt: e.altKey })
+  if (target) tools.click(target, { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey })
 }
 
 let resizeObserver: ResizeObserver | null = null

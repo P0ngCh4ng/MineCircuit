@@ -1,4 +1,4 @@
-import type { PickModifiers, PickTarget, Tool, ToolId } from './tool'
+import type { PickModifiers, PickTarget, Tool, ToolId, ToolOverride } from './tool'
 
 /**
  * ツールを登録し、今のツールにマウスの移動とクリックを渡す。
@@ -8,6 +8,7 @@ export class ToolController {
   private readonly tools = new Map<ToolId, Tool>()
   private activeId: ToolId | null = null
   private lastHover: PickTarget | null = null
+  private override: ToolOverride | null = null
 
   /** 今のツールが変わったときに呼ばれる */
   onActiveChange: ((id: ToolId | null) => void) | null = null
@@ -47,19 +48,40 @@ export class ToolController {
     this.activeId = id
     next.activate?.()
     // マウスが表示の上にあるまま切り替えたときも、すぐに新しいツールの表示を出す
-    next.onHover(this.lastHover)
+    if (!this.override) next.onHover(this.lastHover)
     this.onActiveChange?.(id)
     return true
+  }
+
+  /**
+   * 今のツールの代わりにマウスを受け取るものを差し込む（貼り付けの見本。#133）。null で外す。
+   * 差し込んだときと外したときは、今のマウスの位置をすぐに渡す
+   */
+  setOverride(next: ToolOverride | null): void {
+    if (this.override === next) return
+    if (next) this.activeTool?.onHover(null)
+    else this.override?.onHover(null)
+    this.override = next
+    ;(next ?? this.activeTool)?.onHover(this.lastHover)
+  }
+
+  get overriding(): boolean {
+    return this.override !== null
+  }
+
+  /** 最後に表示から来たマウスの下のもの */
+  get lastTarget(): PickTarget | null {
+    return this.lastHover
   }
 
   /** 表示からマウスの移動を受け取る。表示の外に出たら null */
   hover(target: PickTarget | null): void {
     this.lastHover = target
-    this.activeTool?.onHover(target)
+    ;(this.override ?? this.activeTool)?.onHover(target)
   }
 
   /** 表示からクリックを受け取る */
   click(target: PickTarget, mods: PickModifiers = { shift: false }): void {
-    this.activeTool?.onClick(target, mods)
+    ;(this.override ?? this.activeTool)?.onClick(target, mods)
   }
 }

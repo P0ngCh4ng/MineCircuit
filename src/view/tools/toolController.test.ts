@@ -139,4 +139,29 @@ describe('SelectTool', () => {
     c.hover(null)
     expect(state.hovered).toBeNull()
   })
+
+  it('差し込んだもの（貼り付けの見本）が、外すまで今のツールの代わりに移動とクリックを受け取る（#133）', () => {
+    const c = new ToolController()
+    const a = new FakeTool('select')
+    c.register(a)
+    c.hover(block([1, 0, 0]))
+    a.log.length = 0
+    const log: string[] = []
+    c.setOverride({
+      onHover: (t) => log.push(`hover:${t ? t.pos.join(',') : 'null'}`),
+      onClick: (t) => log.push(`click:${t.pos.join(',')}`),
+    })
+    // 差し込んだらすぐに今のマウスの位置を渡し、今のツールの表示は消す
+    expect(log).toEqual(['hover:1,0,0'])
+    expect(a.log).toEqual(['hover:null'])
+    c.hover(empty([2, 0, 0]))
+    c.click(empty([2, 0, 0]))
+    expect(log).toEqual(['hover:1,0,0', 'hover:2,0,0', 'click:2,0,0'])
+    expect(a.log).toEqual(['hover:null'])
+    expect(c.overriding).toBe(true)
+    c.setOverride(null)
+    expect(log.at(-1)).toBe('hover:null')
+    expect(a.log.at(-1)).toBe('hover:2,0,0')
+    expect(c.overriding).toBe(false)
+  })
 })

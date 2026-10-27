@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // 右パネルの「選択範囲」（#130）。docs/ui.md「右パネル『選択範囲』」「まとめて変える」。
 // 2つ以上のブロックが入る範囲を選んでいるときに出す（1つのときは BlockDetail）。
-// 範囲の座標と大きさ（数を打って直せる）、中のブロックの数と多い種類、消す・回す・反転する・塗る・置き換えのボタン（#132）。
+// 範囲の座標と大きさ（数を打って直せる）、中のブロックの数と多い種類、消す・回す・反転する・コピー・切り取り・塗る・置き換えのボタン（#132・#133）。
 import { computed, ref } from 'vue'
 import { boxSize } from '../../domain/box'
 import { useDocumentSession } from '../document/documentSession'
+import { useClipboardActions } from '../edit/clipboardActions'
 import { useRegionActions } from '../edit/regionActions'
 import { useBrushStore } from '../stores/brushStore'
 import { useModpackContentStore } from '../stores/modpackContent'
@@ -16,6 +17,7 @@ const tools = useToolStore()
 const brush = useBrushStore()
 const content = useModpackContentStore()
 const actions = useRegionActions()
+const clipboard = useClipboardActions()
 
 const AXES = [
   { axis: 0, label: 'x' },
@@ -131,6 +133,11 @@ function replace(): void {
       <div class="group">
         <button type="button" data-action="mirror-x" @click="actions.mirror('x')">左右反転（X）</button>
         <button type="button" data-action="mirror-z" @click="actions.mirror('z')">前後反転（Z）</button>
+      </div>
+      <div class="group">
+        <button type="button" data-action="copy" title="Ctrl+C" @click="clipboard.copy()">コピー</button>
+        <button type="button" data-action="cut" title="Ctrl+X" @click="clipboard.cut()">切り取り</button>
+        <button type="button" data-action="duplicate" title="Ctrl+D" @click="clipboard.duplicate()">複製</button>
       </div>
 
       <div class="group">

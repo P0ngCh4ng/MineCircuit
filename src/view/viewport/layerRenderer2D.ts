@@ -381,3 +381,49 @@ export function drawSelectionBox2D(
   ctx.restore()
   return inside ? 'solid' : 'dashed'
 }
+
+/** 貼り付けの見本の1マス（drawPastePreview2D に渡す） */
+export interface PastePreviewCell2D {
+  readonly pos: Vec3
+  /** ブロックの ID（色に使う） */
+  readonly id: string
+}
+
+/** 重なるときの見本の色（3D の見本と同じ） */
+export const PASTE_BLOCKED_CSS = '#e0402a'
+/** 見本の範囲の線の色（3D の見本と同じ） */
+export const PASTE_OUTLINE_CSS = '#2f6fd0'
+
+/**
+ * 貼り付けの見本（#133）を今の段に描く。見本のマスを半透明で塗り、見本の範囲に線を引く。
+ * 範囲が今の段に入らなければ点線だけ。重なるブロックがあれば赤。描いたマスの数を返す
+ */
+export function drawPastePreview2D(
+  ctx: SelectionCanvas2D,
+  layout: GridLayout2D,
+  layer: number,
+  cells: readonly PastePreviewCell2D[],
+  box: Box | null,
+  blocked: boolean,
+): number {
+  if (!box) return 0
+  const { originX: ox, originY: oy, cellSize: cs } = layout
+  let drawn = 0
+  ctx.save()
+  ctx.globalAlpha = 0.55
+  for (const c of cells) {
+    if (c.pos[1] !== layer) continue
+    ctx.fillStyle = blocked ? PASTE_BLOCKED_CSS : blockColorCss(c.id)
+    ctx.fillRect(ox + c.pos[0] * cs, oy + c.pos[2] * cs, cs, cs)
+    drawn++
+  }
+  ctx.globalAlpha = 1
+  const inside = layer >= box.min[1] && layer <= box.max[1]
+  ctx.setLineDash(inside ? [] : [...SELECTION_DASH_2D])
+  ctx.strokeStyle = blocked ? PASTE_BLOCKED_CSS : PASTE_OUTLINE_CSS
+  ctx.lineWidth = 2
+  ctx.strokeRect(ox + box.min[0] * cs, oy + box.min[2] * cs, (box.max[0] - box.min[0] + 1) * cs, (box.max[2] - box.min[2] + 1) * cs)
+  ctx.setLineDash([])
+  ctx.restore()
+  return drawn
+}
