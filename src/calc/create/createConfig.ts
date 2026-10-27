@@ -95,6 +95,10 @@ export interface CreateServerConfig {
   readonly disableStress: boolean | null
   readonly mediumSpeed: number | null
   readonly fastSpeed: number | null
+  /** ファンネルが取り出す間隔（tick。`logistics.defaultExtractionTimer`） */
+  readonly extractionTimer: number | null
+  /** プレスがスタックごと押すか（`recipes.bulkPressing`） */
+  readonly bulkPressing: boolean | null
   /** stressValues の版（v2 なら 2）。表がなければ null */
   readonly stressVersion: number | null
   /** ブロック名（`create:` なし）→ SU/RPM */
@@ -135,6 +139,8 @@ export function readCreateServerConfig(text: string, path: string): CreateServer
     disableStress: bool('kinetics.disableStress'),
     mediumSpeed: num('kinetics.stats.mediumSpeed'),
     fastSpeed: num('kinetics.stats.fastSpeed'),
+    extractionTimer: num('logistics.defaultExtractionTimer'),
+    bulkPressing: bool('recipes.bulkPressing'),
     stressVersion: version,
     impact,
     capacity,

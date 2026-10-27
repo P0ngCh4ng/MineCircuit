@@ -4,9 +4,14 @@ import { jarKeyPrefix } from './indexedDbJarCache'
 import type { JarSummary } from './jarScanner'
 import { Modpack } from './modpack'
 import { MemoryFileSource } from '../memoryFileSource'
+import type { ProcessingRecipe } from './recipes'
+
+function recipe(id: string, duration: number): ProcessingRecipe {
+  return { id, type: 'milling', items: ['minecraft:wheat'], tags: [], duration }
+}
 
 function summary(jar: string, partial: Partial<JarSummary>): JarSummary {
-  return { jar, mods: [], namespaces: [], lang: { ja_jp: {}, en_us: {} }, blockStates: {}, problems: [], assets: [], ...partial }
+  return { jar, mods: [], namespaces: [], lang: { ja_jp: {}, en_us: {} }, blockStates: {}, problems: [], assets: [], recipes: [], ...partial }
 }
 
 describe('Modpack', () => {
@@ -44,6 +49,36 @@ describe('Modpack', () => {
     expect(await pack.list('saves/')).toEqual(['a/', 'b/', 'readme.txt'])
     expect(await pack.list('saves/b/serverconfig')).toEqual(['create-server.toml'])
     expect(await pack.list('config/')).toEqual([])
+  })
+
+  it('レシピを ID でまとめ、後の jar、さらに kubejs/data/ のものを優先する', async () => {
+    const pack = new Modpack(
+      [
+        summary('a.jar', { recipes: [recipe('create:milling/wheat', 100), recipe('create:milling/a', 50)] }),
+        summary('b.jar', { recipes: [recipe('create:milling/wheat', 200), recipe('create:milling/b', 60)] }),
+      ],
+      null,
+      [],
+      [],
+      [],
+      null,
+      null,
+      {},
+      { recipes: [recipe('create:milling/a', 10), recipe('kubejs:milling/c', 70)], scriptsChangeRecipes: true },
+    )
+    const book = await pack.recipeBook()
+    expect(Object.fromEntries(book.recipes.map((r) => [r.id, r.duration]))).toEqual({
+      'create:milling/wheat': 200,
+      'create:milling/a': 10,
+      'create:milling/b': 60,
+      'kubejs:milling/c': 70,
+    })
+    expect(book.scriptsChangeRecipes).toBe(true)
+  })
+
+  it('KubeJS のレシピがなければ jar のレシピだけで、スクリプトはレシピを変えていない扱い', async () => {
+    const pack = new Modpack([summary('a.jar', { recipes: [recipe('create:milling/wheat', 100)] })], null)
+    expect(await pack.recipeBook()).toEqual({ recipes: [recipe('create:milling/wheat', 100)], scriptsChangeRecipes: false })
   })
 })
 

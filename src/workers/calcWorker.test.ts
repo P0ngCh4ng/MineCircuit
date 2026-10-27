@@ -110,4 +110,54 @@ describe('計算の Worker', () => {
     expect(o.status).toBe('error')
     expect(o.status === 'error' && o.message).toMatch(/読めません/)
   })
+
+  it('Worker の中から Modpack のレシピを画面側に問い合わせる', async () => {
+    let asked = 0
+    const pack: CalcModpack = {
+      hasNamespace: () => true,
+      config: async () => null,
+      recipeBook: async () => {
+        asked++
+        return {
+          recipes: [{ id: 'create:milling/wheat', type: 'milling', items: ['minecraft:wheat'], tags: [], duration: 150 }],
+          scriptsChangeRecipes: true,
+        }
+      },
+    }
+    const recipes: CalcPlugin = {
+      ...noopCalcPlugin(),
+      run: async (_bp, ctx) => {
+        const book = await ctx.pack?.recipeBook?.()
+        const text = book ? `${book.recipes.map((r) => `${r.id}=${r.duration}`).join()}/${book.scriptsChangeRecipes}` : ''
+        return { summary: [{ label: 'レシピ', value: resolved(text, 'modpack') }], issues: [], assumptions: [] }
+      },
+    }
+    const [o] = await new WorkerCalcBackend(fakeWorker(new PluginRegistry([recipes]))).run({ blueprint: bp, pack, ports: [] })
+    expect(asked).toBe(1)
+    expect(o.status === 'ok' && o.result.summary[0].value.value).toBe('create:milling/wheat=150/true')
+
+    // recipeBook を持たない Modpack では空のレシピ
+    const noRecipes: CalcModpack = { hasNamespace: () => true, config: async () => null }
+    const [o2] = await new WorkerCalcBackend(fakeWorker(new PluginRegistry([recipes]))).run({ blueprint: bp, pack: noRecipes, ports: [] })
+    expect(o2.status === 'ok' && o2.result.summary[0].value.value).toBe('/false')
+  })
+
+  it('レシピを読めなかったら、そのプラグインの error になる', async () => {
+    const pack: CalcModpack = {
+      hasNamespace: () => true,
+      config: async () => null,
+      recipeBook: async () => {
+        throw new Error('レシピを読めません')
+      },
+    }
+    const recipes: CalcPlugin = {
+      ...noopCalcPlugin(),
+      run: async (_bp, ctx) => {
+        await ctx.pack?.recipeBook?.()
+        return { summary: [], issues: [], assumptions: [] }
+      },
+    }
+    const [o] = await new WorkerCalcBackend(fakeWorker(new PluginRegistry([recipes]))).run({ blueprint: bp, pack, ports: [] })
+    expect(o.status === 'error' && o.message).toMatch(/レシピを読めません/)
+  })
 })

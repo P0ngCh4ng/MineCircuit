@@ -160,7 +160,7 @@ describe('Create の応力プラグイン', () => {
     })
     expect(result.assumptions.map((a) => a.message)).toContain('Modpack がないので、Create の内蔵の初期値を使った')
     const press = result.probes?.find((p) => p.pos.join() === '1,0,0')
-    expect(press?.values.map((v) => v.label)).toEqual(['回転数', '応力', 'ネットワーク'])
+    expect(press?.values.map((v) => v.label)).toEqual(['回転数', '応力', '処理時間', 'ネットワーク'])
     expect(press?.values[0].value).toEqual({ value: '16 RPM', source: 'blueprint' })
     expect(press?.values[1].value).toEqual({ value: '128 SU（8 SU/RPM）', source: 'builtin' })
     // Worker から送れる素のデータ

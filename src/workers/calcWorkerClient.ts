@@ -2,6 +2,7 @@
 
 import { toSnapshot } from '../calc/blueprintSnapshot'
 import type { CalcModpack } from '../calc/calcPlugin'
+import type { RecipeBook } from '../io/modpack/recipes'
 import type { CalcBackend, CalcRequest } from '../calc/calcScheduler'
 import type { PluginOutcome } from '../calc/pluginRegistry'
 import type { FromCalcWorker, PackInfo, ToCalcWorker } from './calcProtocol'
@@ -68,6 +69,9 @@ export class WorkerCalcBackend implements CalcBackend {
       case 'list':
         void this.answerList(message.requestId, message.callId, message.path)
         break
+      case 'recipes':
+        void this.answerRecipes(message.requestId, message.callId)
+        break
     }
   }
 
@@ -90,6 +94,22 @@ export class WorkerCalcBackend implements CalcBackend {
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e)
       this.port.postMessage({ type: 'list-reply', callId, entries: [], error })
+    }
+  }
+
+  private async answerRecipes(requestId: number, callId: number): Promise<void> {
+    const pack = this.pending.get(requestId)?.pack ?? null
+    try {
+      const book = pack?.recipeBook ? await pack.recipeBook() : { recipes: [], scriptsChangeRecipes: false }
+      // structured clone で送れる素のデータにする
+      const plain: RecipeBook = {
+        recipes: book.recipes.map((r) => ({ ...r, items: [...r.items], tags: [...r.tags] })),
+        scriptsChangeRecipes: book.scriptsChangeRecipes,
+      }
+      this.port.postMessage({ type: 'recipes-reply', callId, book: plain })
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e)
+      this.port.postMessage({ type: 'recipes-reply', callId, book: { recipes: [], scriptsChangeRecipes: false }, error })
     }
   }
 }

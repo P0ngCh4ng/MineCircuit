@@ -309,6 +309,37 @@ describe('ModpackLoader（jar の外の翻訳）', () => {
   })
 })
 
+describe('ModpackLoader（KubeJS のレシピ）', () => {
+  it('kubejs/data/ のレシピを読み、レシピを変えるサーバーのスクリプトがあるかを調べる', async () => {
+    const source = new MemoryFileSource([
+      ['mods/a.jar', gearJar()],
+      [
+        'kubejs/data/kubejs/recipes/milling/wheat.json',
+        strToU8(JSON.stringify({ type: 'create:milling', ingredients: [{ item: 'minecraft:wheat' }], processingTime: 150 })),
+      ],
+      ['kubejs/data/kubejs/recipes/shaped.json', strToU8(JSON.stringify({ type: 'minecraft:crafting_shaped' }))],
+      ['kubejs/server_scripts/recipes.js', strToU8("ServerEvents.recipes(event => { event.remove({ output: 'minecraft:stick' }) })")],
+    ])
+    const pack = await new ModpackLoader(source).load()
+    const book = await pack.recipeBook()
+    expect(book.recipes).toEqual([{ id: 'kubejs:milling/wheat', type: 'milling', items: ['minecraft:wheat'], tags: [], duration: 150 }])
+    expect(book.scriptsChangeRecipes).toBe(true)
+    expect(pack.problems).toEqual([])
+  })
+
+  it('レシピを変えるスクリプトがなければ scriptsChangeRecipes は false。読めないレシピは problems に入れる', async () => {
+    const source = new MemoryFileSource([
+      ['mods/a.jar', gearJar()],
+      ['kubejs/data/kubejs/recipes/broken.json', strToU8('{ not json')],
+      ['kubejs/server_scripts/other.js', strToU8("ServerEvents.tags('item', event => {})")],
+    ])
+    const pack = await new ModpackLoader(source).load()
+    const book = await pack.recipeBook()
+    expect(book).toEqual({ recipes: [], scriptsChangeRecipes: false })
+    expect(pack.problems.map((p) => p.jar)).toEqual(['kubejs/data'])
+  })
+})
+
 describe('jarCacheKey', () => {
   it('大きさと更新時刻、または中身から作る', () => {
     expect(jarCacheKey('a.jar', { size: 10, lastModified: 5 }, null)).toBe(`v${JAR_SUMMARY_FORMAT}|a.jar|10|5`)

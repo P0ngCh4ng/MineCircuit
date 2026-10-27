@@ -62,3 +62,11 @@ export const HAND_CRANK_SPEED = 32
 
 /** 蒸気エンジンの回転数の単位（PoweredShaftBlockEntity） */
 export const STEAM_ENGINE_BASE_SPEED = 16
+
+/** 物流と処理の設定の初期値（docs/create-throughput.md「設定ファイルの項目」） */
+export const DEFAULT_LOGISTICS = {
+  /** `logistics.defaultExtractionTimer`（tick） */
+  extractionTimer: 8,
+  /** `recipes.bulkPressing` */
+  bulkPressing: false,
+} as const

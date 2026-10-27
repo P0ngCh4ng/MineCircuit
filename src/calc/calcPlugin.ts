@@ -6,6 +6,7 @@ import type { BlockState } from '../domain/blockState'
 import type { Blueprint } from '../domain/blueprint'
 import type { Direction } from '../domain/direction'
 import type { Vec3 } from '../domain/vec3'
+import type { RecipeBook } from '../io/modpack/recipes'
 import type { PortKindDef, VirtualPort } from './virtualPort'
 import type { Resolved } from './provenance'
 
@@ -24,6 +25,11 @@ export interface CalcModpack {
    * 持たない実装もあるので省略できる。
    */
   list?(dir: string): Promise<string[]>
+  /**
+   * Create の処理のレシピ（jar と kubejs/data/。docs/create-throughput.md「レシピ」）。
+   * 処理時間の計算に使う。持たない実装もあるので省略できる（省略なら、レシピは分からないものとして計算する）
+   */
+  recipeBook?(): Promise<RecipeBook>
 }
 
 /** プラグインの run に渡すもの */

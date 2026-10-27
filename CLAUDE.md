@@ -10,6 +10,7 @@
 | [docs/design.md](docs/design.md) | クラス設計。層、各クラス、値の出どころ、編集、書き出し |
 | [docs/ui.md](docs/ui.md) | 画面構成。配置、ツール、キー操作 |
 | [docs/create-stress.md](docs/create-stress.md) | Createの応力計算の規則と数値。回転のつながり、速度比、初期値、計算の手順 |
+| [docs/create-throughput.md](docs/create-throughput.md) | Createの輸送量と処理時間の規則。ベルト・アーム・ファンネル・機械、レシピの読み方 |
 | [prototype/index.html](prototype/index.html) | UIプロトタイプ。1ファイルの参考実装 |
 
 作業は GitHub の Issue 単位で進める。マイルストーン M0〜M6 が仕様書の「開発の順番」に対応する（M6 はデスクトップ版）。

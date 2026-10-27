@@ -8,9 +8,11 @@ import { ModpackAssetReader, type AssetLocation } from '../assets/modpackAssetRe
 import { FileNotFoundError, normalizePath, type FileSource } from '../fileSource'
 import { LANG_CODES, type JarSummary, type JsonValue, type LangCode, type LangTable } from './jarScanner'
 import { kubeJsBlockAssets, type KubeJsStartup } from './kubejs'
+import type { KubeJsRecipes } from './kubejsRecipes'
 import type { LangPack } from './langPacks'
 import type { ModInfo } from './modMetadata'
 import { MODS_DIR } from './modpackFolder'
+import { mergeRecipes, type RecipeBook } from './recipes'
 import type { VanillaLoadResult, VanillaStatus } from './vanillaAssets'
 
 /** KubeJS のスクリプトから組み立てた資産の場所の名前（problems に出る） */
@@ -51,6 +53,7 @@ export class Modpack {
   /** 見た目の資産を読む場所（優先度の低い順） */
   private readonly assetLocations: readonly AssetLocation[]
   private assetReader: ModpackAssetReader | null = null
+  private readonly recipes: RecipeBook
 
   /**
    * jar ごとの結果からまとめる。summaries は jar の名前順に渡す。
@@ -64,6 +67,8 @@ export class Modpack {
    * kubejs は KubeJS のスクリプトを読んだ結果（kubejs.ts）。namespace を足し、ブロックの blockstates とモデルを組み立てて、
    * jar より優先度の高い資産とブロック状態の定義にする（kubejs/assets/ の本物のファイルはさらに優先）。
    * machines は Custom Machinery の機械の ID → 見た目のブロック（customMachinery.ts）。
+   * kubejsRecipes は kubejs/data/ のレシピとスクリプトの有無（kubejsRecipes.ts）。jar のレシピより優先する。
+   * Minecraft 本体の jar のレシピは使わない。
    */
   constructor(
     summaries: readonly JarSummary[],
@@ -74,6 +79,7 @@ export class Modpack {
     vanilla: VanillaLoadResult | null = null,
     kubejs: Pick<KubeJsStartup, 'namespaces' | 'blocks'> | null = null,
     machines: Readonly<Record<string, string>> = {},
+    kubejsRecipes: Pick<KubeJsRecipes, 'recipes' | 'scriptsChangeRecipes'> | null = null,
   ) {
     const mods: ModInfo[] = []
     const namespaces = new Set<string>()
@@ -115,12 +121,22 @@ export class Modpack {
     this.jarCount = summaries.length
     this.source = source
     this.machines = machines
+    // 同じ ID のレシピは、後の jar、さらに kubejs/data/ のものを使う
+    this.recipes = {
+      recipes: mergeRecipes(...summaries.map((s) => s.recipes), kubejsRecipes?.recipes ?? []),
+      scriptsChangeRecipes: kubejsRecipes?.scriptsChangeRecipes ?? false,
+    }
     this.assetLocations = [
       ...(base ? [{ kind: 'zip', path: base.jarPath, assets: base.summary.assets, source: base.source } as const] : []),
       ...summaries.map((s): AssetLocation => ({ kind: 'zip', path: `${MODS_DIR}/${s.jar}`, assets: s.assets })),
       ...(Object.keys(scriptAssets).length > 0 ? [{ kind: 'memory', path: KUBEJS_SCRIPT_ASSETS, files: scriptAssets } as const] : []),
       ...assetPacks,
     ]
+  }
+
+  /** Create の処理のレシピ（jar と kubejs/data/ のもの）と、スクリプトがレシピを変えているか */
+  recipeBook(): Promise<RecipeBook> {
+    return Promise.resolve(this.recipes)
   }
 
   /**

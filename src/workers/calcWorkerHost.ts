@@ -2,6 +2,7 @@
 
 import { fromSnapshot } from '../calc/blueprintSnapshot'
 import type { CalcModpack } from '../calc/calcPlugin'
+import type { RecipeBook } from '../io/modpack/recipes'
 import { runPlugins, type PluginRegistry } from '../calc/pluginRegistry'
 import type { FromCalcWorker, PackInfo, ToCalcWorker } from './calcProtocol'
 
@@ -13,6 +14,7 @@ export function createCalcWorkerHost(registry: PluginRegistry, post: (message: F
   let nextCallId = 1
   const pendingCalls = new Map<number, { resolve: (text: string | null) => void; reject: (e: Error) => void }>()
   const pendingLists = new Map<number, { resolve: (entries: string[]) => void; reject: (e: Error) => void }>()
+  const pendingRecipes = new Map<number, { resolve: (book: RecipeBook) => void; reject: (e: Error) => void }>()
 
   /** Worker の中の Modpack の代理。設定ファイルは画面側に問い合わせる */
   function packProxy(info: PackInfo, requestId: number): CalcModpack {
@@ -31,6 +33,12 @@ export function createCalcWorkerHost(registry: PluginRegistry, post: (message: F
           const callId = nextCallId++
           pendingLists.set(callId, { resolve, reject })
           post({ type: 'list', requestId, callId, path })
+        }),
+      recipeBook: () =>
+        new Promise<RecipeBook>((resolve, reject) => {
+          const callId = nextCallId++
+          pendingRecipes.set(callId, { resolve, reject })
+          post({ type: 'recipes', requestId, callId })
         }),
     }
   }
@@ -70,6 +78,14 @@ export function createCalcWorkerHost(registry: PluginRegistry, post: (message: F
           pendingLists.delete(message.callId)
           if (message.error !== undefined) call.reject(new Error(message.error))
           else call.resolve([...message.entries])
+          break
+        }
+        case 'recipes-reply': {
+          const call = pendingRecipes.get(message.callId)
+          if (!call) return
+          pendingRecipes.delete(message.callId)
+          if (message.error !== undefined) call.reject(new Error(message.error))
+          else call.resolve(message.book)
           break
         }
       }
