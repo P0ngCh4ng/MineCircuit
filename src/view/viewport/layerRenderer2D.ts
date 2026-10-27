@@ -3,6 +3,7 @@
 
 import type { CalcRotation } from '../../calc/calcPlugin'
 import type { Blueprint } from '../../domain/blueprint'
+import { isSingleCell, type Box } from '../../domain/box'
 import type { Vec3 } from '../../domain/vec3'
 import type { GridLayout2D } from '../tools/picker'
 import { blockColor, blockColorCss } from './blockColor'
@@ -337,4 +338,46 @@ export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, sc
   }
   mark(scene.hovered, theme.hover, 1.5)
   mark(scene.selected, theme.selection, 2.5)
+}
+
+/** 選択範囲の長方形を描く canvas。点線を引くので setLineDash も使う */
+export type SelectionCanvas2D = Canvas2DLike & Pick<CanvasRenderingContext2D, 'setLineDash'>
+
+/** 範囲の外の段で、選択範囲の長方形を描く点線の間隔（画素） */
+export const SELECTION_DASH_2D: readonly number[] = [6, 4]
+
+/**
+ * 選択範囲の長方形（#130、docs/ui.md「範囲を選ぶ」）。2つ以上のマスが入る範囲のときだけ描く。
+ * 今の段が範囲の段（min.y〜max.y）に入れば実線、入らなければ点線にする。
+ * 1マスのときは drawLayer2D の選択の枠（scene.selected）のまま。
+ * 描いたら 'solid' / 'dashed'、描かなければ null
+ */
+export function drawSelectionBox2D(
+  ctx: SelectionCanvas2D,
+  layout: GridLayout2D,
+  layer: number,
+  box: Box | null,
+  theme: LayerTheme2D,
+): 'solid' | 'dashed' | null {
+  if (!box || isSingleCell(box)) return null
+  const { originX: ox, originY: oy, cellSize: cs } = layout
+  const inside = layer >= box.min[1] && layer <= box.max[1]
+  const px = ox + box.min[0] * cs
+  const py = oy + box.min[2] * cs
+  const w = (box.max[0] - box.min[0] + 1) * cs
+  const h = (box.max[2] - box.min[2] + 1) * cs
+  const lineWidth = 2.5
+  ctx.save()
+  ctx.setLineDash(inside ? [] : [...SELECTION_DASH_2D])
+  // マスの境目に太い線、その内側に細い線（選択の枠と同じ見た目）
+  ctx.strokeStyle = theme.selection
+  ctx.lineWidth = lineWidth
+  ctx.strokeRect(px, py, w, h)
+  ctx.strokeStyle = theme.markInner
+  ctx.lineWidth = 1
+  const inset = lineWidth / 2 + 0.5
+  ctx.strokeRect(px + inset, py + inset, w - inset * 2, h - inset * 2)
+  ctx.setLineDash([])
+  ctx.restore()
+  return inside ? 'solid' : 'dashed'
 }

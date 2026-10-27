@@ -95,9 +95,14 @@ describe('ToolController', () => {
 
 describe('SelectTool', () => {
   function setup() {
-    const state: { selected: Vec3 | null; hovered: Vec3 | null } = { selected: null, hovered: null }
+    const state: { selected: Vec3 | null; extendedTo: Vec3 | null; hovered: Vec3 | null } = {
+      selected: null,
+      extendedTo: null,
+      hovered: null,
+    }
     const tool = new SelectTool({
       setSelected: (p) => (state.selected = p),
+      extendSelection: (p) => (state.extendedTo = p),
       setHovered: (p) => (state.hovered = p),
     })
     const c = new ToolController()
@@ -111,6 +116,17 @@ describe('SelectTool', () => {
     expect(state.selected).toEqual([2, 1, 0])
     c.click(empty([3, 1, 0]))
     expect(state.selected).toBeNull()
+  })
+
+  it('Shift+クリックで範囲を広げる。空きマスも角にでき、選択は解除しない', () => {
+    const { c, state } = setup()
+    c.click(block([0, 0, 0]))
+    c.click(block([2, 1, 3]), { shift: true })
+    expect(state.extendedTo).toEqual([2, 1, 3])
+    expect(state.selected).toEqual([0, 0, 0])
+    c.click(empty([4, 0, 0]), { shift: true })
+    expect(state.extendedTo).toEqual([4, 0, 0])
+    expect(state.selected).toEqual([0, 0, 0])
   })
 
   it('マウスの下のブロックを伝え、空きマスや外では null にする', () => {

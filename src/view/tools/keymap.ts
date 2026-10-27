@@ -15,6 +15,10 @@ export type KeyAction =
   | { readonly type: 'layerUp' }
   | { readonly type: 'layerDown' }
   | { readonly type: 'clearSelection' }
+  /** 設計図全体を選ぶ（Ctrl+A） */
+  | { readonly type: 'selectAll' }
+  /** 範囲を置くブロックで塗る（F） */
+  | { readonly type: 'fillSelection' }
 
 /** KeyboardEvent のうち使う部分。テストで偽物を渡せるようにする */
 export interface KeyInput {
@@ -41,6 +45,7 @@ export function resolveKeyAction(e: KeyInput): KeyAction | null {
   if (ctrl && !e.altKey) {
     if (key === 'z' && !e.shiftKey) return { type: 'undo' }
     if (key === 'y' && !e.shiftKey) return { type: 'redo' }
+    if (key === 'a' && !e.shiftKey) return { type: 'selectAll' }
     return null
   }
   if (e.altKey) return null
@@ -59,6 +64,7 @@ export function resolveKeyAction(e: KeyInput): KeyAction | null {
   }
   if (e.shiftKey) return null
   if (key === 'g') return { type: 'toggleGrid' }
+  if (key === 'f') return { type: 'fillSelection' }
   const tool = TOOL_KEYS.get(key)
   return tool ? { type: 'tool', id: tool } : null
 }

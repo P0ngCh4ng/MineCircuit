@@ -88,6 +88,63 @@ describe('LayerView2D', () => {
     wrapper.unmount()
   })
 
+  it('選択ツールでドラッグすると、今の段の長方形を選ぶ。続くクリックで選び直さない（#130）', async () => {
+    const { wrapper, at } = mountView()
+    const tools = useToolStore()
+    expect(tools.activeToolId).toBe('select')
+    useLayerStore().setLayer(1)
+    await wrapper.vm.$nextTick()
+    const canvas = wrapper.get('canvas')
+
+    await canvas.trigger('pointerdown', { button: 0, ...at(3, 0) })
+    await canvas.trigger('pointermove', { buttons: 1, ...at(2, 1) })
+    // 動いている間も範囲を広げる
+    expect(tools.selectionBox).toEqual({ min: [2, 1, 0], max: [3, 1, 1] })
+    await canvas.trigger('pointerup', { button: 0, ...at(1, 2) })
+    await canvas.trigger('click', at(1, 2))
+    expect(tools.selectionBox).toEqual({ min: [1, 1, 0], max: [3, 1, 2] })
+    // 起点はドラッグを始めたマス（続く Shift+クリックはここから広げる）
+    expect(tools.selectedPos).toEqual([3, 1, 0])
+
+    // そのあとのふつうのクリックは、今までどおり1つを選ぶ・解除する
+    await canvas.trigger('pointerdown', { button: 0, ...at(2, 1) })
+    await canvas.trigger('pointerup', { button: 0, ...at(2, 1) })
+    await canvas.trigger('click', at(2, 1))
+    expect(tools.selectedPos).toEqual([2, 1, 1])
+    expect(tools.selectionBox).toEqual({ min: [2, 1, 1], max: [2, 1, 1] })
+    wrapper.unmount()
+  })
+
+  it('Shift+ドラッグで、起点の段から今の段までの高さにする（#130）', async () => {
+    const { wrapper, at } = mountView()
+    const tools = useToolStore()
+    const canvas = wrapper.get('canvas')
+    // 段 1 のブロックを起点にする
+    await canvas.trigger('click', at(1, 2))
+    expect(tools.selectedPos).toEqual([1, 0, 2])
+
+    useLayerStore().setLayer(2)
+    await wrapper.vm.$nextTick()
+    await canvas.trigger('pointerdown', { button: 0, shiftKey: true, ...at(0, 0) })
+    await canvas.trigger('pointermove', { buttons: 1, shiftKey: true, ...at(3, 1) })
+    await canvas.trigger('pointerup', { button: 0, shiftKey: true, ...at(3, 1) })
+    await canvas.trigger('click', { shiftKey: true, ...at(3, 1) })
+    expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [3, 2, 1] })
+    wrapper.unmount()
+  })
+
+  it('選択ツールでなければ、ドラッグで範囲を選ばない', async () => {
+    const { wrapper, at } = mountView()
+    const tools = useToolStore()
+    const canvas = wrapper.get('canvas')
+    tools.activeToolId = 'measure'
+    await canvas.trigger('pointerdown', { button: 0, ...at(0, 0) })
+    await canvas.trigger('pointermove', { buttons: 1, ...at(3, 2) })
+    await canvas.trigger('pointerup', { button: 0, ...at(3, 2) })
+    expect(tools.selectionBox).toBeNull()
+    wrapper.unmount()
+  })
+
   it('今の段と北の向きを出す。段は設計図の高さに収める', async () => {
     const { wrapper } = mountView()
     expect(wrapper.text()).toContain('北（−Z）')

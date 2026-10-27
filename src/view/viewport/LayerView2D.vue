@@ -2,6 +2,7 @@
 // 2D表示（LayerView2D）。今の段を真上から見たマス目で描く。docs/ui.md「2D表示と計測」。
 // マウスの位置は picker.ts の pick2D でマスに直し、toolStore を通して今のツールに渡す。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { isSingleCell } from '../../domain/box'
 import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
 import { useAppearanceStore } from '../stores/appearanceStore'
@@ -15,9 +16,10 @@ import { useViewStore } from '../stores/viewStore'
 import { pick2D, type GridLayout2D, type PickScene2D } from '../tools/picker'
 import type { PickTarget } from '../tools/tool'
 import { ANALYSIS_COLORS_2D, drawAnalysisOverlay2D } from './analysisOverlay2D'
+import { clampedCell2D, dragSelectionBox, insideGrid2D, isDrag2D, type Cell2D } from './dragSelect2D'
 import { layoutGrid2D } from './layerGrid2D'
 import { drawPortOverlay2D } from './portOverlay2D'
-import { DARK_THEME_2D, drawLayer2D, LIGHT_THEME_2D } from './layerRenderer2D'
+import { DARK_THEME_2D, drawLayer2D, drawSelectionBox2D, LIGHT_THEME_2D } from './layerRenderer2D'
 import { createTextureCellPainter } from './textureCellPainter2D'
 
 const props = withDefaults(defineProps<{ showGrid?: boolean }>(), { showGrid: true })
@@ -76,21 +78,27 @@ function draw(): void {
   el.width = Math.round(width.value * dpr)
   el.height = Math.round(height.value * dpr)
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  const theme = dark.value ? DARK_THEME_2D : LIGHT_THEME_2D
+  const box = tools.selectionBox
+  // 2つ以上のマスが入る範囲なら長方形だけを描き、1つのブロックの枠は出さない（#130）
+  const multi = box !== null && !isSingleCell(box)
   drawLayer2D(ctx, width.value, height.value, {
     blueprint: bp,
     layer: layer.value,
     layout: grid,
-    theme: dark.value ? DARK_THEME_2D : LIGHT_THEME_2D,
+    theme,
     showGrid: props.showGrid,
     showLabels: viewMode.showLabels,
     hovered: tools.hoverTarget?.pos ?? null,
-    selected: tools.selectedPos,
+    selected: multi ? null : tools.selectedPos,
     fontFamily: getComputedStyle(el).fontFamily || 'sans-serif',
     highlighted: highlight.value,
     calcMarks: { network: probe.networkPositions, issues: calc.issuePositions },
     rotations: viewMode.showRotation ? calc.rotations : null,
     cellPainter: cellPainter.value,
   })
+  // 選択範囲の長方形。範囲の外の段では点線（#130）
+  drawSelectionBox2D(ctx, grid, layer.value, box, theme)
   // 計測とつながり（#16）
   drawAnalysisOverlay2D(
     ctx,
@@ -129,7 +137,7 @@ watch(
 
 // 設計図・段・表示の設定・マウスの下・選択が変わったら描き直す
 watch(
-  () => [layout.value, session.version.value, layer.value, viewMode.showLabels, props.showGrid, tools.hoverTarget, tools.selectedPos, dark.value, highlight.value],
+  () => [layout.value, session.version.value, layer.value, viewMode.showLabels, props.showGrid, tools.hoverTarget, tools.selectedPos, tools.selectionBox, dark.value, highlight.value],
   () => draw(),
   { flush: 'post' },
 )
@@ -153,10 +161,91 @@ function samePos(a: PickTarget | null, b: PickTarget | null): boolean {
   return a.empty === b.empty && a.pos[0] === b.pos[0] && a.pos[1] === b.pos[1] && a.pos[2] === b.pos[2]
 }
 
+/** canvas の中の位置 */
+function canvasPoint(e: MouseEvent): { x: number; y: number } | null {
+  const el = canvas.value
+  if (!el) return null
+  const rect = el.getBoundingClientRect()
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+}
+
+/**
+ * 選択ツールのドラッグ（#130）。押したマス、押したときの起点の段、別のマスへ動いたか。
+ * 動かずに離したときは、ふつうのクリック（onClick）に任せる
+ */
+interface DragSelect {
+  readonly pointerId: number
+  readonly start: Cell2D
+  readonly anchorLayer: number | null
+  moved: boolean
+}
+let drag: DragSelect | null = null
+/** ドラッグで範囲を選んだ直後のクリックを、選択の操作にしない */
+let suppressClick = false
+
+/** ドラッグで今のマスまでの範囲を選ぶ。まだ押したマスから動いていなければ何もしない */
+function updateDrag(e: PointerEvent): void {
+  const bp = blueprint.value
+  const grid = layout.value
+  const p = canvasPoint(e)
+  if (!drag || !bp || !grid || !p) return
+  const cell = clampedCell2D(p.x, p.y, grid, bp.size)
+  if (!drag.moved && !isDrag2D(drag.start, cell)) return
+  drag.moved = true
+  // Shift+ドラッグなら、起点の段から今の段までの高さにする
+  const anchor = e.shiftKey ? drag.anchorLayer : null
+  // 起点はドラッグを始めたマス（Shift+ドラッグなら起点の段）。続く Shift+クリックはそこから広げる
+  tools.setSelectionBox(dragSelectionBox(drag.start, cell, layer.value, anchor), [drag.start[0], anchor ?? layer.value, drag.start[1]])
+}
+
+function onPointerDown(e: PointerEvent): void {
+  suppressClick = false
+  drag = null
+  if (e.button !== 0 || tools.activeToolId !== 'select') return
+  const bp = blueprint.value
+  const grid = layout.value
+  const p = canvasPoint(e)
+  if (!bp || !grid || !p || !insideGrid2D(p.x, p.y, grid, bp.size)) return
+  drag = {
+    pointerId: e.pointerId,
+    start: clampedCell2D(p.x, p.y, grid, bp.size),
+    anchorLayer: tools.selectedPos ? tools.selectedPos[1] : null,
+    moved: false,
+  }
+  // マス目の外へ出ても離したことが分かるように
+  try {
+    canvas.value?.setPointerCapture?.(e.pointerId)
+  } catch {
+    // 捕まえられなくても、ドラッグはできる
+  }
+}
+
+function endDrag(e: PointerEvent): void {
+  try {
+    if (canvas.value?.hasPointerCapture?.(e.pointerId)) canvas.value.releasePointerCapture(e.pointerId)
+  } catch {
+    // 放せなくても困らない
+  }
+  drag = null
+}
+
+function onPointerUp(e: PointerEvent): void {
+  if (!drag || drag.pointerId !== e.pointerId) return
+  updateDrag(e)
+  // 範囲を選んだときは、続いて来るクリックで選び直さない
+  if (drag.moved) suppressClick = true
+  endDrag(e)
+}
+
+function onPointerCancel(e: PointerEvent): void {
+  if (drag) endDrag(e)
+}
+
 function onPointerMove(e: PointerEvent): void {
   const target = pickAt(e)
   // 同じマスの中で動いたときは知らせない（描き直しを減らす）
   if (!samePos(target, tools.hoverTarget)) tools.hover(target)
+  if (drag && drag.pointerId === e.pointerId) updateDrag(e)
 }
 
 function onPointerLeave(): void {
@@ -164,6 +253,10 @@ function onPointerLeave(): void {
 }
 
 function onClick(e: MouseEvent): void {
+  if (suppressClick) {
+    suppressClick = false
+    return
+  }
   const target = pickAt(e)
   if (target) tools.click(target, { shift: e.shiftKey, alt: e.altKey })
 }
@@ -199,6 +292,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   darkQuery?.removeEventListener('change', onThemeChange)
+  drag = null
   tools.hover(null)
 })
 </script>
@@ -210,6 +304,9 @@ onBeforeUnmount(() => {
       aria-label="今の段のマス目"
       @pointermove="onPointerMove"
       @pointerleave="onPointerLeave"
+      @pointerdown="onPointerDown"
+      @pointerup="onPointerUp"
+      @pointercancel="onPointerCancel"
       @click="onClick"
     ></canvas>
     <div class="compass" aria-label="上が北（−Z）">
