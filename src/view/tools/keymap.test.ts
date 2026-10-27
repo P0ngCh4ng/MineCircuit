@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isTextInputTarget, resolveKeyAction, type KeyInput } from './keymap'
+import { TOOL_CATALOG } from './toolCatalog'
 
 function k(key: string, mods: Partial<Omit<KeyInput, 'key'>> = {}): KeyInput {
   return { key, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, ...mods }
@@ -31,6 +32,24 @@ describe('resolveKeyAction', () => {
     expect(resolveKeyAction(k('PageUp'))).toEqual({ type: 'layerUp' })
     expect(resolveKeyAction(k('PageDown'))).toEqual({ type: 'layerDown' })
     expect(resolveKeyAction(k('Escape'))).toEqual({ type: 'clearSelection' })
+  })
+
+  it('Ctrl+A（Mac は Cmd+A）で全体を選び、F で範囲を塗る', () => {
+    expect(resolveKeyAction(k('a', { ctrlKey: true }))).toEqual({ type: 'selectAll' })
+    expect(resolveKeyAction(k('A', { metaKey: true }))).toEqual({ type: 'selectAll' })
+    expect(resolveKeyAction(k('a'))).toBeNull()
+    expect(resolveKeyAction(k('a', { ctrlKey: true, shiftKey: true }))).toBeNull()
+    expect(resolveKeyAction(k('f'))).toEqual({ type: 'fillSelection' })
+    expect(resolveKeyAction(k('F'))).toEqual({ type: 'fillSelection' })
+    expect(resolveKeyAction(k('f', { ctrlKey: true }))).toBeNull()
+    expect(resolveKeyAction(k('F', { shiftKey: true }))).toBeNull()
+    expect(resolveKeyAction(k('f', { altKey: true }))).toBeNull()
+  })
+
+  it('F と G はツールの切り替えのキーと重ならない', () => {
+    const toolKeys = TOOL_CATALOG.flatMap((t) => (t.key ? [t.key.toLowerCase()] : []))
+    expect(toolKeys).not.toContain('f')
+    expect(toolKeys).not.toContain('g')
   })
 
   it('Ctrl や Alt と一緒のツールキー、割り当てのないキー、IME の変換中は無視する', () => {

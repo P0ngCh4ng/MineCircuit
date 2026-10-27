@@ -6,12 +6,16 @@ import { layoutGrid2D } from './layerGrid2D'
 import type { BlockState } from '../../domain/blockState'
 import {
   drawLayer2D,
+  drawSelectionBox2D,
   ISSUE_MARK_CSS,
   LIGHT_THEME_2D,
   NETWORK_MARK_CSS,
+  SELECTION_DASH_2D,
   TEXTURE_BACKDROP_ALPHA,
   type Canvas2DLike,
+  type SelectionCanvas2D,
 } from './layerRenderer2D'
+import { boxFromCorners, singleCellBox } from '../../domain/box'
 import type { CellPainter2D } from './textureCellPainter2D'
 
 interface FillCall {
@@ -184,5 +188,53 @@ describe('drawLayer2D', () => {
     const stone = fake.fills.filter((f) => f.style === blockColorCss('minecraft:stone'))
     expect(stone.map((f) => f.alpha)).toEqual([TEXTURE_BACKDROP_ALPHA, 1])
     expect(fake.texts).toEqual(expect.arrayContaining(['SH', 'ST']))
+  })
+})
+
+describe('drawSelectionBox2D', () => {
+  /** 引いた長方形と、そのときの点線の設定を記録する偽の canvas */
+  function selectionContext() {
+    const rects: { x: number; y: number; w: number; h: number; style: string; dash: number[] }[] = []
+    let dash: number[] = []
+    const ctx = {
+      strokeStyle: '',
+      lineWidth: 1,
+      save() {},
+      restore() {},
+      setLineDash(d: number[]) {
+        dash = [...d]
+      },
+      strokeRect(x: number, y: number, w: number, h: number) {
+        rects.push({ x, y, w, h, style: String(ctx.strokeStyle), dash })
+      },
+    }
+    return { ctx: ctx as unknown as SelectionCanvas2D, rects, dash: () => dash }
+  }
+  const layout = { originX: 10, originY: 20, cellSize: 8 }
+  const box = boxFromCorners([1, 1, 2], [3, 2, 4])
+
+  it('範囲の段では、範囲の長方形を実線で描く', () => {
+    const fake = selectionContext()
+    expect(drawSelectionBox2D(fake.ctx, layout, 1, box, LIGHT_THEME_2D)).toBe('solid')
+    const outer = fake.rects.find((r) => r.style === LIGHT_THEME_2D.selection)!
+    expect(outer).toMatchObject({ x: 10 + 8, y: 20 + 16, w: 24, h: 24, dash: [] })
+    expect(fake.rects.some((r) => r.style === LIGHT_THEME_2D.markInner)).toBe(true)
+    expect(drawSelectionBox2D(selectionContext().ctx, layout, 2, box, LIGHT_THEME_2D)).toBe('solid')
+  })
+
+  it('範囲の外の段では点線で描き、描いたあと点線を戻す', () => {
+    for (const layer of [0, 3]) {
+      const fake = selectionContext()
+      expect(drawSelectionBox2D(fake.ctx, layout, layer, box, LIGHT_THEME_2D)).toBe('dashed')
+      expect(fake.rects.every((r) => r.dash.join() === SELECTION_DASH_2D.join())).toBe(true)
+      expect(fake.dash()).toEqual([])
+    }
+  })
+
+  it('1マスの範囲と、選んでいないときは描かない（1マスは今までの選択の枠のまま）', () => {
+    const fake = selectionContext()
+    expect(drawSelectionBox2D(fake.ctx, layout, 0, singleCellBox([0, 0, 0]), LIGHT_THEME_2D)).toBeNull()
+    expect(drawSelectionBox2D(fake.ctx, layout, 0, null, LIGHT_THEME_2D)).toBeNull()
+    expect(fake.rects).toHaveLength(0)
   })
 })

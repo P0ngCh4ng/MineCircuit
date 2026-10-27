@@ -44,6 +44,8 @@ useKeyboardShortcuts({
   redo: () => session.redo(),
   rotateBrush: (a) => rotate(a.vertical),
   deleteSelection: () => edit.deleteSelected(),
+  fillSelection: () => edit.fillSelection(),
+  selectAll: () => edit.selectAll(),
   toggleGrid: () => view.toggleGrid(),
 })
 </script>

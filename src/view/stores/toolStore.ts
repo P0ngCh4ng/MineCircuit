@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { markRaw, ref, shallowRef } from 'vue'
+import { boxFromCorners, singleCellBox, type Box } from '../../domain/box'
 import type { Vec3 } from '../../domain/vec3'
 import { SelectTool } from '../tools/selectTool'
 import type { PickModifiers, PickTarget, Tool, ToolId } from '../tools/tool'
@@ -13,8 +14,15 @@ export const useToolStore = defineStore('tool', () => {
   const activeToolId = ref<ToolId | null>(null)
   /** ツールが登録されるたびに増える。ツールバーの「使えるか」を作り直すのに使う */
   const registeredIds = ref<ToolId[]>([])
-  /** 選択中のブロック（右パネルに出す） */
+  /**
+   * 選択中のブロック（右パネルに出す）。範囲を選んでいるときは、範囲の起点（最初にクリックした所）
+   */
   const selectedPos = shallowRef<Vec3 | null>(null)
+  /**
+   * 選択範囲（#130、docs/ui.md「範囲の選択と一括操作」）。1つのブロックを選んでいるときは 1×1×1 の箱。
+   * 何も選んでいなければ null
+   */
+  const selectionBox = shallowRef<Box | null>(null)
   /** マウスの下のブロック */
   const hoveredPos = shallowRef<Vec3 | null>(null)
   /** 表示から来た最後の PickTarget（下の状態表示のマウス位置に使う） */
@@ -51,8 +59,29 @@ export const useToolStore = defineStore('tool', () => {
     controller.click(target, mods)
   }
 
+  /** 1つのブロックを選ぶ（範囲もそのマスだけにする）。null なら選択を解除する */
   function setSelected(pos: Vec3 | null): void {
     selectedPos.value = pos
+    selectionBox.value = pos ? singleCellBox(pos) : null
+  }
+
+  /** 起点（selectedPos）と pos を角にした範囲に広げる。起点がなければ pos を選ぶ */
+  function extendSelection(pos: Vec3): void {
+    const anchor = selectedPos.value
+    if (!anchor) {
+      setSelected(pos)
+      return
+    }
+    selectionBox.value = boxFromCorners(anchor, pos)
+  }
+
+  /**
+   * 範囲を直接決める（2D のドラッグ、パネルの座標の入力、Ctrl+A）。null なら解除。
+   * 起点は anchor（ドラッグを始めたマスなど）。省略したら範囲の最小の角。続けて Shift+クリックすると、起点から広げる
+   */
+  function setSelectionBox(box: Box | null, anchor?: Vec3): void {
+    selectionBox.value = box
+    selectedPos.value = box ? (anchor ?? box.min) : null
   }
 
   function setHovered(pos: Vec3 | null): void {
@@ -60,12 +89,13 @@ export const useToolStore = defineStore('tool', () => {
   }
 
   // 選択ツールは最初から使える。ほかのツールは各 Issue で register する
-  register(new SelectTool({ setSelected, setHovered }))
+  register(new SelectTool({ setSelected, extendSelection, setHovered }))
 
   return {
     activeToolId,
     registeredIds,
     selectedPos,
+    selectionBox,
     hoveredPos,
     hoverTarget,
     register,
@@ -74,6 +104,8 @@ export const useToolStore = defineStore('tool', () => {
     hover,
     click,
     setSelected,
+    extendSelection,
+    setSelectionBox,
     setHovered,
   }
 })

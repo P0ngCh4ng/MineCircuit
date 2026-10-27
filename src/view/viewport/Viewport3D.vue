@@ -3,6 +3,7 @@
 // 左ドラッグで回す、右ドラッグで動かす、ホイールで拡大・縮小。動かさずに離したらクリック。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Blueprint } from '../../domain/blueprint'
+import { isSingleCell } from '../../domain/box'
 import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
 import { useAppearanceStore } from '../stores/appearanceStore'
@@ -18,6 +19,7 @@ import { BlueprintScene } from './blueprintScene'
 import { CalcOverlay3D } from './calcOverlay3D'
 import { RotationOverlay3D } from './rotationOverlay3D'
 import { PortOverlay3D } from './portOverlay3D'
+import { SelectionOverlay3D } from './selectionOverlay3D'
 import { createViewportRenderer, type SceneRenderer, type SceneRendererFactory } from './viewportRenderer'
 import { currentThemeName, viewportTheme, watchThemeName } from './viewportTheme'
 
@@ -67,6 +69,9 @@ scene.scene.add(rotationOverlay.group)
 // 仮の入出力の印（#70）
 const portOverlay = new PortOverlay3D()
 scene.scene.add(portOverlay.group)
+// 選択範囲の箱の線（#130）
+const selectionOverlay = new SelectionOverlay3D()
+scene.scene.add(selectionOverlay.group)
 let renderer: SceneRenderer | null = null
 let resizeObserver: ResizeObserver | null = null
 let stopTheme: (() => void) | null = null
@@ -110,8 +115,10 @@ function onPointerUp(e: PointerEvent): void {
 
 onMounted(() => {
   scene.setTheme(viewportTheme(currentThemeName()))
+  selectionOverlay.setTheme(viewportTheme(currentThemeName()))
   stopTheme = watchThemeName((name) => {
     scene.setTheme(viewportTheme(name))
+    selectionOverlay.setTheme(viewportTheme(name))
     render()
   })
 
@@ -196,10 +203,13 @@ onMounted(() => {
       { immediate: true },
     ),
     watch(
-      () => [tools.selectedPos, tools.hoveredPos] as const,
-      ([selected, hovered]) => {
-        scene.setSelected(selected)
+      () => [tools.selectedPos, tools.selectionBox, tools.hoveredPos] as const,
+      ([selected, box, hovered]) => {
+        // 2つ以上のマスが入る範囲なら箱の線だけを出し、1つのブロックの枠は出さない（#130）
+        const multi = box !== null && !isSingleCell(box)
+        scene.setSelected(multi ? null : selected)
         scene.setHovered(hovered)
+        selectionOverlay.update(box)
         render()
       },
       { immediate: true },
@@ -264,10 +274,11 @@ onBeforeUnmount(() => {
   calcOverlay.dispose()
   rotationOverlay.dispose()
   portOverlay.dispose()
+  selectionOverlay.dispose()
   tools.hover(null)
 })
 
-defineExpose({ scene, calcOverlay, rotationOverlay, portOverlay })
+defineExpose({ scene, calcOverlay, rotationOverlay, portOverlay, selectionOverlay })
 </script>
 
 <template>

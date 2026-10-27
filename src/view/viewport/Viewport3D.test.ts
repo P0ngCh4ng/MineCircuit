@@ -13,6 +13,7 @@ import { useViewStore } from '../stores/viewStore'
 import type { PickRay } from '../tools/picker'
 import type { BlueprintScene } from './blueprintScene'
 import type { CameraView } from './cameraViews'
+import type { SelectionOverlay3D } from './selectionOverlay3D'
 import type { SceneRenderer } from './viewportRenderer'
 import Viewport3D from './Viewport3D.vue'
 
@@ -120,6 +121,29 @@ describe('Viewport3D', () => {
     const visible = scene.scene.children.filter((o) => o.type === 'LineSegments' && o.name === '' && o.visible)
     expect(visible.map((o) => o.position.toArray())).toEqual([[0.5, 0.5, 0.5]])
     expect(fake.renders).toBeGreaterThan(before)
+  })
+
+  it('2つ以上のマスが入る範囲は箱の線で囲み、1つのブロックの枠は出さない（#130）', async () => {
+    const { wrapper, tools, scene } = setup()
+    const overlay = (wrapper.vm as unknown as { selectionOverlay: SelectionOverlay3D }).selectionOverlay
+    expect(scene.scene.children).toContain(overlay.group)
+    const singleFrames = () => scene.scene.children.filter((o) => o.type === 'LineSegments' && o.name === '' && o.visible)
+
+    tools.setSelected([0, 0, 0])
+    await nextTick()
+    expect(overlay.object.visible).toBe(false)
+    expect(singleFrames()).toHaveLength(1)
+
+    tools.extendSelection([2, 1, 0])
+    await nextTick()
+    expect(overlay.shownBox).toEqual({ min: [0, 0, 0], max: [2, 1, 0] })
+    expect(overlay.object.visible).toBe(true)
+    expect(singleFrames()).toHaveLength(0)
+
+    tools.setSelected(null)
+    await nextTick()
+    expect(overlay.object.visible).toBe(false)
+    wrapper.unmount()
   })
 
   it('段の表示方法、グリッド、座標軸の変更を描画に伝える', async () => {
