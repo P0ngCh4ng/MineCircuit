@@ -381,7 +381,16 @@ describe('物の通り道', () => {
     // できる物は、処理できる数（8 個/分）から計算する。小麦粉は 1 + 2 × 0.25 = 1.5 倍
     expect(sinkOf(result, '0,0,0', 'create:wheat_flour')).toBeCloseTo((8 / 60) * 1.5)
     expect(at(result, '2,0,0')?.noRecipe).toEqual(['minecraft:stone'])
-    expect(itemPathValues(at(result, '2,0,0')!).find((v) => v.label === 'レシピ')?.value.value).toBe('この物のレシピがない（minecraft:stone）')
+    expect(itemPathValues(at(result, '2,0,0')!).find((v) => v.label === 'レシピ')?.value.value).toBe('Modpack にこの物のレシピがない（minecraft:stone）')
+  })
+
+  it('Modpack のレシピがなければ、レシピがないのではなく分からないと出す', () => {
+    const fx = blueprintFixture().place([0, 0, 0], 'create:millstone')
+    const { result } = trace(fx, [port([0, 0, 0], 'up', 'minecraft:wheat')], { '0,0,0': 16 }, null)
+    expect(at(result, '0,0,0')?.recipesUnknown).toBe(true)
+    expect(itemPathValues(at(result, '0,0,0')!).find((v) => v.label === 'レシピ')?.value.value).toBe(
+      'Modpack を読んでいないので、レシピが分からない（minecraft:wheat）。上のバーで Modpack を選ぶと、できる物をたどる',
+    )
   })
 
   it('アイテムを選んでいない物の入口は、仮定に載せてたどらない。Modpack がなければ機械で止まる', () => {

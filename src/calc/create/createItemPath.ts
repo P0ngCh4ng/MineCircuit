@@ -69,6 +69,8 @@ export interface ItemPathRecord {
   readonly sinks: ItemOutput[]
   /** レシピのない物 */
   readonly noRecipe: string[]
+  /** Modpack のレシピがなく、レシピが分からなかった（noRecipe の物に、レシピがないとは限らない） */
+  recipesUnknown: boolean
   /** 「止まっているので、物はここで止まる」など */
   readonly notes: string[]
   /** 機械が1分に処理できる数。機械でなければ null */
@@ -617,6 +619,7 @@ class ItemTracer {
     const recipe = choice.recipe
     if (!recipe) {
       if (!rec.noRecipe.includes(flow.item)) rec.noRecipe.push(flow.item)
+      if (!book) rec.recipesUnknown = true
       if (!book) this.env.log.add('Modpack のレシピがないので、機械でできる物が分からず、物の通り道は機械で止まる')
       return null
     }
@@ -654,7 +657,7 @@ class ItemTracer {
     const key = posKey(pos)
     let r = this.records.get(key)
     if (!r) {
-      r = { pos: [pos[0], pos[1], pos[2]], arrivals: [], recipes: [], sinks: [], noRecipe: [], notes: [], capacityPerMinute: null, processedRate: 0 }
+      r = { pos: [pos[0], pos[1], pos[2]], arrivals: [], recipes: [], sinks: [], noRecipe: [], recipesUnknown: false, notes: [], capacityPerMinute: null, processedRate: 0 }
       this.records.set(key, r)
     }
     return r
@@ -759,7 +762,11 @@ export function itemPathValues(record: ItemPathRecord): CalcSummaryItem[] {
       ),
     })
   } else if (record.noRecipe.length > 0) {
-    values.push({ label: 'レシピ', value: resolved(`この物のレシピがない（${record.noRecipe.join('、')}）`, 'virtual') })
+    const items = record.noRecipe.join('、')
+    const text = record.recipesUnknown
+      ? `Modpack を読んでいないので、レシピが分からない（${items}）。上のバーで Modpack を選ぶと、できる物をたどる`
+      : `Modpack にこの物のレシピがない（${items}）`
+    values.push({ label: 'レシピ', value: resolved(text, 'virtual') })
   }
   if (record.sinks.length > 0) {
     values.push({

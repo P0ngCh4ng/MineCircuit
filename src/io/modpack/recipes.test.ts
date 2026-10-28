@@ -46,11 +46,26 @@ describe('readProcessingRecipe', () => {
         { fluid: 'minecraft:water', amount: 250 },
         { fluidTag: 'forge:milk', amount: 250 },
         { item: 5, tag: null },
-        'minecraft:stone',
         null,
       ],
     })
     expect(r).toMatchObject({ items: ['a:item'], tags: ['a:tag'] })
+  })
+
+  it('NeoForge のいずれかの材料（neoforge:compound）の中を読む。Create 6.0 の Mod 連携のレシピの形（#139）', () => {
+    const r = readProcessingRecipe('create:milling/compat/ae2/fluix_crystal', {
+      'neoforge:conditions': [{ type: 'neoforge:mod_loaded', modid: 'ae2' }],
+      type: 'create:milling',
+      ingredients: [{ type: 'neoforge:compound', ingredients: [{ item: 'ae2:fluix_crystal' }, { tag: 'c:gems/fluix' }] }],
+      processing_time: 200,
+      results: [{ id: 'ae2:fluix_dust' }],
+    })
+    expect(r).toMatchObject({ items: ['ae2:fluix_crystal'], tags: ['c:gems/fluix'], duration: 200 })
+  })
+
+  it('文字列の材料（1.21.2 からの形）は、# で始まればタグ、そうでなければアイテム', () => {
+    const r = readProcessingRecipe('a:5', { type: 'create:milling', ingredients: ['minecraft:wheat', '#c:crops/wheat', 'oops'] })
+    expect(r).toMatchObject({ items: ['minecraft:wheat'], tags: ['c:crops/wheat'] })
   })
 
   it('材料がなければ空', () => {

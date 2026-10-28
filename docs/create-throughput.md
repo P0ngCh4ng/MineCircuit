@@ -125,6 +125,7 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 
 - 処理時間の項目は、1.18 は `processingTime`、1.21（Create 6.0）は `processing_time`。どちらも書いていなければ 0。
 - 材料のうち液体（`amount` を持つもの、`fluid`・`fluidTag`）は見ない。
+- 材料の形は `{ item }`・`{ tag }`・その配列のほか、NeoForge のいずれかの材料 `{ type: "neoforge:compound", ingredients: [...] }` の中も読む（Create 6.0 の Mod 連携のレシピ。`create:milling/compat/...` など、Create 6.0.10 の加工のレシピ 553 のうち 353 がこの形。2026-10-28 に確認）。1.21.2 からの文字列の形（`"minecraft:wheat"`、`"#c:crops/wheat"`）も読む。
 - 読むのは `type` が `create:milling`・`create:crushing`・`create:cutting`・`create:mixing` のものだけ。材料（`ingredients` の `item` と `tag`）と処理時間（`processingTime`）だけを持つ。
 - 条件付きのレシピ（`conditions`、`fabric:load_conditions`）の条件は見ない。
 - **KubeJS のスクリプト（`kubejs/server_scripts/`）で足した・変えたレシピは読めない。** スクリプトがレシピを変えているとき（`recipes` のイベントがあるとき）は、仮定に載せる。手元の Create Astral は、Create の粉砕・混ぜるレシピをスクリプトで変えている（`server_scripts/recipes/create/` など。2026-10-27 に確認）。
@@ -215,6 +216,7 @@ Create 6.0（1.21.1）のソースと比べた（2026-10-27）。上の規則は
 | レシピのフォルダ | `recipes/` | `recipe/` |
 | 処理時間の項目 | `processingTime` | `processing_time` |
 | 液体の材料 | `{ fluid / fluidTag, amount }` | `{ type, tag, amount }` |
+| いずれかの材料 | 配列 | 配列か `{ type: "neoforge:compound", ingredients }` |
 
 ベルト・ファンネル・シュート・プレス・石臼・ソー・デプロイヤーの規則と、`defaultExtractionTimer`・`bulkPressing` の初期値は同じ。
 
