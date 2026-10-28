@@ -1,15 +1,18 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { markRaw } from 'vue'
 import { blueprintFixture } from '../../tests/fixtures/blueprintFixture'
 import { noopCalcPlugin } from '../../tests/fixtures/noopCalcPlugin'
-import { InlineCalcBackend } from '../calc/calcScheduler'
+import { InlineCalcBackend, type CalcBackend, type CalcRequest } from '../calc/calcScheduler'
 import { PluginRegistry } from '../calc/pluginRegistry'
 import { nbt } from '../domain/nbt'
 import { eraseBlock } from '../edit/editCommand'
+import { Modpack } from '../io/modpack/modpack'
 import App from './App.vue'
 import { createDocumentSession, DOCUMENT_SESSION_KEY, type FileLike } from './document/documentSession'
 import { useCalcStore } from './stores/calcStore'
+import { setModpackLoadEnvironment, useModpackContentStore } from './stores/modpackContent'
 import { useToolStore } from './stores/toolStore'
 
 function sample() {
@@ -40,6 +43,30 @@ function fact(wrapper: ReturnType<typeof mountApp>['wrapper'], key: string): str
 }
 
 describe('App', () => {
+  beforeEach(() => setModpackLoadEnvironment({ cache: null, scan: null }))
+  afterEach(() => setModpackLoadEnvironment(null))
+
+  it('読み込んだ Modpack を計算に渡し、変えたら計算し直す（#141）', async () => {
+    const { session, wrapper } = mountApp()
+    const requests: CalcRequest[] = []
+    const backend: CalcBackend = {
+      run: async (request) => {
+        requests.push(request)
+        return []
+      },
+    }
+    useCalcStore().setBackend(backend, { delayMs: 0 })
+    session.setBlueprint(sample().toBlueprint())
+    await vi.waitFor(() => expect(requests).toHaveLength(1))
+    expect(requests[0]!.pack).toBeNull()
+
+    const pack = markRaw(new Modpack([], null))
+    useModpackContentStore().pack = pack
+    await vi.waitFor(() => expect(requests).toHaveLength(2))
+    expect(requests[1]!.pack).toBe(pack)
+    wrapper.unmount()
+  })
+
   it('非公式ツールであることと、ファイルを外部に送信しないことを表示する', () => {
     const { wrapper } = mountApp()
     expect(wrapper.text()).toContain('非公式ツールです')
