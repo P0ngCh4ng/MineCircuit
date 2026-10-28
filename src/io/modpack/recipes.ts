@@ -99,14 +99,28 @@ function readResults(value: unknown): RecipeResult[] {
   return results
 }
 
-/** 材料（`{item}`・`{tag}`・その配列。入れ子の配列も）から、アイテムの ID とタグを集める。液体は見ない */
+/**
+ * 材料から、アイテムの ID とタグを集める。液体は見ない。読める形：
+ * - `{item}`・`{tag}`・その配列（入れ子の配列も）
+ * - NeoForge のいずれかの材料 `{ type: 'neoforge:compound', ingredients: [...] }`（Create 6.0 の Mod 連携のレシピ。#139）
+ * - 文字列 `"minecraft:wheat"`・`"#c:ores/iron"`（1.21.2 からの形）
+ */
 function collectIngredients(value: unknown, items: Set<string>, tags: Set<string>): void {
   if (Array.isArray(value)) {
     for (const v of value) collectIngredients(v, items, tags)
     return
   }
+  if (typeof value === 'string') {
+    if (value.startsWith('#')) tags.add(value.slice(1))
+    else if (value.includes(':')) items.add(value)
+    return
+  }
   // 液体の材料（1.21 は `{ type, tag, amount }`、1.18 は `{ fluid / fluidTag, amount }`）は見ない
   if (!isObject(value) || 'amount' in value || 'fluid' in value || 'fluidTag' in value) return
+  if (value.type === 'neoforge:compound') {
+    collectIngredients(value.ingredients ?? value.children, items, tags)
+    return
+  }
   if (typeof value.item === 'string') items.add(value.item)
   if (typeof value.tag === 'string') tags.add(value.tag)
 }

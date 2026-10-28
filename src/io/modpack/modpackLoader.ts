@@ -76,7 +76,7 @@ export interface ModpackLoaderOptions {
 /**
  * 保存した結果の形を変えたら上げる。上げると、保存した結果はすべて読み直しになる。
  */
-export const JAR_SUMMARY_FORMAT = 4
+export const JAR_SUMMARY_FORMAT = 5
 
 /** 読み込みを途中でやめたときのエラー */
 export class ModpackLoadAbortedError extends Error {
