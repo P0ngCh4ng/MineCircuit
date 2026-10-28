@@ -16,6 +16,7 @@ import StatusBar from './shell/StatusBar.vue'
 import TopBar from './shell/TopBar.vue'
 import { useAppearanceSync } from './stores/appearanceSync'
 import { useCalcStore } from './stores/calcStore'
+import { useModpackContentStore } from './stores/modpackContent'
 import { useToolStore } from './stores/toolStore'
 import { useViewStore } from './stores/viewStore'
 import { useKeyboardShortcuts } from './tools/useKeyboardShortcuts'
@@ -23,6 +24,7 @@ import ViewportArea from './viewport/ViewportArea.vue'
 
 const tools = useToolStore()
 const calc = useCalcStore()
+const content = useModpackContentStore()
 const view = useViewStore()
 const session = useDocumentSession()
 const rotate = useRotateAction()
@@ -43,6 +45,13 @@ watch(session.current, (doc) => {
   tools.setHovered(null)
   void calc.attach(doc?.blueprint ?? null, doc?.history.onChange ?? null)
 })
+
+// 読み込んだ Modpack を計算に渡す。Modpack を変えたら計算し直す（#141）
+watch(
+  () => content.pack,
+  (pack) => calc.setPack(pack),
+  { immediate: true },
+)
 
 useKeyboardShortcuts({
   tool: (a) => tools.setTool(a.id),
