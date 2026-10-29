@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 「書き出し（.nbt）」ボタン（#21）。
+// 「書き出し（.nbt）」ボタン（#21）。上のバー1段目の設計図のグループに置く。Ctrl+S でも始める（#151）。
 // 生データのないブロックや足りない Mod があれば、先に知らせて確かめてから書き出す。
 // 保存先を選ぶ画面は利用者の操作の中でしか開けないので、書き出しはクリックの処理から直接始める。
 // 保存先はブラウザ版とデスクトップ版で違う（view/platform/fileAccess.ts の createBlueprintSink）。
@@ -11,6 +11,7 @@ import { useMissingMods } from '../analysis/useMissingMods'
 import { useDocumentSession } from '../document/documentSession'
 import { createBlueprintSink } from '../platform/fileAccess'
 import ModalDialog from '../shell/ModalDialog.vue'
+import { useKeyboardShortcuts } from '../tools/useKeyboardShortcuts'
 import { exportErrorMessage, exportNotices, exportResultMessage } from './exportMessages'
 
 const props = withDefaults(defineProps<{ createSink?: () => FileSink }>(), {
@@ -27,6 +28,13 @@ const notices = ref<string[]>([])
 const message = ref<{ text: string; error: boolean } | null>(null)
 
 const disabled = computed(() => !session.current.value || exporting.value)
+
+// 押せないとき（設計図がない、書き出し中、確かめる画面を出している）も、ブラウザのページの保存は止める
+useKeyboardShortcuts({
+  export: () => {
+    if (!disabled.value && !confirming.value) onClick()
+  },
+})
 
 function onClick(): void {
   const doc = session.current.value
@@ -70,7 +78,7 @@ async function run(): Promise<void> {
     type="button"
     data-action="export"
     :disabled="disabled"
-    :title="session.current.value ? '設計図を .nbt で書き出します' : '設計図を開くと書き出せます'"
+    :title="session.current.value ? '設計図を .nbt で書き出します（Ctrl+S）' : '設計図を開くと書き出せます（Ctrl+S）'"
     @click="onClick"
   >
     {{ exporting ? '書き出しています…' : '書き出し（.nbt）' }}

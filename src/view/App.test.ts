@@ -161,6 +161,14 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  it('書き出しのボタンは上のバー1段目の設計図のグループにあり、編集のグループにはない（#151）', () => {
+    const { wrapper } = mountApp()
+    const fileGroup = wrapper.get('.top-bar > .row:first-child')
+    expect(fileGroup.find('[data-action="export"]').exists()).toBe(true)
+    expect(wrapper.get('[aria-label="編集"]').find('[data-action="export"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('別の設計図を開くと選択を消す', async () => {
     const { session, wrapper } = mountApp()
     session.setBlueprint(sample().toBlueprint())

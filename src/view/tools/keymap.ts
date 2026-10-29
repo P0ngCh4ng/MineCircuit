@@ -27,6 +27,8 @@ export type KeyAction =
   | { readonly type: 'cutSelection' }
   | { readonly type: 'paste' }
   | { readonly type: 'duplicateSelection' }
+  /** 書き出し（.nbt）を始める（Ctrl+S。#151） */
+  | { readonly type: 'export' }
 
 /** 範囲を動かす向き。up〜right は画面の上下左右、raise / lower は1段上・下 */
 export type MoveDirection = 'up' | 'down' | 'left' | 'right' | 'raise' | 'lower'
@@ -76,6 +78,7 @@ export function resolveKeyAction(e: KeyInput): KeyAction | null {
     if (key === 'x' && !e.shiftKey) return { type: 'cutSelection' }
     if (key === 'v' && !e.shiftKey) return { type: 'paste' }
     if (key === 'd' && !e.shiftKey) return { type: 'duplicateSelection' }
+    if (key === 's' && !e.shiftKey) return { type: 'export' }
     if (key === 'r') return { type: 'rotateBrush', vertical: e.shiftKey, overwrite: true }
     return null
   }
@@ -98,6 +101,13 @@ export function resolveKeyAction(e: KeyInput): KeyAction | null {
   if (key === 'f') return { type: 'fillSelection' }
   const tool = TOOL_KEYS.get(key)
   return tool ? { type: 'tool', id: tool } : null
+}
+
+/**
+ * 入力欄で打っても行う操作。文字の操作と重ならず、ブラウザの既定の動き（ページの保存）を止めたいもの
+ */
+export function worksInTextInput(action: KeyAction): boolean {
+  return action.type === 'export'
 }
 
 /**
