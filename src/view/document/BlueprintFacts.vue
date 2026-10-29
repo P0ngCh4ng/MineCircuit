@@ -21,7 +21,7 @@ function count(n: number): string {
 
 const facts = computed(() => {
   const s = summary.value
-  const edits = session.editCount.value
+  const changes = session.unsavedChanges.value
   return [
     { key: 'size', label: '寸法', title: '幅 × 高さ × 奥行き', value: s ? s.size.join(' × ') : '–' },
     { key: 'blocks', label: 'ブロック', title: '空きでないブロックの数', value: s ? count(s.blockCount) : '–' },
@@ -39,7 +39,12 @@ const facts = computed(() => {
       title: 'ファイルの DataVersion から推定した Minecraft のバージョン',
       value: s ? minecraftVersionLabel(s.dataVersion) : '–',
     },
-    { key: 'edits', label: '編集', title: '元に戻せる編集の回数', value: s ? (edits > 0 ? `${count(edits)} 回` : 'なし') : '–' },
+    {
+      key: 'edits',
+      label: '書き出してから',
+      title: '最後に書き出してからの変更（置く・消す・元に戻す・やり直すなど）の回数。書き出すと 0 に戻る',
+      value: s ? (changes > 0 ? `${count(changes)} 回の変更` : '変更なし') : '–',
+    },
   ]
 })
 </script>

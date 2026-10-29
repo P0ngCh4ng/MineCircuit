@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
-import { blueprintFixture } from '../../../tests/fixtures/blueprintFixture'
+import { blueprintFixture, state } from '../../../tests/fixtures/blueprintFixture'
+import { placeBlock } from '../../edit/editCommand'
 import { createDocumentSession, provideDocumentSession, type DocumentSession } from './documentSession'
 import OpenFileButton from './OpenFileButton.vue'
 
@@ -54,6 +55,32 @@ describe('OpenFileButton', () => {
     // gzip の展開は非同期なので、開き終わるまで待つ
     await vi.waitFor(() => expect(session.current.value?.fileName).toBe('mill.nbt'))
     expect(session.error.value).toBeNull()
+  })
+
+  it('書き出していない変更があれば、開く前に確かめる。やめると今の設計図のまま', async () => {
+    const session = createDocumentSession()
+    const doc = session.setBlueprint(blueprintFixture({ size: [1, 1, 1] }).toBlueprint(), 'old.nbt')
+    session.apply(placeBlock(doc.blueprint, [0, 0, 0], state('minecraft:stone'), false))
+    const bytes = await blueprintFixture().place([0, 0, 0], 'minecraft:stone').toNbtBytes()
+    // テストの環境には window.confirm がないので置く
+    const confirm = vi.fn((_message?: string) => false)
+    window.confirm = confirm
+    const wrapper = mountWith(session)
+    const input = wrapper.get('[data-testid="open-file-input"]')
+    Object.defineProperty(input.element, 'files', {
+      value: [{ name: 'new.nbt', arrayBuffer: async () => bytes.slice().buffer }],
+      configurable: true,
+    })
+
+    await input.trigger('change')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('書き出していない変更が 1 回あります。'))
+    expect(session.current.value?.fileName).toBe('old.nbt')
+
+    confirm.mockReturnValue(true)
+    await input.trigger('change')
+    await vi.waitFor(() => expect(session.current.value?.fileName).toBe('new.nbt'))
+    delete (window as { confirm?: unknown }).confirm
   })
 
   it('デスクトップ版で取り消したら何もしない', async () => {

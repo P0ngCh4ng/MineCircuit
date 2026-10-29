@@ -6,9 +6,11 @@ import { createDocumentSession, DOCUMENT_SESSION_KEY } from '../document/documen
 import { useLayerStore } from '../stores/layerStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
+import ViewControls from '../shell/ViewControls.vue'
 import ViewModeSwitch from '../shell/ViewModeSwitch.vue'
 import { layoutGrid2D } from './layerGrid2D'
 import LayerView2D from './LayerView2D.vue'
+import { clampToView, panBy, wheelZoomFactor, zoomAt } from './view2D'
 
 const WIDTH = 400
 const HEIGHT = 300
@@ -51,7 +53,7 @@ function mountView() {
     clientX: layout.originX + (x + 0.5) * layout.cellSize,
     clientY: layout.originY + (z + 0.5) * layout.cellSize,
   })
-  return { wrapper, session, at }
+  return { wrapper, session, at, layout }
 }
 
 describe('LayerView2D', () => {
@@ -152,6 +154,128 @@ describe('LayerView2D', () => {
     useLayerStore().setLayer(10)
     await wrapper.vm.$nextTick()
     expect(wrapper.get('[data-testid="layer-view-2d-layer"]').text()).toBe('段 3 / 3')
+    wrapper.unmount()
+  })
+})
+
+describe('LayerView2D の拡大・縮小と移動（#155）', () => {
+  it('ホイールでマウスの位置を中心に拡大し、そのマスはマウスの下に残る', async () => {
+    const { wrapper, at, layout } = mountView()
+    const tools = useToolStore()
+    const canvas = wrapper.get('canvas')
+    const p = at(1, 2)
+    await canvas.trigger('wheel', { deltaY: -300, ...p })
+    expect(tools.hoverTarget?.pos).toEqual([1, 0, 2])
+    // 拡大したので、もとの (3, 2) の位置は、もう (3, 2) ではない
+    const zoomed = zoomAt(layout, p.clientX, p.clientY, wheelZoomFactor(-300))
+    expect(zoomed.cellSize).toBeGreaterThan(layout.cellSize)
+    await canvas.trigger('pointermove', at(3, 2))
+    expect(tools.hoverTarget?.pos).not.toEqual([3, 0, 2])
+    wrapper.unmount()
+  })
+
+  it('中ボタンでドラッグして表示を動かす', async () => {
+    const { wrapper, at, layout } = mountView()
+    const tools = useToolStore()
+    const canvas = wrapper.get('canvas')
+    const start = at(0, 0)
+    // 2マス右・1マス下へ動かす
+    const end = { clientX: start.clientX + layout.cellSize * 2, clientY: start.clientY + layout.cellSize }
+    await canvas.trigger('pointerdown', { button: 1, pointerId: 1, ...start })
+    await canvas.trigger('pointermove', { buttons: 4, pointerId: 1, ...end })
+    await canvas.trigger('pointerup', { button: 1, pointerId: 1, ...end })
+    // 動かしたあと、もとの (2, 1) の位置にはマス (0, 0) がある
+    await canvas.trigger('pointermove', at(2, 1))
+    expect(tools.hoverTarget?.pos).toEqual([0, 0, 0])
+    wrapper.unmount()
+  })
+
+  it('空白キーを押したまま左ドラッグで表示を動かす。範囲は選ばず、続くクリックで選ばない', async () => {
+    const { wrapper, at, layout } = mountView()
+    const tools = useToolStore()
+    const canvas = wrapper.get('canvas')
+    await canvas.trigger('pointerenter')
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ' }))
+    await wrapper.vm.$nextTick()
+    expect(canvas.classes()).toContain('grab')
+
+    const start = at(3, 2)
+    const end = { clientX: start.clientX - layout.cellSize * 3, clientY: start.clientY - layout.cellSize * 2 }
+    await canvas.trigger('pointerdown', { button: 0, pointerId: 2, ...start })
+    expect(canvas.classes()).toContain('grabbing')
+    await canvas.trigger('pointermove', { buttons: 1, pointerId: 2, ...end })
+    await canvas.trigger('pointerup', { button: 0, pointerId: 2, ...end })
+    await canvas.trigger('click', end)
+    expect(tools.selectionBox).toBeNull()
+    expect(tools.selectedPos).toBeNull()
+
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space', key: ' ' }))
+    await wrapper.vm.$nextTick()
+    expect(canvas.classes()).not.toContain('grab')
+    // マス (3, 2) は、もとの (0, 0) の位置に来ている
+    await canvas.trigger('pointermove', at(0, 0))
+    expect(tools.hoverTarget?.pos).toEqual([3, 0, 2])
+    wrapper.unmount()
+  })
+
+  it('マウスが 2D表示の外にあるときは、空白キーを使わない', async () => {
+    const { wrapper } = mountView()
+    const canvas = wrapper.get('canvas')
+    const e = new KeyboardEvent('keydown', { code: 'Space', key: ' ', cancelable: true })
+    window.dispatchEvent(e)
+    await wrapper.vm.$nextTick()
+    expect(e.defaultPrevented).toBe(false)
+    expect(canvas.classes()).not.toContain('grab')
+    wrapper.unmount()
+  })
+
+  it('大きい設計図の端まで動かして見られる。「全体を表示」で全体が入る大きさに戻す', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const session = createDocumentSession()
+    const bp = blueprintFixture({ size: [400, 1, 300], name: 'large.nbt' }).place([399, 0, 299], 'minecraft:stone').toBlueprint()
+    session.setBlueprint(bp, 'large.nbt')
+    const global = { plugins: [pinia], provide: { [DOCUMENT_SESSION_KEY as symbol]: session } }
+    const wrapper = mount(LayerView2D, { global, attachTo: document.body })
+    const viewMode = useViewStore()
+    viewMode.setMode('2d')
+    const tools = useToolStore()
+    const canvas = wrapper.get('canvas')
+    const fit = layoutGrid2D(WIDTH, HEIGHT, bp.size)
+    const cornerAt = (g: { originX: number; originY: number; cellSize: number }) => ({
+      clientX: g.originX + 399.5 * g.cellSize,
+      clientY: g.originY + 299.5 * g.cellSize,
+    })
+
+    // 左上で5目盛り拡大すると、右下の端のマスは表示の外になる
+    let grid = fit
+    for (let i = 0; i < 5; i++) {
+      await canvas.trigger('wheel', { deltaY: -100, clientX: 0, clientY: 0 })
+      grid = clampToView(zoomAt(grid, 0, 0, wheelZoomFactor(-100)), bp.size, WIDTH, HEIGHT)
+    }
+    expect(grid.cellSize).toBeGreaterThan(fit.cellSize)
+    const far = cornerAt(grid)
+    expect(far.clientX > WIDTH || far.clientY > HEIGHT).toBe(true)
+
+    // 表示の真ん中まで動かすと、右下の端のマスに届く
+    const dx = WIDTH / 2 - far.clientX
+    const dy = HEIGHT / 2 - far.clientY
+    await canvas.trigger('pointerdown', { button: 1, pointerId: 3, clientX: 300, clientY: 200 })
+    await canvas.trigger('pointermove', { buttons: 4, pointerId: 3, clientX: 300 + dx, clientY: 200 + dy })
+    await canvas.trigger('pointerup', { button: 1, pointerId: 3, clientX: 300 + dx, clientY: 200 + dy })
+    await canvas.trigger('pointermove', cornerAt(clampToView(panBy(grid, dx, dy), bp.size, WIDTH, HEIGHT)))
+    expect(tools.hoverTarget?.pos).toEqual([399, 0, 299])
+
+    // 上のバーの「全体を表示」を 2D でも押せて、はじめの置き方に戻る
+    const controls = mount(ViewControls, { global })
+    const fitButton = controls.get('[data-view="fit"]')
+    expect(fitButton.attributes('disabled')).toBeUndefined()
+    expect(controls.get('[data-view="iso"]').attributes('disabled')).toBeDefined()
+    await fitButton.trigger('click')
+    await wrapper.vm.$nextTick()
+    await canvas.trigger('pointermove', cornerAt(fit))
+    expect(tools.hoverTarget?.pos).toEqual([399, 0, 299])
+    controls.unmount()
     wrapper.unmount()
   })
 })

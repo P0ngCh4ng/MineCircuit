@@ -5,6 +5,7 @@ import { watch } from 'vue'
 import { useProbeTool } from './calc/useProbeTool'
 import { usePortTool } from './calc/usePortTool'
 import { useDocumentSession } from './document/documentSession'
+import { useUnsavedChangesGuard } from './document/unsavedChanges'
 import { usePasteModeSync, useClipboardActions } from './edit/clipboardActions'
 import { useRelocationSync } from './edit/relocationSync'
 import { useRotateAction } from './edit/rotateAction'
@@ -38,6 +39,8 @@ usePortTool()
 useRelocationSync()
 // Modpack と設計図に合わせて、ブロックの見た目（テクスチャ）を用意する
 useAppearanceSync()
+// 書き出していない変更があれば、ページを閉じる前に確かめる（#150）
+useUnsavedChangesGuard(session)
 
 // 設計図が入れ替わったら、前の設計図の選択を消し、計算の対象を変える
 watch(session.current, (doc) => {

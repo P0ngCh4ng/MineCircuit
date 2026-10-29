@@ -4,6 +4,7 @@
 import MeasureReadout from '../analysis/MeasureReadout.vue'
 import { useDocumentSession } from '../document/documentSession'
 import { useFileDrop } from '../document/useFileDrop'
+import { confirmDiscard } from '../document/unsavedChanges'
 import { useViewStore } from '../stores/viewStore'
 import ToolBar from '../tools/ToolBar.vue'
 import LayerView2D from './LayerView2D.vue'
@@ -13,7 +14,9 @@ import Viewport3D from './Viewport3D.vue'
 const session = useDocumentSession()
 const { current, opening, error } = session
 const view = useViewStore()
-const drop = useFileDrop((file) => void session.openFile(file))
+const drop = useFileDrop((file) => {
+  if (confirmDiscard(session)) void session.openFile(file)
+})
 </script>
 
 <template>

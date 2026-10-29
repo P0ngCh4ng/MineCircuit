@@ -105,7 +105,7 @@ describe('DocumentSession', () => {
     expect(session.apply(eraseBlock(bp, [1, 0, 0]))).toBe(true)
     expect(session.apply(rotateBlock(bp, [0, 0, 0], false))).toBe(true)
     const edited = blueprintContents(bp)
-    expect(session.editCount.value).toBe(3)
+    expect(session.unsavedChanges.value).toBe(3)
     expect(session.nextUndoLabel.value).toBe('shaft を回す')
 
     expect(session.undo()?.label).toBe('shaft を回す')
@@ -131,7 +131,7 @@ describe('DocumentSession', () => {
     expect(session.undo()).toBeNull()
     expect(session.redo()).toBeNull()
     expect(session.canUndo.value).toBe(false)
-    expect(session.editCount.value).toBe(0)
+    expect(session.unsavedChanges.value).toBe(0)
 
     const doc = session.setBlueprint(sample().toBlueprint())
     const v = session.version.value
@@ -170,6 +170,6 @@ describe('DocumentSession', () => {
     session.setBlueprint(sample().toBlueprint())
     session.close()
     expect(session.current.value).toBeNull()
-    expect(session.editCount.value).toBe(0)
+    expect(session.unsavedChanges.value).toBe(0)
   })
 })
