@@ -328,11 +328,11 @@ export class KineticGraph {
     const n = this.nodes.length
     const issues: CalcIssue[] = [...this.buildIssues]
     const issueKeys = new Set<string>()
-    const addIssue = (pos: Vec3, message: string, severity?: 'warning'): void => {
+    const addIssue = (pos: Vec3, message: string): void => {
       const key = `${posKey(pos)}|${message}`
       if (issueKeys.has(key)) return
       issueKeys.add(key)
-      issues.push(severity ? { pos: [pos[0], pos[1], pos[2]], message, severity } : { pos: [pos[0], pos[1], pos[2]], message })
+      issues.push({ pos: [pos[0], pos[1], pos[2]], message })
     }
 
     // 4. 剛体のまとまりに分け、5. 比 k を決める
@@ -505,10 +505,19 @@ export class KineticGraph {
       }
     })
 
+    // ネットワーク全体の問題は1件にまとめる（#153）
+    const addNetworkIssue = (members: readonly number[], message: string, severity?: 'warning'): void => {
+      const positions = members.map((m) => this.nodes[m].pos).map((p): Vec3 => [p[0], p[1], p[2]])
+      if (positions.length === 0) return
+      const text = `${message}（ブロック ${formatNumber(positions.length)} 個）`
+      issues.push(severity ? { pos: positions[0], message: text, severity, positions } : { pos: positions[0], message: text, positions })
+    }
     for (const net of networks) {
       if (net.overloaded) {
-        const message = `応力が足りません（使用 ${formatNumber(net.stress)} SU / 供給 ${formatNumber(net.capacity)} SU）。ネットワーク全体が止まります。`
-        for (const i of net.nodes) if (this.nodes[i].portId === null) addIssue(this.nodes[i].pos, message)
+        addNetworkIssue(
+          net.nodes.filter((i) => this.nodes[i].portId === null),
+          `応力が足りません（使用 ${formatNumber(net.stress)} SU / 供給 ${formatNumber(net.capacity)} SU）。ネットワーク全体が止まります。`,
+        )
         continue
       }
       for (const i of net.nodes) {
@@ -527,11 +536,8 @@ export class KineticGraph {
     for (const net of networks) {
       if (net.overloaded) continue
       const powered = net.nodes.some((m) => this.nodes[m].source !== null)
-      const warning = powered ? STOPPED_MESSAGE : UNPOWERED_MESSAGE
-      for (const m of net.nodes) {
-        if (this.nodes[m].portId !== null || theoretical[m] !== 0 || broken[group[m]]) continue
-        addIssue(this.nodes[m].pos, warning, 'warning')
-      }
+      const stopped = net.nodes.filter((m) => this.nodes[m].portId === null && theoretical[m] === 0 && !broken[group[m]])
+      addNetworkIssue(stopped, powered ? STOPPED_MESSAGE : UNPOWERED_MESSAGE, 'warning')
     }
 
     return { nodes, networks, issues }

@@ -72,10 +72,14 @@ describe('KineticGraph：docs/create-stress.md の例', () => {
     const net = r.network([0, 0, 0])
     expect(net.stress).toBe(384)
     expect(net.overloaded).toBe(true)
-    for (const pos of [[0, 0, 0], [0, 0, 1], [1, 1, 1], [1, 1, 4]] as Vec3[]) {
-      expect(r.speed(pos)).toBe(0)
-      expect(r.issuesAt(pos).some((m) => m.startsWith('応力が足りません'))).toBe(true)
-    }
+    for (const pos of [[0, 0, 0], [0, 0, 1], [1, 1, 1], [1, 1, 4]] as Vec3[]) expect(r.speed(pos)).toBe(0)
+    // ネットワーク全体の問題は1件にまとめ、全ブロックの位置を持つ（#153）
+    const overload = r.ev.issues.filter((i) => i.message.startsWith('応力が足りません'))
+    expect(overload).toHaveLength(1)
+    expect(overload[0].message).toBe('応力が足りません（使用 384 SU / 供給 256 SU）。ネットワーク全体が止まります。（ブロック 6 個）')
+    expect(overload[0].pos).toEqual([0, 0, 0])
+    expect(overload[0].positions).toHaveLength(6)
+    expect(overload[0].positions).toEqual(expect.arrayContaining([[0, 0, 0], [1, 1, 4]]))
   })
 
   it('例2：速度コントローラー', () => {
@@ -296,16 +300,22 @@ describe('KineticGraph：組み間違いの検査（#148）', () => {
         .toBlueprint(),
     )
     expect(r.issuesAt([1, 0, 0])).toEqual([])
-    for (const pos of [[3, 0, 0], [4, 0, 0]] as Vec3[]) {
-      expect(r.issuesAt(pos)).toEqual(['動力源につながっていません。回りません。'])
-    }
-    expect(r.ev.issues.filter((i) => i.severity === 'warning')).toHaveLength(2)
+    // ネットワークごとに1件（#153）
+    expect(r.ev.issues).toEqual([
+      {
+        pos: [3, 0, 0],
+        message: '動力源につながっていません。回りません。（ブロック 2 個）',
+        severity: 'warning',
+        positions: [[3, 0, 0], [4, 0, 0]],
+      },
+    ])
   })
 
   it('動力源が止まっていれば、つながったブロックは「回転数が 0」の警告', () => {
     const r = evaluate(motor(blueprintFixture(), 0).place([1, 0, 0], 'create:shaft', { axis: 'x' }).toBlueprint())
-    expect(r.issuesAt([0, 0, 0])).toEqual(['回転数が 0 です。つながっている動力源が止まっています。'])
-    expect(r.issuesAt([1, 0, 0])).toEqual(['回転数が 0 です。つながっている動力源が止まっています。'])
+    expect(r.ev.issues.map((i) => [i.message, i.positions])).toEqual([
+      ['回転数が 0 です。つながっている動力源が止まっています。（ブロック 2 個）', [[0, 0, 0], [1, 0, 0]]],
+    ])
   })
 
   it('仮の動力源につながっていれば警告を出さない', () => {

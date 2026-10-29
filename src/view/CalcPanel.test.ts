@@ -5,6 +5,7 @@ import { blueprintFixture, state } from '../../tests/fixtures/blueprintFixture'
 import { noopCalcPlugin } from '../../tests/fixtures/noopCalcPlugin'
 import { InlineCalcBackend } from '../calc/calcScheduler'
 import { PluginRegistry } from '../calc/pluginRegistry'
+import { resolved } from '../calc/provenance'
 import { nbt } from '../domain/nbt'
 import { placeBlock } from '../edit/editCommand'
 import { EditHistory } from '../edit/editHistory'
@@ -75,6 +76,41 @@ describe('CalcPanel（右パネルの計算結果）', () => {
     expect(items[0].find('.severity').text()).toBe('警告')
     expect(items[1].find('.severity').exists()).toBe(false)
     expect(calc.issuePositions).toEqual([[1, 0, 0]])
+  })
+
+  it('まとめた問題は、その全ブロックを強調する（#153）', async () => {
+    const plugin = noopCalcPlugin()
+    const run = plugin.run.bind(plugin)
+    const grouped = {
+      ...plugin,
+      run: async (...args: Parameters<typeof plugin.run>) => ({
+        ...(await run(...args)),
+        issues: [{ pos: [0, 0, 0] as const, message: 'まとめた問題', positions: [[0, 0, 0], [1, 0, 0]] as const }],
+      }),
+    }
+    const { calc } = setup([grouped])
+    await calc.attach(sample())
+    await flushPromises()
+    expect(calc.issuePositions).toEqual([[0, 0, 0], [1, 0, 0]])
+  })
+
+  it('位置のある合計の行（ネット一覧）を押すと、そのブロックをプローブの対象にする（#152）', async () => {
+    const plugin = noopCalcPlugin()
+    const run = plugin.run.bind(plugin)
+    const withNet = {
+      ...plugin,
+      run: async (...args: Parameters<typeof plugin.run>) => {
+        const r = await run(...args)
+        return { ...r, summary: [...r.summary, { label: 'ネットワーク 1', value: resolved('使用 0 SU', 'blueprint'), pos: [1, 0, 0] as const }] }
+      },
+    }
+    const { calc, wrapper } = setup([withNet])
+    await calc.attach(sample())
+    await flushPromises()
+    const buttons = wrapper.findAll('.summary .net')
+    expect(buttons.map((b) => b.text())).toEqual(['ネットワーク 1'])
+    await buttons[0].trigger('click')
+    expect(useProbeStore().probedPos).toEqual([1, 0, 0])
   })
 
   it('問題の位置を押すと、そのブロックを選び、その段へ移ってプローブの対象にする', async () => {

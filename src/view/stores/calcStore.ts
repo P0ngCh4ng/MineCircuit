@@ -102,7 +102,9 @@ export const useCalcStore = defineStore('calc', () => {
   /** 3D 表示で強調する位置（全プラグインの問題のうちエラー。警告は組み立て途中で多く出るので強調しない） */
   const issuePositions = computed<Vec3[]>(() =>
     (outcomes.value ?? []).flatMap((o) =>
-      o.status === 'ok' ? o.result.issues.filter((i) => i.severity !== 'warning').map((i) => i.pos) : [],
+      o.status === 'ok'
+        ? o.result.issues.filter((i) => i.severity !== 'warning').flatMap((i) => i.positions ?? [i.pos])
+        : [],
     ),
   )
 

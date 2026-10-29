@@ -154,10 +154,15 @@ describe('Create の応力プラグイン', () => {
 
   it('Modpack がなくても内蔵の初期値で計算し、そのことを仮定に載せる', async () => {
     const result = await runCreateStress(pressLine(), { pack: null, ports: [] })
-    expect(result.summary[0]).toEqual({
-      label: '合計',
-      value: { value: '使用 128 SU / 供給 262,144 SU', source: 'builtin' },
-    })
+    // ネット一覧（#152）：先頭は集計。別々のネットワークの使用と供給は足さない
+    expect(result.summary).toEqual([
+      { label: 'まとめ', value: { value: 'ネットワーク 1／過負荷 0／止まっている 0', source: 'builtin' } },
+      {
+        label: 'ネットワーク 1',
+        value: { value: '使用 128 SU / 供給 262,144 SU（余裕 262,016 SU）、16 RPM。動力源 1・負荷 1・ブロック 2', source: 'builtin' },
+        pos: [0, 0, 0],
+      },
+    ])
     expect(result.assumptions.map((a) => a.message)).toContain('Modpack がないので、Create の内蔵の初期値を使った')
     const press = result.probes?.find((p) => p.pos.join() === '1,0,0')
     expect(press?.values.map((v) => v.label)).toEqual(['回転数', '応力', '処理時間', 'ネットワーク'])
@@ -165,6 +170,21 @@ describe('Create の応力プラグイン', () => {
     expect(press?.values[1].value).toEqual({ value: '128 SU（8 SU/RPM）', source: 'builtin' })
     // Worker から送れる素のデータ
     expect(structuredClone(result)).toEqual(result)
+  })
+
+  it('ネット一覧は、動力源のないネットワークも出し、過負荷を合計に隠さない（#152）', async () => {
+    const bp = blueprintFixture()
+      .place([0, 0, 0], 'create:creative_motor', { facing: 'east' }, nbt.compound({ ScrollValue: nbt.int(16) }))
+      .place([1, 0, 0], 'create:shaft', { axis: 'x' })
+      .place([0, 0, 2], 'create:shaft', { axis: 'x' })
+      .place([1, 0, 2], 'create:shaft', { axis: 'x' })
+      .toBlueprint()
+    const result = await runCreateStress(bp, { pack: null, ports: [] })
+    expect(result.summary.map((s) => s.label)).toEqual(['まとめ', 'ネットワーク 1', 'ネットワーク 2'])
+    expect(result.summary[0].value.value).toBe('ネットワーク 2／過負荷 0／止まっている 1')
+    const idle = result.summary.slice(1).find((s) => s.value.value.includes('止まっている'))
+    expect(idle?.value.value).toBe('使用 0 SU / 供給 0 SU（余裕 0 SU）、止まっている。動力源 0・負荷 0・ブロック 2')
+    expect(idle?.pos).toEqual([0, 0, 2])
   })
 
   it('プローブに回転のネットワークの番号を付ける（つながっていないブロックは別の番号）', async () => {
@@ -220,8 +240,9 @@ describe('Create の応力プラグイン', () => {
   it('Modpack の設定ファイルの値を使う', async () => {
     const pack = fakePack({ 'saves/World/serverconfig/create-server.toml': TOML })
     const result = await runCreateStress(pressLine(), { pack, ports: [] })
-    expect(result.summary[0].value).toEqual({ value: '使用 160 SU / 供給 16 SU', source: 'modpack' })
-    expect(result.issues.some((i) => i.message.startsWith('応力が足りません'))).toBe(true)
+    expect(result.summary[0].value).toEqual({ value: 'ネットワーク 1／過負荷 1／止まっている 0', source: 'modpack' })
+    expect(result.summary[1].value.value).toMatch(/^使用 160 SU \/ 供給 16 SU（足りない 144 SU）、16 RPM（過負荷）。/)
+    expect(result.issues.filter((i) => i.message.startsWith('応力が足りません'))).toHaveLength(1)
   })
 })
 

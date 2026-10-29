@@ -149,7 +149,7 @@ describe('仮の入出力と計算（#70 の完了の条件）', () => {
 
   it('動力源のない設計図に仮の動力源を置くと、回転数と応力が計算され、出どころは仮の入出力', async () => {
     const { calc, ports, tools } = await setup()
-    expect(createOutcome(calc).summary[0].value.value).toBe('使用 0 SU / 供給 0 SU')
+    expect(createOutcome(calc).summary[0].value.value).toBe('ネットワーク 1／過負荷 0／止まっている 1')
 
     expect(tools.setTool('port')).toBe(true)
     tools.click({ pos: [0, 0, 0], face: 'west', empty: false })
