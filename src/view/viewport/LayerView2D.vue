@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 2D表示（LayerView2D）。今の段を真上から見たマス目で描く。docs/ui.md「2D表示と計測」。
 // マウスの位置は picker.ts の pick2D でマスに直し、toolStore を通して今のツールに渡す。
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+// ホイールで拡大・縮小、中ボタンか空白キー＋左ドラッグで表示を動かす（#155。計算は view2D.ts）。
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { isSingleCell } from '../../domain/box'
 import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
@@ -22,6 +23,7 @@ import { layoutGrid2D } from './layerGrid2D'
 import { drawPortOverlay2D } from './portOverlay2D'
 import { DARK_THEME_2D, drawLayer2D, drawPastePreview2D, drawSelectionBox2D, LIGHT_THEME_2D } from './layerRenderer2D'
 import { createTextureCellPainter } from './textureCellPainter2D'
+import { clampToView, panBy, wheelZoomFactor, zoomAt } from './view2D'
 
 const props = withDefaults(defineProps<{ showGrid?: boolean }>(), { showGrid: true })
 
@@ -57,12 +59,33 @@ const size = computed(() => {
   return session.current.value?.blueprint.size ?? null
 })
 
+/** 拡大・縮小や移動をしたあとのマス目の置き方。null なら全体を表示（#155） */
+const zoomed = shallowRef<GridLayout2D | null>(null)
+
 /** マス目の置き方。描くときと、マウスの位置をマスに直すときに使う */
 const layout = computed<GridLayout2D | null>(() => {
   const s = size.value
   if (!s || width.value === 0 || height.value === 0) return null
-  return layoutGrid2D(width.value, height.value, s)
+  const z = zoomed.value
+  // 表示の大きさが変わっても、マス目が外へ出きらないようにする
+  return z ? clampToView(z, s, width.value, height.value) : layoutGrid2D(width.value, height.value, s)
 })
+
+// 別の設計図を開いたら、全体を表示に戻す
+watch(
+  () => session.current.value?.blueprint ?? null,
+  () => {
+    zoomed.value = null
+  },
+)
+
+// 上のバーの視点の「全体を表示」（#155）
+watch(
+  () => viewMode.cameraRequest,
+  (req) => {
+    if (req?.kind === 'fit') zoomed.value = null
+  },
+)
 
 /** 今の段（設計図の高さに収める） */
 const layer = computed(() => {
@@ -221,9 +244,88 @@ function updateDrag(e: PointerEvent): void {
   tools.setSelectionBox(dragSelectionBox(drag.start, cell, layer.value, anchor), [drag.start[0], anchor ?? layer.value, drag.start[1]])
 }
 
+/** 表示を動かすドラッグ（#155）。押した位置と、そのときのマス目の置き方 */
+interface Pan {
+  readonly pointerId: number
+  readonly button: number
+  readonly startX: number
+  readonly startY: number
+  readonly from: GridLayout2D
+}
+let pan: Pan | null = null
+const panning = ref(false)
+/** 空白キーを押している（左ドラッグで表示を動かす） */
+const spaceHeld = ref(false)
+/** マウスが 2D表示の上にある。空白キーはこのときだけ使う */
+let pointerInside = false
+
+function startPan(e: PointerEvent): boolean {
+  const grid = layout.value
+  if (!grid) return false
+  if (e.button !== 1 && !(e.button === 0 && spaceHeld.value)) return false
+  e.preventDefault()
+  pan = { pointerId: e.pointerId, button: e.button, startX: e.clientX, startY: e.clientY, from: grid }
+  panning.value = true
+  tools.hover(null)
+  try {
+    canvas.value?.setPointerCapture?.(e.pointerId)
+  } catch {
+    // 捕まえられなくても、ドラッグはできる
+  }
+  return true
+}
+
+function endPan(e: PointerEvent): void {
+  if (!pan) return
+  // 左ドラッグで動かしたときは、続いて来るクリックで選ばない
+  if (pan.button === 0) suppressClick = true
+  pan = null
+  panning.value = false
+  endDrag(e)
+}
+
+function onWheel(e: WheelEvent): void {
+  const grid = layout.value
+  const p = canvasPoint(e)
+  if (!grid || !p) return
+  const s = size.value
+  const next = zoomAt(grid, p.x, p.y, wheelZoomFactor(e.deltaY, e.deltaMode))
+  if (next === grid || !s) return
+  zoomed.value = clampToView(next, s, width.value, height.value)
+  onHover(e)
+}
+
+/** 中ボタンを押したときの、ブラウザの自動スクロールを止める */
+function onMouseDown(e: MouseEvent): void {
+  if (e.button === 1) e.preventDefault()
+}
+
+function isTyping(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  return target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT'
+}
+
+function onKeyDown(e: KeyboardEvent): void {
+  if (e.code !== 'Space' || !pointerInside || isTyping(e.target)) return
+  // ページのスクロールや、フォーカスのあるボタンを押すのを止める
+  e.preventDefault()
+  spaceHeld.value = true
+}
+
+function onKeyUp(e: KeyboardEvent): void {
+  if (e.code !== 'Space' || !spaceHeld.value) return
+  e.preventDefault()
+  spaceHeld.value = false
+}
+
+function onBlur(): void {
+  spaceHeld.value = false
+}
+
 function onPointerDown(e: PointerEvent): void {
   suppressClick = false
   drag = null
+  if (startPan(e)) return
   if (e.button !== 0 || tools.activeToolId !== 'select') return
   const bp = blueprint.value
   const grid = layout.value
@@ -253,6 +355,10 @@ function endDrag(e: PointerEvent): void {
 }
 
 function onPointerUp(e: PointerEvent): void {
+  if (pan && pan.pointerId === e.pointerId) {
+    endPan(e)
+    return
+  }
   if (!drag || drag.pointerId !== e.pointerId) return
   updateDrag(e)
   // 範囲を選んだときは、続いて来るクリックで選び直さない
@@ -261,17 +367,34 @@ function onPointerUp(e: PointerEvent): void {
 }
 
 function onPointerCancel(e: PointerEvent): void {
+  if (pan) endPan(e)
   if (drag) endDrag(e)
 }
 
-function onPointerMove(e: PointerEvent): void {
+function onHover(e: MouseEvent): void {
   const target = pickAt(e)
   // 同じマスの中で動いたときは知らせない（描き直しを減らす）
   if (!samePos(target, tools.hoverTarget)) tools.hover(target)
+}
+
+function onPointerMove(e: PointerEvent): void {
+  pointerInside = true
+  if (pan && pan.pointerId === e.pointerId) {
+    const s = size.value
+    const next = panBy(pan.from, e.clientX - pan.startX, e.clientY - pan.startY)
+    zoomed.value = s ? clampToView(next, s, width.value, height.value) : next
+    return
+  }
+  onHover(e)
   if (drag && drag.pointerId === e.pointerId) updateDrag(e)
 }
 
+function onPointerEnter(): void {
+  pointerInside = true
+}
+
 function onPointerLeave(): void {
+  pointerInside = false
   tools.hover(null)
 }
 
@@ -308,6 +431,9 @@ onMounted(() => {
     onThemeChange()
     darkQuery.addEventListener('change', onThemeChange)
   }
+  window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keyup', onKeyUp)
+  window.addEventListener('blur', onBlur)
   // 文字のフォントが読み込まれたら、目盛りと略称を描き直す
   void document.fonts?.ready.then(() => draw())
 })
@@ -315,7 +441,11 @@ onMounted(() => {
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   darkQuery?.removeEventListener('change', onThemeChange)
+  window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keyup', onKeyUp)
+  window.removeEventListener('blur', onBlur)
   drag = null
+  pan = null
   tools.hover(null)
 })
 </script>
@@ -325,12 +455,16 @@ onBeforeUnmount(() => {
     <canvas
       ref="canvas"
       aria-label="今の段のマス目"
+      :class="{ grab: spaceHeld, grabbing: panning }"
+      @pointerenter="onPointerEnter"
       @pointermove="onPointerMove"
       @pointerleave="onPointerLeave"
       @pointerdown="onPointerDown"
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
       @click="onClick"
+      @mousedown="onMouseDown"
+      @wheel.prevent="onWheel"
     ></canvas>
     <div class="compass" aria-label="上が北（−Z）">
       <span class="arrow" aria-hidden="true">↑</span> 北（−Z）
@@ -350,6 +484,14 @@ canvas {
   width: 100%;
   height: 100%;
   cursor: crosshair;
+}
+
+canvas.grab {
+  cursor: grab;
+}
+
+canvas.grabbing {
+  cursor: grabbing;
 }
 
 .compass,
