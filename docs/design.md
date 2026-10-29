@@ -735,8 +735,38 @@ class CreateStressPlugin implements CalcPlugin {
 
 - レシピの処理時間を使う機械（石臼・粉砕ホイール・ソー・ミキサー）のために、`CalcModpack` に `recipeBook?(): Promise<RecipeBook>` を足す。持たない実装もあるので省略できる。
 - レシピは jar の読み込みのときに `data/<namespace>/recipes/`（1.21 は `recipe/`）から、Create の処理の種類だけを材料と処理時間に縮めて `JarSummary.recipes` に入れる。形を変えたので保存の版を 3 にした。
-- Modpack の `kubejs/data/` のレシピは jar より優先する。`kubejs/server_scripts/` のスクリプトのレシピは読めないので、レシピを変えるスクリプトがあることだけを調べ、仮定に載せる。
+- Modpack の `kubejs/data/` のレシピは jar より優先する。`kubejs/server_scripts/` のスクリプトは動かして、レシピとタグの変更を集める（下の「KubeJS のスクリプトを動かす」）。
 - Worker の中のプラグインは、画面側の Modpack に `recipes` で問い合わせる（`config`・`list` と同じ形）。
+
+#### KubeJS のスクリプトを動かす（#145）
+
+KubeJS のスクリプトのレシピは、スクリプトを作り物の KubeJS の上で動かして集める。何を集め、どう当てはめるかは [create-throughput.md](create-throughput.md)「KubeJS のスクリプトのレシピ」。ここには動かし方と安全の決まりを書く。
+
+**Modpack のコードを動かす。** スクリプトは Modpack の作者が書いたコードで、アプリの作者は中身を確かめていない。次の決まりで、スクリプトが利用者のファイルとネットワークに触れられないようにする。
+
+- **JS で書いた JS の処理系で動かす。** `eval`・`new Function` は使わない（デスクトップ版の CSP は `script-src 'self'` で、これを緩めない）。処理系は sval（MIT License、acorn で構文を読む）を使う。スクリプトから見える大域は、作り物の KubeJS（`onEvent`・`ServerEvents`・`Item` など）と JavaScript の組み込み（`Math`・`JSON`・`Array` など）だけにし、`self`・`globalThis`・`fetch` などの本物の大域は渡さない。
+- **ネットワークの関数を消した Web Worker の中で動かす。** 処理系が外に抜ける穴があったときのために、Worker は動かす前に自分の大域から `fetch`・`XMLHttpRequest`・`WebSocket`・`EventSource`・`importScripts`・`indexedDB`・`caches`・`BroadcastChannel`・`Worker` を消す。結果を返す `postMessage` は、消す前に取っておく。
+- **ファイルを渡さない。** Worker に渡すのは、画面側で読んだスクリプトの文字列と、当てはめる前のレシピ・タグ・Mod の一覧だけ。`FileSource` は渡さない。
+- **止める。** 1回の読み込みにつき Worker を1つ作り、終わったら止める。時間の上限（20 秒）を超えたら画面側から `terminate` する。処理系の1つの命令ごとに数える上限も付け、止まらない輪を早めに打ち切る。
+- 動かすのは Modpack を読み込んだときだけ。設計図・プラグインの計算からは動かさない。
+
+**置き場所。** 層の決まりに合わせて分ける。
+
+| 層 | ファイル | 中身 |
+| --- | --- | --- |
+| io | `io/modpack/kubejsScripts/`（`scriptOrder.ts`・`fakeKubeJs.ts`・`recipeChanges.ts`） | 動かす順、作り物の KubeJS、集めた変更（`ScriptRecipeChanges`：足す・消す・置き換える・タグの変更、再現しなかった呼び出しとエラー）と、それをレシピに当てはめる関数。処理系の呼び出しもここ（Worker の外でもテストできる） |
+| io | `io/modpack/modpackLoader.ts` | jar と kubejs/data を読んだあと、`ScriptRunner`（差し替えられる関数）でスクリプトを動かし、`RecipeBook` に当てはめる。jar を開く `JarScanner` と同じく、Worker の実装は外から渡す |
+| workers | `workers/kubejsScripts.worker.ts`・`kubejsScriptsClient.ts` | `ScriptRunner` の Worker の実装。大域を消し、時間の上限で止める |
+
+- `RecipeBook.scriptsChangeRecipes` は、スクリプトを動かした結果のまとめ（集めた数・再現しなかった呼び出し・エラー・打ち切ったか）に置き換え、プラグインはそれを仮定に載せる。
+- スクリプトの結果は IndexedDB に保存しない（jar・kubejs/data のレシピの全体を元にするので、jar の保存とは鍵が合わない）。毎回の読み込みで動かす。進み具合の表示に「KubeJS のスクリプトを動かしています」の段階を足す。
+- 集めたレシピの出どころは、jar のレシピと同じく `modpack` にし、作り物で集めたことは仮定に載せる。
+
+**テスト。** スクリプトはテストの中で文字列として作る（他人の Modpack のスクリプトはリポジトリに入れない）。
+
+- 1.18 の書き方と 1.19 からの書き方で、足す・消す・置き換える・タグが集まる。
+- 知らない呼び出し、エラーを投げるファイル、止まらない輪があっても、残りが動き、読み込みが終わる。
+- スクリプトから `fetch`・`globalThis`・`self`・`Function`・`constructor` を通した抜け道に触れても、何も起きない（例外か undefined）。
 
 ## ゲームとの行き来
 

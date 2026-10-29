@@ -122,23 +122,69 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 | --- | --- |
 | Mod の jar の `data/<namespace>/recipes/`（1.21 は `recipe/`） | Mod が持つレシピ |
 | Modpack の `kubejs/data/<namespace>/recipes/` | KubeJS のデータパックで足したレシピ。同じ ID なら jar より優先 |
+| Modpack の `kubejs/server_scripts/` | KubeJS のスクリプト。作り物の KubeJS の上で動かし、レシピを足す・消す・置き換える操作を集めて、上の2つに当てはめる（下の「KubeJS のスクリプトのレシピ」。#145） |
 
 - 処理時間の項目は、1.18 は `processingTime`、1.21（Create 6.0）は `processing_time`。どちらも書いていなければ 0。
 - 材料のうち液体（`amount` を持つもの、`fluid`・`fluidTag`）は見ない。
 - 材料の形は `{ item }`・`{ tag }`・その配列のほか、NeoForge のいずれかの材料 `{ type: "neoforge:compound", ingredients: [...] }` の中も読む（Create 6.0 の Mod 連携のレシピ。`create:milling/compat/...` など、Create 6.0.10 の加工のレシピ 553 のうち 353 がこの形。2026-10-28 に確認）。1.21.2 からの文字列の形（`"minecraft:wheat"`、`"#c:crops/wheat"`）も読む。
 - 読むのは `type` が `create:milling`・`create:crushing`・`create:cutting`・`create:mixing` のものだけ。材料（`ingredients` の `item` と `tag`）と処理時間（`processingTime`）だけを持つ。
 - 条件付きのレシピ（`conditions`、`fabric:load_conditions`）の条件は見ない。
-- **KubeJS のスクリプト（`kubejs/server_scripts/`）で足した・変えたレシピは読めない。** スクリプトがレシピを変えているとき（`recipes` のイベントがあるとき）は、仮定に載せる。手元の Create Astral は、Create の粉砕・混ぜるレシピをスクリプトで変えている（`server_scripts/recipes/create/` など。2026-10-27 に確認）。
+- KubeJS のスクリプト（`kubejs/server_scripts/`）で足した・変えたレシピは、スクリプトを動かして集める（下の「KubeJS のスクリプトのレシピ」）。手元の Create Astral は、Create の処理のレシピのほとんどをスクリプトで足している（2026-10-29 に確認。石臼 約 49・粉砕 約 77・ソー 約 49・ミキサー 約 361・プレス 約 14・圧縮 約 97。`kubejs/data/` のレシピ JSON は 52 個だけ）。
 - ワールドのデータパック（`saves/<ワールド>/datapacks/`）は、この版では読まない。
 
 ### どのレシピか
 
 1. 物の入口からたどって、その機械に届く物が分かれば（下の「物の通り道」）、それを材料に持つレシピを使う。
 2. 1 で決まらず、機械の生データに入っている物（入れ物の中身）があれば、それを材料に持つレシピを使う。
-3. 材料は、アイテムの ID とタグの両方で照らす。タグは jar・kubejs/data の `data/<ns>/tags/items/`（1.21 は `tags/item/`）を読み、入れ子のタグをたどって平らにしたもの。`replace: true` のファイルは前のファイルの中身を捨てる。KubeJS のスクリプトで変えたタグは入らない。
+3. 材料は、アイテムの ID とタグの両方で照らす。タグは jar・kubejs/data の `data/<ns>/tags/items/`（1.21 は `tags/item/`）を読み、入れ子のタグをたどって平らにしたもの。`replace: true` のファイルは前のファイルの中身を捨てる。KubeJS のスクリプトのタグのイベントで足した・消したものも当てはめる（下の「KubeJS のスクリプトのレシピ」）。
 4. 材料に合うレシピが2つ以上あれば、レシピの ID の名前順で最初のものを使い、仮定に載せる。
 5. 1〜4 で決まらなければ、その種類のレシピの処理時間の範囲（最短〜最長）を出し、時間はCreate のコードの初期値（石臼・粉砕 100、ソー 50、ミキサー 100 として r = 1）で計算する。初期値を使ったことを仮定に載せる。
 6. Modpack がなければ、5 の初期値だけで計算する。
+
+### KubeJS のスクリプトのレシピ（#145）
+
+スクリプトはレシピを配列に並べ、`forEach` でまとめて登録することが多い（Create Astral の `recipes/create/milling.js` など）。文字列を探すだけでは取れないので、スクリプトを作り物の KubeJS の上で動かし、呼ばれた操作を集める。動かし方と安全の決まりは [design.md](design.md)「KubeJS のスクリプトを動かす」。
+
+**動かす順。** `kubejs/server_scripts/` の下の `.js` を、全部同じ1つの大域の中で、次の順に動かす。
+
+- 先頭のコメント `// priority: <数>` の大きいものから。書いていなければ 0。同じなら、`server_scripts/` からのパスの名前順。
+- `// ignored: true` のファイルは動かさない。
+- この順は KubeJS のソースで確かめてから作る（未確認）。
+
+**イベント。** 登録だけを受け付け、レシピとタグのイベントだけを、全ファイルを動かし終えてから、登録した順に呼ぶ。ほかのイベント（プレイヤー・ブロック・コマンドなど）は呼ばない。
+
+| 書き方 | KubeJS の版（Minecraft） | 呼ぶもの |
+| --- | --- | --- |
+| `onEvent('recipes', fn)` | 1.18 | レシピ |
+| `onEvent('item.tags', fn)` / `onEvent('tags.items', fn)` | 1.18 | アイテムのタグ |
+| `ServerEvents.recipes(fn)` | 1.19〜1.21 | レシピ |
+| `ServerEvents.tags('item', fn)` | 1.19〜1.21 | アイテムのタグ |
+
+**レシピのイベントで扱う呼び出し。** レシピは、この節の上の「読む場所」と同じ形（材料・処理時間・できる物）に直す。読むのは同じ6つの種類だけ。
+
+| 呼び出し | すること |
+| --- | --- |
+| `event.recipes.createMilling(出る物, 材料)` など（`create` + 種類の名前） | レシピを足す。1.18 の kubejs-create の書き方 |
+| `event.recipes.create.milling(出る物, 材料)` など | レシピを足す。1.19 からの書き方 |
+| 上の2つに続く `.processingTime(n)`・`.id(id)` | 処理時間・ID を決める。`.heatRequirement(…)` など、ほかは何もしない |
+| `event.custom(json)` | JSON を、jar のレシピ JSON と同じ読み方で読む |
+| `event.remove(条件)` | 条件に合うレシピを消す |
+| `event.replaceInput(条件, 元, 先)`・`event.replaceOutput(条件, 元, 先)` | 条件に合うレシピの材料・できる物を置き換える |
+
+- 出る物・材料には、文字列（`"minecraft:stone"`、`"3x minecraft:stone"`、`"#c:ores/iron"`）、`Item.of(id, 数)`、`.withChance(確率)`、`Ingredient.of(…)`、`{ item, count, chance }`、`{ tag }`、それらの配列を受け付ける。液体（`Fluid.of(…)`、`{ fluid, amount }`）は、ファイルのレシピと同じく見ない。
+- 条件（`event.remove` などの1つ目）は、`id`・`type`・`output`・`input`・`mod` と、その配列（どれか）・オブジェクト（全部）・`{ not: … }` を扱う。照らす相手は、その時点のすべてのレシピ（jar・kubejs/data・それまでにスクリプトで足したもの）。知らない項目のある条件は、何も消さずに仮定に載せる。
+- 操作は呼ばれた順に当てはめる。ID を決めずに足したレシピの ID は `kubejs:script/<ファイルのパス>/<その中の番号>` にする。
+- `event.forEachRecipe`・`event.findRecipes` は、上の6つの種類のレシピだけを渡す。ほかの種類（Farmer's Delight の料理など）は渡さないので、それを元に作るレシピは集まらない。
+
+**タグのイベントで扱う呼び出し。** `event.add(タグ, アイテム)`・`event.remove(タグ, アイテム)`・`event.removeAll(タグ)`。jar・kubejs/data のタグを読んだあとに当てはめる。
+
+**作り物の大域。** `Item`・`Ingredient`・`Fluid` のほか、`Platform.isLoaded(modId)` は Modpack の Mod の一覧で答える。`console.log` などは何もしない。`java(…)`・`Java.loadClass(…)`・`Utils`・`JsonIO`・`global` の知らない項目と、上の表にない呼び出しは、何もしない作り物の値を返し、名前を数えて仮定に載せる（「KubeJS のスクリプトの呼び出しのうち、アプリで再現しないもの：…」）。
+
+**うまく動かないとき。**
+
+- ファイルを動かしていてエラーが起きたら、そのファイルの残りを飛ばし、次のファイルへ進む。イベントの中のエラーは、そのイベントの残りを飛ばす。どちらもファイルの名前とエラーを仮定に載せる。
+- 全体で時間の上限（20 秒）を超えたら打ち切り、スクリプトの結果は使わない（jar・kubejs/data のレシピだけで計算し、仮定に載せる）。
+- スクリプトを動かして集めたレシピを使ったときは、仮定に「KubeJS のスクリプトのレシピは、アプリの中で作り物の KubeJS を使って集めた。ゲームと違うことがある（足す n・消す m・置き換える k）」と載せる。
 
 ## 物の通り道（#127）
 
@@ -225,7 +271,8 @@ Create 6.0（1.21.1）のソースと比べた（2026-10-27）。上の規則は
 - 物の入口を置かないときの、設計図全体の流れ。
 - 扇風機による処理（洗う・焼く・燻す）と、シュートの扇風機の風。
 - 液体（ポンプ・パイプ）の流量。
-- KubeJS のスクリプトのレシピ、ワールドのデータパックのレシピ。
+- ワールドのデータパックのレシピ。
+- KubeJS のスクリプトのうち、上の「KubeJS のスクリプトのレシピ」の表にない呼び出しで作るレシピ（`forEachRecipe` でほかの種類から作るもの、Java のクラスを使うものなど）。
 - 動く仕掛け（Contraption）のドリルやハーベスター。
 
 ## ゲームで確かめる手順
@@ -242,6 +289,8 @@ Create 6.0（1.21.1）のソースと比べた（2026-10-27）。上の規則は
 - ベルトに 64 個の山がそのまま乗るか、ファンネルの1回の数がベルトの空きで減るか。
 - ミキサーの1回の前後の tick（下ろす・上げる）の正確な数（±1 tick）。
 - ソーがベルトの上の物を処理するときの時間（ベルトの処理は別の経路）。
+- KubeJS がスクリプトのファイルを動かす順と、ファイルどうしで大域を分けるかどうか（版ごとに KubeJS のソースで確かめる）。
+- 作り物の KubeJS で集めたレシピが、ゲームの中のレシピ（JEI などで見えるもの）と同じになるか（Create Astral で数を比べる）。
 
 ## 参照したソース
 
