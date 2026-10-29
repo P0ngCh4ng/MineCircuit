@@ -3,6 +3,7 @@
 import BlueprintFacts from '../document/BlueprintFacts.vue'
 import NewBlueprintButton from '../document/NewBlueprintButton.vue'
 import OpenFileButton from '../document/OpenFileButton.vue'
+import ExportButton from '../edit/ExportButton.vue'
 import ModpackLoadStatus from '../ModpackLoadStatus.vue'
 import ModpackPicker from '../ModpackPicker.vue'
 import { useModpackStore } from '../stores/modpack'
@@ -16,13 +17,14 @@ const content = useModpackContentStore()
 
 <template>
   <header class="top-bar">
-    <!-- 1段目：設計図の選択・開く、Modpack、設計図の情報 -->
+    <!-- 1段目：設計図（新規・開く・書き出し）、Modpack、設計図の情報 -->
     <div class="row">
       <span class="brand">MineCircuit</span>
       <div class="bar-group">
         <span class="bar-label">設計図</span>
         <NewBlueprintButton />
         <OpenFileButton />
+        <ExportButton />
       </div>
       <details class="modpack">
         <summary>
