@@ -16,8 +16,11 @@ const session = useDocumentSession()
 const view = useViewStore()
 const search = useSearchStore()
 const noBlueprint = computed(() => session.current.value === null)
-/** 視点は3D表示だけで使う */
+/** 視点（斜め・上・正面・横）は3D表示だけで使う。「全体を表示」は2Dでも使う（#155） */
 const noCamera = computed(() => noBlueprint.value || view.mode !== '3d')
+const fitTitle = computed(() =>
+  view.mode === '2d' ? '段全体が入る大きさに戻す' : '今の向きのまま、設計図全体が入るようにする',
+)
 const nav = useLayerNavigation()
 const layerText = computed(() => (nav.height.value > 0 ? `${nav.current.value + 1} / ${nav.height.value}` : '– / –'))
 
@@ -44,7 +47,7 @@ function onModeChange(e: Event): void {
       >
         {{ v.label }}
       </button>
-      <button type="button" data-view="fit" title="今の向きのまま、設計図全体が入るようにする" :disabled="noCamera" @click="view.fitAll()">
+      <button type="button" data-view="fit" :title="fitTitle" :disabled="noBlueprint" @click="view.fitAll()">
         全体を表示
       </button>
     </div>

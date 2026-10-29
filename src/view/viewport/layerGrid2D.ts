@@ -18,8 +18,8 @@ export interface GridPadding2D {
 
 export const DEFAULT_GRID_PADDING: GridPadding2D = Object.freeze({ left: 96, top: 56, right: 24, bottom: 24 })
 
-/** 1マスの最小の大きさ（px）。これより小さくはしない（はみ出す） */
-export const MIN_CELL_SIZE = 4
+/** 1マスの最小の大きさ（px）。これより小さくはしない（はみ出した分は、2D表示を動かして見る。#155） */
+export const MIN_CELL_SIZE = 1
 /** 1マスの最大の大きさ（px）。小さい設計図が大きくなりすぎないようにする */
 export const MAX_CELL_SIZE = 64
 /** 略称を出す最小のマスの大きさ（px） */
