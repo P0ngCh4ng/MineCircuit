@@ -16,7 +16,9 @@ import {
   type GameFolder,
   type ModpackLoadProgress,
 } from '../../io/modpack/modpackLoader'
+import type { ScriptRunner } from '../../io/modpack/kubejsScripts/scriptTypes'
 import { createWorkerJarScanner } from '../../workers/jarScanClient'
+import { createWorkerScriptRunner } from '../../workers/kubejsScriptsClient'
 import { useGameFolderStore } from './gameFolders'
 import { useModpackStore } from './modpack'
 
@@ -27,6 +29,8 @@ export interface ModpackLoadEnvironment {
   cache: JarCache | null
   /** null ならその場で開く */
   scan: JarScanner | null
+  /** KubeJS のスクリプトを動かす関数（Worker）。省略・null なら動かさない */
+  scripts?: ScriptRunner | null
 }
 
 let environment: ModpackLoadEnvironment | null = null
@@ -40,6 +44,7 @@ function defaultEnvironment(): ModpackLoadEnvironment {
   return {
     cache: IndexedDbJarCache.supported() ? new IndexedDbJarCache() : null,
     scan: createWorkerJarScanner()?.scan ?? null,
+    scripts: createWorkerScriptRunner(),
   }
 }
 
@@ -79,6 +84,7 @@ export const useModpackContentStore = defineStore('modpackContent', () => {
       scan: environment.scan ?? undefined,
       signal: own.signal,
       gameFolders,
+      scripts: environment.scripts ?? null,
       onProgress: (p) => {
         if (controller === own) progress.value = p
       },
