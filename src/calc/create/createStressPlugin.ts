@@ -3,6 +3,7 @@
 
 import type { Blueprint } from '../../domain/blueprint'
 import type { Vec3 } from '../../domain/vec3'
+import type { ScriptRunSummary } from '../../io/modpack/kubejsScripts/scriptTypes'
 import type { RecipeBook } from '../../io/modpack/recipes'
 import { AssumptionLog } from '../assumptionLog'
 import type {
@@ -147,11 +148,39 @@ async function loadRecipes(ctx: CalcContext, log: AssumptionLog): Promise<Recipe
   const pack = ctx.pack
   if (!pack?.recipeBook) return null
   try {
-    return await pack.recipeBook()
+    const book = await pack.recipeBook()
+    if (book.scripts) for (const message of scriptAssumptions(book.scripts)) log.add(message)
+    return book
   } catch {
     log.add('Modpack のレシピを読めなかったので、処理時間は Create の初期値で計算した')
     return null
   }
+}
+
+/** 仮定に載せる、ほかの項目の数 */
+const LISTED = 8
+
+function listed(items: readonly string[]): string {
+  const shown = items.slice(0, LISTED).join('、')
+  return items.length > LISTED ? `${shown}、ほか ${items.length - LISTED} 件` : shown
+}
+
+/** KubeJS のスクリプトを動かした結果の仮定（docs/create-throughput.md「KubeJS のスクリプトのレシピ」） */
+export function scriptAssumptions(summary: ScriptRunSummary): string[] {
+  if (summary.failed !== null) return [`KubeJS のスクリプトを使えなかった（${summary.failed}）。スクリプトのレシピは入っていない`]
+  const messages: string[] = []
+  if (summary.added + summary.removed + summary.replaced > 0) {
+    messages.push(
+      `KubeJS のスクリプトのレシピは、アプリの中で作り物の KubeJS を使って集めた。ゲームと違うことがある（足す ${summary.added}・消す ${summary.removed}・置き換える ${summary.replaced}）`,
+    )
+  }
+  if (summary.unsupported.length > 0) {
+    messages.push(`KubeJS のスクリプトの呼び出しのうち、アプリで再現しないもの：${listed(summary.unsupported.map((u) => `${u.name}（${u.count} 回）`))}`)
+  }
+  if (summary.errors.length > 0) {
+    messages.push(`KubeJS のスクリプトでエラーが起きた所は、その残りを飛ばした：${listed(summary.errors.map((e) => `${e.path}（${e.message}）`))}`)
+  }
+  return messages
 }
 
 /** 回らないブロック（ファンネル・シュート）のプローブ。回転のネットワークはない */

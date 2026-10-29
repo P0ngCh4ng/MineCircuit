@@ -372,3 +372,67 @@ describe('jarCacheKey', () => {
     expect(k1.startsWith(`v${JAR_SUMMARY_FORMAT}|a.jar|3|h`)).toBe(true)
   })
 })
+
+describe('ModpackLoader（KubeJS のスクリプトを動かす。#145）', () => {
+  const json = (v: unknown) => strToU8(JSON.stringify(v))
+  function createJar(): Uint8Array {
+    return fakeJar({
+      forgeMods: [{ modId: 'create', displayName: 'Create' }],
+      files: {
+        'data/create/recipes/milling/wheat.json': json({ type: 'create:milling', ingredients: [{ item: 'minecraft:wheat' }], processingTime: 150 }),
+        'data/create/recipes/milling/bone.json': json({ type: 'create:milling', ingredients: [{ item: 'minecraft:bone' }], processingTime: 50 }),
+        'data/c/tags/items/grain.json': json({ values: ['minecraft:wheat'] }),
+      },
+    })
+  }
+  const scripts = {
+    'kubejs/server_scripts/constants.js': strToU8('// priority: 10\nconst TIME = 200'),
+    'kubejs/server_scripts/recipes/milling.js': strToU8(`
+      onEvent('recipes', event => {
+        event.remove({ id: 'create:milling/bone' })
+        event.recipes.createMilling('create:cinder_flour', 'minecraft:netherrack').processingTime(TIME)
+      })
+      onEvent('item.tags', event => event.add('c:grain', 'minecraft:rice'))
+    `),
+  }
+
+  it('ScriptRunner を渡すと、スクリプトで足す・消す・タグを変えたレシピの本を作る', async () => {
+    const { inlineScriptRunner } = await import('./kubejsScripts/runScripts')
+    const source = new MemoryFileSource([['mods/create.jar', createJar()], ...Object.entries(scripts)])
+    const pack = await new ModpackLoader(source, { scripts: inlineScriptRunner }).load()
+    const book = await pack.recipeBook()
+    expect(book.recipes.map((r) => [r.id, r.duration])).toEqual([
+      ['create:milling/wheat', 150],
+      ['kubejs:script/recipes/milling/1', 200],
+    ])
+    expect(book.itemTags['c:grain']).toEqual(['minecraft:wheat', 'minecraft:rice'])
+    expect(book.scriptsChangeRecipes).toBe(false)
+    expect(book.scripts).toMatchObject({ files: 2, added: 1, removed: 1, replaced: 0, errors: [], failed: null })
+  })
+
+  it('ScriptRunner がなければスクリプトは動かさず、レシピを変えるスクリプトがあることだけを知らせる', async () => {
+    const source = new MemoryFileSource([['mods/create.jar', createJar()], ...Object.entries(scripts)])
+    const book = await (await new ModpackLoader(source).load()).recipeBook()
+    expect(book.recipes.map((r) => r.id).sort()).toEqual(['create:milling/bone', 'create:milling/wheat'])
+    expect(book.scriptsChangeRecipes).toBe(true)
+    expect(book.scripts).toBeUndefined()
+  })
+
+  it('動かせなかったときは jar のレシピを使い、失敗を本に残す。スクリプトがなければ動かさない', async () => {
+    const source = new MemoryFileSource([['mods/create.jar', createJar()], ...Object.entries(scripts)])
+    const failing = async () => ({
+      recipes: [],
+      itemTags: {},
+      summary: { files: 0, added: 0, removed: 0, replaced: 0, unsupported: [], errors: [], failed: '20 秒で終わらなかったので打ち切った' },
+    })
+    const book = await (await new ModpackLoader(source, { scripts: failing }).load()).recipeBook()
+    expect(book.recipes.map((r) => r.id).sort()).toEqual(['create:milling/bone', 'create:milling/wheat'])
+    expect(book.scriptsChangeRecipes).toBe(true)
+    expect(book.scripts?.failed).toBe('20 秒で終わらなかったので打ち切った')
+
+    let called = 0
+    const none = new MemoryFileSource([['mods/create.jar', createJar()]])
+    await new ModpackLoader(none, { scripts: async () => (called++, failing()) }).load()
+    expect(called).toBe(0)
+  })
+})

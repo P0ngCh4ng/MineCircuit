@@ -744,29 +744,39 @@ KubeJS のスクリプトのレシピは、スクリプトを作り物の KubeJS
 
 **Modpack のコードを動かす。** スクリプトは Modpack の作者が書いたコードで、アプリの作者は中身を確かめていない。次の決まりで、スクリプトが利用者のファイルとネットワークに触れられないようにする。
 
-- **JS で書いた JS の処理系で動かす。** `eval`・`new Function` は使わない（デスクトップ版の CSP は `script-src 'self'` で、これを緩めない）。処理系は sval（MIT License、acorn で構文を読む）を使う。スクリプトから見える大域は、作り物の KubeJS（`onEvent`・`ServerEvents`・`Item` など）と JavaScript の組み込み（`Math`・`JSON`・`Array` など）だけにし、`self`・`globalThis`・`fetch` などの本物の大域は渡さない。
-- **ネットワークの関数を消した Web Worker の中で動かす。** 処理系が外に抜ける穴があったときのために、Worker は動かす前に自分の大域から `fetch`・`XMLHttpRequest`・`WebSocket`・`EventSource`・`importScripts`・`indexedDB`・`caches`・`BroadcastChannel`・`Worker` を消す。結果を返す `postMessage` は、消す前に取っておく。
+- **JS で書いた JS の処理系で動かす。** `eval`・`new Function` は使わない（デスクトップ版の CSP は `script-src 'self'` で、これを緩めない）。処理系は sval 0.6.12（MIT License、acorn で構文を読む）を使う。
+- **sval の sandBox は仕切りにならないので、大域を自分で削る**（`runScripts.ts`）。sval の sandBox は、ホストの大域（`fetch`・`process` など）を写した入れ物を作り、そのプロトタイプにホストの大域そのものを隠し持つ（2026-10-29 に Node で確かめた）。そこで次のようにする。
+  - 写した大域から、JavaScript の組み込みの一部（`Object`・`Array`・`Math`・`JSON`・`Map` など）を除いて消す。`Function`・`eval`・`Proxy`・`Reflect` も消す。
+  - プロトタイプを、知らない名前の受け皿（何もしない値を返す Proxy）に替える。ホストの機能の名前（`fetch`・`eval`・`Function`・`process` など）と sval が中で使う隠れた名前（`noctor…` など。`svalNames.ts`）には答えない。
+  - そこへ作り物の KubeJS を置く。
+- **関数から `Function` に届く道は、Worker の中で消す。** sval の中で作った関数は本物の関数なので、`(() => 1).constructor` が本物の `Function` になる。Worker は動かす前に、普通・async・generator・async generator の関数のプロトタイプの `constructor` を消す（`kubejsScriptsHarden.ts`）。sval は動くことを確かめた（クラス・generator を含む）。
+- **ネットワークの関数を消した Web Worker の中で動かす。** それでも処理系から外に抜けられたときのために、Worker は動かす前に、自分の大域とそのプロトタイプから `fetch`・`XMLHttpRequest`・`WebSocket`・`WebTransport`・`EventSource`・`importScripts`・`indexedDB`・`caches`・`BroadcastChannel`・`Worker`・`SharedWorker`・`navigator`・`eval`・`Function`・`setTimeout`・`setInterval` を消す。結果を返す `postMessage` は、消す前に取っておく。
 - **ファイルを渡さない。** Worker に渡すのは、画面側で読んだスクリプトの文字列と、当てはめる前のレシピ・タグ・Mod の一覧だけ。`FileSource` は渡さない。
-- **止める。** 1回の読み込みにつき Worker を1つ作り、終わったら止める。時間の上限（20 秒）を超えたら画面側から `terminate` する。処理系の1つの命令ごとに数える上限も付け、止まらない輪を早めに打ち切る。
+- **止める。** 1回の読み込みにつき Worker を1つ作り、終わったら止める。時間の上限（20 秒）を超えたら画面側から `terminate` する。sval には命令を数える口がないので、止まらない輪も、この時間の上限で止める。
+- **Worker の外では動かさない。** `ModpackLoader` は `ScriptRunner` を渡されたときだけ動かす。画面は Worker の実装だけを渡し、Worker が使えなければ動かさない。その場で動かす実装（`inlineScriptRunner`）はテストだけで使う。
 - 動かすのは Modpack を読み込んだときだけ。設計図・プラグインの計算からは動かさない。
 
 **置き場所。** 層の決まりに合わせて分ける。
 
 | 層 | ファイル | 中身 |
 | --- | --- | --- |
-| io | `io/modpack/kubejsScripts/`（`scriptOrder.ts`・`fakeKubeJs.ts`・`recipeChanges.ts`） | 動かす順、作り物の KubeJS、集めた変更（`ScriptRecipeChanges`：足す・消す・置き換える・タグの変更、再現しなかった呼び出しとエラー）と、それをレシピに当てはめる関数。処理系の呼び出しもここ（Worker の外でもテストできる） |
-| io | `io/modpack/modpackLoader.ts` | jar と kubejs/data を読んだあと、`ScriptRunner`（差し替えられる関数）でスクリプトを動かし、`RecipeBook` に当てはめる。jar を開く `JarScanner` と同じく、Worker の実装は外から渡す |
-| workers | `workers/kubejsScripts.worker.ts`・`kubejsScriptsClient.ts` | `ScriptRunner` の Worker の実装。大域を消し、時間の上限で止める |
+| io | `io/modpack/kubejsScripts/scriptFiles.ts` | `server_scripts/` の `.js` を読み、先頭のコメントを読んで動かす順に並べる |
+| io | `io/modpack/kubejsScripts/scriptTypes.ts` | Worker とやりとりする形。渡すもの（`ScriptRunInput`：スクリプト・レシピ・タグ・Mod の一覧）と結果（`ScriptRunOutput`：当てはめたあとのレシピ・タグと、まとめの `ScriptRunSummary`） |
+| io | `io/modpack/kubejsScripts/fakeKubeJs.ts`・`scriptValues.ts` | 作り物の KubeJS。呼ばれた操作を、その場でレシピとタグに当てはめる。物の書き方をレシピのデータに直す |
+| io | `io/modpack/kubejsScripts/runScripts.ts`・`svalNames.ts` | sval の大域を削り、ファイルを順に動かしてからイベントを呼ぶ |
+| io | `io/modpack/modpackLoader.ts`・`modpack.ts` | jar・kubejs/data・Minecraft 本体を読んだあと、`ScriptRunner`（外から渡す関数）でスクリプトを動かし、失敗していなければその結果で `RecipeBook` を作る |
+| workers | `workers/kubejsScripts.worker.ts`・`kubejsScriptsClient.ts`・`kubejsScriptsHarden.ts`・`kubejsScriptsProtocol.ts` | `ScriptRunner` の Worker の実装。大域を削り、時間の上限で止める |
 
-- `RecipeBook.scriptsChangeRecipes` は、スクリプトを動かした結果のまとめ（集めた数・再現しなかった呼び出し・エラー・打ち切ったか）に置き換え、プラグインはそれを仮定に載せる。
+- `RecipeBook` に、スクリプトを動かした結果のまとめ `scripts?: ScriptRunSummary`（集めた数・再現しなかった呼び出し・エラー・失敗）を足す。プラグイン（`createStressPlugin.ts` の `scriptAssumptions`）がそれを仮定に載せる。`scriptsChangeRecipes` は「レシピを変えるスクリプトがあるのに、動かしていない・動かせなかった」の意味にする。
 - スクリプトの結果は IndexedDB に保存しない（jar・kubejs/data のレシピの全体を元にするので、jar の保存とは鍵が合わない）。毎回の読み込みで動かす。進み具合の表示に「KubeJS のスクリプトを動かしています」の段階を足す。
 - 集めたレシピの出どころは、jar のレシピと同じく `modpack` にし、作り物で集めたことは仮定に載せる。
 
 **テスト。** スクリプトはテストの中で文字列として作る（他人の Modpack のスクリプトはリポジトリに入れない）。
 
-- 1.18 の書き方と 1.19 からの書き方で、足す・消す・置き換える・タグが集まる。
-- 知らない呼び出し、エラーを投げるファイル、止まらない輪があっても、残りが動き、読み込みが終わる。
-- スクリプトから `fetch`・`globalThis`・`self`・`Function`・`constructor` を通した抜け道に触れても、何も起きない（例外か undefined）。
+- 1.18 の書き方と 1.19 からの書き方で、足す・消す・置き換える・タグが集まる（`runScripts.test.ts`）。読み込みからプローブまで（`view/calc/modpackItemInput.test.ts`）。
+- 知らない呼び出し・大域・Java のクラス、エラーを投げるファイル、構文の誤りがあっても、残りが動く。Worker が時間の上限を超えた・失敗したときは、スクリプトの結果を使わずに読み込みが終わる（`workers/kubejsScripts.test.ts`）。
+- スクリプトから `fetch`・`process`・`eval`・`Function`・`self.fetch`・`globalThis.fetch`・大域のプロトタイプに触れても、何も見えない。Worker の大域を削る関数は、作り物の大域で確かめる（その場の `Function.prototype` を壊さないため）。
+- 本物の Worker（ブラウザ）で、関数の `constructor` が消えていること、止まらない輪が時間の上限で止まることを確かめた（手作業。2026-10-29）。
 
 ## ゲームとの行き来
 

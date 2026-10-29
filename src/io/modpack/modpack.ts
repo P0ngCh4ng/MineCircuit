@@ -8,12 +8,13 @@ import { ModpackAssetReader, type AssetLocation } from '../assets/modpackAssetRe
 import { FileNotFoundError, normalizePath, type FileSource } from '../fileSource'
 import { LANG_CODES, type JarSummary, type JsonValue, type LangCode, type LangTable } from './jarScanner'
 import { flattenItemTags, mergeItemTagFiles, type ItemTagFiles } from './itemTags'
+import type { ScriptRunOutput } from './kubejsScripts/scriptTypes'
 import { kubeJsBlockAssets, type KubeJsStartup } from './kubejs'
 import type { KubeJsRecipes } from './kubejsRecipes'
 import type { LangPack } from './langPacks'
 import type { ModInfo } from './modMetadata'
 import { MODS_DIR } from './modpackFolder'
-import { mergeRecipes, type RecipeBook } from './recipes'
+import { mergeRecipes, type ProcessingRecipe, type RecipeBook } from './recipes'
 import type { VanillaLoadResult, VanillaStatus } from './vanillaAssets'
 
 /** KubeJS のスクリプトから組み立てた資産の場所の名前（problems に出る） */
@@ -27,6 +28,25 @@ export interface ModpackProblem {
   /** jar のファイル名、またはリソースパックのパス（`resourcepacks/foo.zip`） */
   readonly jar: string
   readonly message: string
+}
+
+/**
+ * スクリプトを当てはめる前のレシピとアイテムのタグ。
+ * レシピは jar（名前順）→ kubejs/data/ の順に、同じ ID なら後のものを使う（Minecraft 本体の jar のレシピは使わない）。
+ * タグは Minecraft 本体の jar → jar（名前順）→ kubejs/data/ の順にまとめる（入れ子はたどらない）
+ */
+export function baseRecipeSources(
+  summaries: readonly JarSummary[],
+  vanilla: VanillaLoadResult | null,
+  kubejsRecipes: Pick<KubeJsRecipes, 'recipes' | 'itemTags'> | null,
+): { recipes: ProcessingRecipe[]; itemTags: ItemTagFiles } {
+  return {
+    recipes: mergeRecipes(...summaries.map((s) => s.recipes), kubejsRecipes?.recipes ?? []),
+    itemTags: [vanilla?.assets?.summary.itemTags, ...summaries.map((s) => s.itemTags), kubejsRecipes?.itemTags].reduce<ItemTagFiles>(
+      (all, tags) => (tags ? mergeItemTagFiles(all, tags) : all),
+      {},
+    ),
+  }
 }
 
 /** 表示名を探す翻訳キーの種類（前にあるものを優先） */
@@ -72,6 +92,7 @@ export class Modpack {
    * kubejsRecipes は kubejs/data/ のレシピとスクリプトの有無（kubejsRecipes.ts）。jar のレシピより優先する。
    * Minecraft 本体の jar のレシピは使わない。
    * アイテムのタグは、Minecraft 本体の jar → jar（名前順）→ kubejs/data/ の順にまとめ、入れ子のタグをたどって平らにする。
+   * scripts は KubeJS のスクリプトを動かした結果（#145）。失敗していなければ、そのレシピとタグを使う。
    */
   constructor(
     summaries: readonly JarSummary[],
@@ -83,6 +104,7 @@ export class Modpack {
     kubejs: Pick<KubeJsStartup, 'namespaces' | 'blocks'> | null = null,
     machines: Readonly<Record<string, string>> = {},
     kubejsRecipes: Pick<KubeJsRecipes, 'recipes' | 'scriptsChangeRecipes' | 'itemTags'> | null = null,
+    scripts: ScriptRunOutput | null = null,
   ) {
     const mods: ModInfo[] = []
     const namespaces = new Set<string>()
@@ -124,16 +146,14 @@ export class Modpack {
     this.jarCount = summaries.length
     this.source = source
     this.machines = machines
-    // 同じ ID のレシピは、後の jar、さらに kubejs/data/ のものを使う
+    // スクリプトを動かせていれば、その結果（jar と kubejs/data/ のものにスクリプトを当てはめたもの）を使う
+    const used = scripts && scripts.summary.failed === null ? scripts : null
+    const sources = used ?? baseRecipeSources(summaries, vanilla, kubejsRecipes)
     this.recipes = {
-      recipes: mergeRecipes(...summaries.map((s) => s.recipes), kubejsRecipes?.recipes ?? []),
-      scriptsChangeRecipes: kubejsRecipes?.scriptsChangeRecipes ?? false,
-      itemTags: flattenItemTags(
-        [base?.summary.itemTags, ...summaries.map((s) => s.itemTags), kubejsRecipes?.itemTags].reduce<ItemTagFiles>(
-          (all, tags) => (tags ? mergeItemTagFiles(all, tags) : all),
-          {},
-        ),
-      ),
+      recipes: sources.recipes,
+      scriptsChangeRecipes: used ? false : (kubejsRecipes?.scriptsChangeRecipes ?? false),
+      itemTags: flattenItemTags(sources.itemTags),
+      ...(scripts ? { scripts: scripts.summary } : {}),
     }
     this.assetLocations = [
       ...(base ? [{ kind: 'zip', path: base.jarPath, assets: base.summary.assets, source: base.source } as const] : []),

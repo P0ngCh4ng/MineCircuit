@@ -7,7 +7,7 @@ import { Modpack } from '../../io/modpack/modpack'
 import { createBuiltinRegistry } from '../builtinPlugins'
 import { loadCreateConfig, parseTomlSubset, readCreateServerConfig } from './createConfig'
 import { CreateValueResolver } from './createValueResolver'
-import { createStressPlugin, runCreateStress } from './createStressPlugin'
+import { createStressPlugin, runCreateStress, scriptAssumptions } from './createStressPlugin'
 
 const TOML = `
 # Create のサーバー設定
@@ -222,5 +222,32 @@ describe('Create の応力プラグイン', () => {
     const result = await runCreateStress(pressLine(), { pack, ports: [] })
     expect(result.summary[0].value).toEqual({ value: '使用 160 SU / 供給 16 SU', source: 'modpack' })
     expect(result.issues.some((i) => i.message.startsWith('応力が足りません'))).toBe(true)
+  })
+})
+
+describe('KubeJS のスクリプトの仮定（#145）', () => {
+  const summary = { files: 3, added: 2, removed: 1, replaced: 0, unsupported: [], errors: [], failed: null }
+
+  it('集めた数、再現しない呼び出し、エラーを仮定にする', () => {
+    expect(
+      scriptAssumptions({
+        ...summary,
+        unsupported: [{ name: 'Java.loadClass', count: 3 }],
+        errors: [{ path: 'a.js', message: 'x is not defined' }],
+      }),
+    ).toEqual([
+      'KubeJS のスクリプトのレシピは、アプリの中で作り物の KubeJS を使って集めた。ゲームと違うことがある（足す 2・消す 1・置き換える 0）',
+      'KubeJS のスクリプトの呼び出しのうち、アプリで再現しないもの：Java.loadClass（3 回）',
+      'KubeJS のスクリプトでエラーが起きた所は、その残りを飛ばした：a.js（x is not defined）',
+    ])
+    expect(scriptAssumptions({ ...summary, added: 0, removed: 0 })).toEqual([])
+    const many = Array.from({ length: 10 }, (_, i) => ({ name: `n${i}`, count: 1 }))
+    expect(scriptAssumptions({ ...summary, added: 0, removed: 0, unsupported: many })[0]).toMatch(/n7（1 回）、ほか 2 件$/)
+  })
+
+  it('打ち切ったときは、スクリプトのレシピを使っていないことだけを出す', () => {
+    expect(scriptAssumptions({ ...summary, failed: '20 秒で終わらなかったので打ち切った' })).toEqual([
+      'KubeJS のスクリプトを使えなかった（20 秒で終わらなかったので打ち切った）。スクリプトのレシピは入っていない',
+    ])
   })
 })

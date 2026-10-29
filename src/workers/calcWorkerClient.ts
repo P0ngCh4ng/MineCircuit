@@ -110,6 +110,7 @@ export class WorkerCalcBackend implements CalcBackend {
           results: r.results.map((x) => ({ ...x })),
         })),
         scriptsChangeRecipes: book.scriptsChangeRecipes,
+        ...(book.scripts ? { scripts: book.scripts } : {}),
         itemTags: Object.fromEntries(Object.entries(book.itemTags).map(([tag, items]) => [tag, [...items]])),
       }
       this.port.postMessage({ type: 'recipes-reply', callId, book: plain })

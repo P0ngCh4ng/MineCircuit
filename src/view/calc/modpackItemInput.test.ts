@@ -13,6 +13,7 @@ import { InlineCalcBackend } from '../../calc/calcScheduler'
 import { nbt } from '../../domain/nbt'
 import type { Resolved } from '../../calc/provenance'
 import { MemoryFileSource } from '../../io/memoryFileSource'
+import { inlineScriptRunner } from '../../io/modpack/kubejsScripts/runScripts'
 import App from '../App.vue'
 import { createDocumentSession, DOCUMENT_SESSION_KEY } from '../document/documentSession'
 import { useCalcStore } from '../stores/calcStore'
@@ -65,14 +66,17 @@ const TAGGED_WHEAT = {
   'data/c/tags/item/crops/wheat.json': json({ values: ['minecraft:wheat'] }),
 }
 
-/** Create の jar 1つだけの Modpack のフォルダ */
-function modpackFolder(files: Record<string, Uint8Array>) {
+/** Create の jar 1つだけの Modpack のフォルダ。scripts は kubejs/server_scripts/ からのパス → 中身 */
+function modpackFolder(files: Record<string, Uint8Array>, scripts: Record<string, string> = {}) {
   const jar = fakeJar({
     neoforgeMods: [{ modId: 'create', displayName: 'Create' }],
     lang: { create: { en_us: { 'block.create.millstone': 'Millstone' } } },
     files,
   })
-  return new MemoryFileSource([['mods/create.jar', jar]])
+  return new MemoryFileSource([
+    ['mods/create.jar', jar],
+    ...Object.entries(scripts).map(([path, text]) => [`kubejs/server_scripts/${path}`, strToU8(text)] as const),
+  ])
 }
 
 // 設計図を開くと仮の入出力は消える（usePortTool）ので、開き終わってから置く
@@ -97,12 +101,12 @@ async function selectModpack(folder: MemoryFileSource | null) {
   await vi.waitFor(() => expect(content.phase).toBe(folder ? 'loaded' : 'idle'))
 }
 
-/** 石臼の上の面に、物の入口（小麦、rate 個/秒）を置く */
-function feedWheat(rate = 1) {
+/** 石臼の上の面に、物の入口（item、rate 個/秒）を置く */
+function feedWheat(rate = 1, item = 'minecraft:wheat') {
   const ports = usePortStore()
   ports.setPlaceKey('create-stress/item-input')
   const port = ports.place(MILL, 'up')!
-  ports.update(withPortParam(withPortItem(port, 'item', 'minecraft:wheat'), 'rate', rate))
+  ports.update(withPortParam(withPortItem(port, 'item', item), 'rate', rate))
 }
 
 /** 石臼のプローブの値。見出しで引く */
@@ -164,6 +168,30 @@ describe('Modpack の読み込みと物の入口', () => {
 
     await selectModpack(null)
     await vi.waitFor(() => expect(millValue('レシピ')?.value).toContain('Modpack を読んでいないので'))
+    wrapper.unmount()
+  })
+
+  it('KubeJS のスクリプトで足したレシピで処理し、jar のレシピを消したものは出さない（#145）', async () => {
+    setModpackLoadEnvironment({ cache: null, scan: null, scripts: inlineScriptRunner })
+    const wrapper = await mountApp()
+    await selectModpack(
+      modpackFolder(LEGACY_WHEAT, {
+        'recipes/milling.js': `
+          onEvent('recipes', event => {
+            event.remove({ id: 'create:milling/wheat' })
+            ;[{ input: 'minecraft:rooted_dirt', output: 'minecraft:dirt' }].forEach(r => {
+              event.recipes.createMilling(Item.of(r.output), r.input).processingTime(60)
+            })
+          })
+        `,
+      }),
+    )
+    feedWheat(1, 'minecraft:rooted_dirt')
+    await vi.waitFor(() => expect(millValue('レシピ')?.value).toContain('kubejs:script/recipes/milling/1'))
+    expect(millValue('レシピ')?.value).toContain('minecraft:dirt')
+    expect(millValue('処理時間')?.source).toBe('modpack')
+    const book = await useModpackContentStore().pack!.recipeBook()
+    expect(book.recipes.some((r) => r.id === 'create:milling/wheat')).toBe(false)
     wrapper.unmount()
   })
 

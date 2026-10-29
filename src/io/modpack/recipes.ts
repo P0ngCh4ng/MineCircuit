@@ -1,7 +1,9 @@
 // Create の処理のレシピ（docs/create-throughput.md「レシピ」）。
 // jar の data/<namespace>/recipes/（1.21 は recipe/）と、Modpack の kubejs/data/ のレシピ JSON から、
-// 処理時間の計算に使う種類だけを読み、材料・処理時間・できる物だけを残す。KubeJS のスクリプトのレシピは読めないので、
-// スクリプトがレシピを変えているかどうかだけを調べる（kubejsRecipes.ts）。
+// 処理時間の計算に使う種類だけを読み、材料・処理時間・できる物だけを残す。KubeJS のスクリプトのレシピは、
+// スクリプトを作り物の KubeJS で動かして集める（kubejsScripts/。#145）。
+
+import type { ScriptRunSummary } from './kubejsScripts/scriptTypes'
 
 /**
  * 読むレシピの種類（`create:` を外した名前）。
@@ -45,8 +47,10 @@ export interface RecipeResult {
 /** Modpack のレシピ全体 */
 export interface RecipeBook {
   readonly recipes: readonly ProcessingRecipe[]
-  /** kubejs/server_scripts/ にレシピを変えるスクリプトがある（中身は読めない） */
+  /** kubejs/server_scripts/ にレシピを変えるスクリプトがあり、動かしていない・動かせなかった（スクリプトのレシピは入っていない） */
   readonly scriptsChangeRecipes: boolean
+  /** スクリプトを動かした結果のまとめ。動かしていなければない（#145） */
+  readonly scripts?: ScriptRunSummary
   /**
    * アイテムのタグ（`forge:ores/iron`、`#` なし）→ そのタグに入るアイテムの ID。入れ子のタグはたどって平らにしてある（#127）。
    * jar と kubejs/data のタグをまとめたもの。KubeJS のスクリプトで変えたタグは入らない

@@ -2,6 +2,7 @@
 // jar の外の翻訳（resourcepacks/、ModTranslations/、kubejs/）も読み、jar の翻訳の上に重ねる（langPacks.ts）。
 // KubeJS のスクリプトで登録したブロックの namespace と、ブロックのテクスチャも読む（kubejs.ts）。
 // Custom Machinery の機械の見た目も読む（customMachinery.ts）。
+// KubeJS のスクリプトは、渡された ScriptRunner（画面では Worker）で動かし、レシピとタグを集める（kubejsScripts/。#145）。
 // jar を開く処理（scan）は差し替えられる。画面では Web Worker で開き、テストではその場で開く。
 // 読んだ結果は jar ごとに保存し（JarCache）、2回目からは変わった jar だけを読み直す。
 // 最後に Minecraft 本体の jar を、Modpack のフォルダと利用者が選んだゲームのフォルダから探して読む（vanillaAssets.ts）。
@@ -11,9 +12,11 @@ import { isDirectoryEntry, type FileSource, type FileStat } from '../fileSource'
 import { isWantedJarEntry, scanJarContent, type JarContent, type JarSummary } from './jarScanner'
 import { readMachineAppearances } from './customMachinery'
 import { KUBEJS_STARTUP_DIR, readKubeJsStartup } from './kubejs'
-import { KUBEJS_DATA_DIR, readKubeJsRecipes } from './kubejsRecipes'
+import { KUBEJS_DATA_DIR, KUBEJS_SERVER_DIR, readKubeJsRecipes } from './kubejsRecipes'
+import { orderScripts, readServerScripts } from './kubejsScripts/scriptFiles'
+import type { ScriptRunner, ScriptRunOutput } from './kubejsScripts/scriptTypes'
 import { findLangPacks, hasNames, langPackFromSummary, readFolderLangPack, type LangPack, type LangPackLocation } from './langPacks'
-import { Modpack, type ModpackProblem } from './modpack'
+import { baseRecipeSources, Modpack, type ModpackProblem } from './modpack'
 import { MODS_DIR } from './modpackFolder'
 import { readZipPartially, ZipLayoutError, type RangeReader } from './partialZip'
 import {
@@ -71,6 +74,11 @@ export interface ModpackLoaderOptions {
   signal?: AbortSignal
   /** Minecraft 本体の jar を探すフォルダ。Modpack のフォルダのあとに、この順で探す */
   gameFolders?: readonly GameFolder[]
+  /**
+   * KubeJS のスクリプトを動かす関数（画面では Worker の実装。docs/design.md「KubeJS のスクリプトを動かす」）。
+   * 省略・null ならスクリプトは動かさない（その場で動かすことはしない）
+   */
+  scripts?: ScriptRunner | null
 }
 
 /**
@@ -128,6 +136,7 @@ export class ModpackLoader {
   private readonly onProgress: ((progress: ModpackLoadProgress) => void) | null
   private readonly signal: AbortSignal | null
   private readonly gameFolders: readonly GameFolder[]
+  private readonly scripts: ScriptRunner | null
 
   constructor(source: FileSource, options: ModpackLoaderOptions = {}) {
     this.source = source
@@ -136,6 +145,7 @@ export class ModpackLoader {
     this.onProgress = options.onProgress ?? null
     this.signal = options.signal ?? null
     this.gameFolders = options.gameFolders ?? []
+    this.scripts = options.scripts ?? null
   }
 
   /**
@@ -196,8 +206,43 @@ export class ModpackLoader {
     if (vanilla.cached) fromCache++
 
     this.throwIfAborted()
+    const scripts = await this.runScripts(summaries, vanilla.result, kubejsRecipes, problems, () =>
+      this.onProgress?.({ done: total - 1, total, fromCache, current: 'KubeJS のスクリプト' }),
+    )
+
+    this.throwIfAborted()
     this.onProgress?.({ done: total, total, fromCache, current: null })
-    return new Modpack(summaries, this.source, problems, langPacks, assetPacks, vanilla.result, kubejs, machines.machines, kubejsRecipes)
+    return new Modpack(
+      summaries,
+      this.source,
+      problems,
+      langPacks,
+      assetPacks,
+      vanilla.result,
+      kubejs,
+      machines.machines,
+      kubejsRecipes,
+      scripts,
+    )
+  }
+
+  /** kubejs/server_scripts/ のスクリプトを動かす。ScriptRunner がない・スクリプトがなければ null */
+  private async runScripts(
+    summaries: readonly JarSummary[],
+    vanilla: VanillaLoadResult | null,
+    kubejsRecipes: Parameters<typeof baseRecipeSources>[2],
+    problems: ModpackProblem[],
+    onStart: () => void,
+  ): Promise<ScriptRunOutput | null> {
+    if (!this.scripts) return null
+    const read = await readServerScripts(this.source, KUBEJS_SERVER_DIR)
+    for (const message of read.problems) problems.push({ jar: KUBEJS_SERVER_DIR, message })
+    if (read.files.length === 0) return null
+    const modIds = new Set(['minecraft', ...summaries.flatMap((s) => s.mods.map((m) => m.modId))])
+    const ordered = orderScripts(read.files, modIds)
+    const base = baseRecipeSources(summaries, vanilla, kubejsRecipes)
+    onStart()
+    return this.scripts({ files: ordered.files, recipes: base.recipes, itemTags: base.itemTags, modIds: [...modIds].sort() })
   }
 
   /**
