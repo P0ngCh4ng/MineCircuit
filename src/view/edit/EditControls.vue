@@ -1,8 +1,7 @@
 ﻿<script setup lang="ts">
-// 上のバー2段目の「編集」。元に戻す・やり直す・書き出し
+// 上のバー2段目の「編集」。元に戻す・やり直す（書き出しは1段目の設計図のグループ。#151）
 import { computed } from 'vue'
 import { useDocumentSession } from '../document/documentSession'
-import ExportButton from './ExportButton.vue'
 
 const session = useDocumentSession()
 const { canUndo, canRedo, nextUndoLabel, nextRedoLabel } = session
@@ -24,6 +23,5 @@ const redoTitle = computed(() =>
     <button type="button" data-action="redo" :disabled="!canRedo" :title="redoTitle" @click="session.redo()">
       やり直す
     </button>
-    <ExportButton />
   </div>
 </template>

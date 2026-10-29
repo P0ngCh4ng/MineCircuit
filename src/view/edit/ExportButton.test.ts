@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, h } from 'vue'
 import { blueprintFixture, state } from '../../../tests/fixtures/blueprintFixture'
@@ -23,6 +23,9 @@ function mountWith(session: DocumentSession, sink: FileSink) {
   })
   return mount(Host)
 }
+
+// Ctrl+S は window で受けるので、前のテストのボタンが残らないようにする
+enableAutoUnmount(afterEach)
 
 const motorNbt = () => nbt.compound({ Speed: nbt.int(16) })
 
@@ -108,6 +111,33 @@ describe('ExportButton', () => {
     await second.saved
     await flushPromises()
     expect(session.unsavedChanges.value).toBe(0)
+  })
+
+  it('Ctrl+S で書き出し、ブラウザのページの保存を止める（#151）', async () => {
+    const session = createDocumentSession()
+    const doc = session.setBlueprint(blueprintFixture({ size: [2, 1, 1], name: 'mill.nbt' }).toBlueprint())
+    session.apply(placeBlock(doc.blueprint, [0, 0, 0], state('minecraft:stone'), false))
+    const sink = new MemoryFileSink()
+    const { sink: watched, saved } = watchSave(sink)
+    const wrapper = mountWith(session, watched)
+
+    const e = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true })
+    window.dispatchEvent(e)
+    expect(e.defaultPrevented).toBe(true)
+    await saved
+    await flushPromises()
+    expect(sink.files.has('mill.nbt')).toBe(true)
+    expect(session.unsavedChanges.value).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('設計図がなくても、Ctrl+S でブラウザのページの保存はしない', () => {
+    const wrapper = mountWith(createDocumentSession(), new MemoryFileSink())
+    const e = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true })
+    window.dispatchEvent(e)
+    expect(e.defaultPrevented).toBe(true)
+    expect(wrapper.find('[data-testid="export-message"]').exists()).toBe(false)
+    wrapper.unmount()
   })
 
   it('生データのないブロックがあれば、確かめてから書き出す', async () => {

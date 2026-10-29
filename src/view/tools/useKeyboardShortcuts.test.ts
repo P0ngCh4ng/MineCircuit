@@ -28,6 +28,14 @@ describe('handleKeyEvent', () => {
     expect(ctrlA.defaultPrevented).toBe(false)
   })
 
+  it('Ctrl+S は入力欄で打っても書き出し、ブラウザのページの保存を止める（#151）', () => {
+    const exportBlueprint = vi.fn()
+    const e = keydown('s', { ctrlKey: true }, document.createElement('input'))
+    expect(handleKeyEvent(e, { export: exportBlueprint })).toBe(true)
+    expect(exportBlueprint).toHaveBeenCalledOnce()
+    expect(e.defaultPrevented).toBe(true)
+  })
+
   it('処理を渡されていない操作のキーは、何もせず既定の動きを残す', () => {
     const e = keydown('f', {}, document.createElement('div'))
     expect(handleKeyEvent(e, {})).toBe(false)

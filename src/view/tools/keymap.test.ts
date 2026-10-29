@@ -57,6 +57,15 @@ describe('resolveKeyAction', () => {
     expect(resolveKeyAction(k('v', { ctrlKey: true, shiftKey: true }))).toBeNull()
   })
 
+  it('Ctrl+S（Mac は Cmd+S）で書き出す（#151）', () => {
+    expect(resolveKeyAction(k('s', { ctrlKey: true }))).toEqual({ type: 'export' })
+    expect(resolveKeyAction(k('S', { metaKey: true }))).toEqual({ type: 'export' })
+    expect(resolveKeyAction(k('s', { ctrlKey: true, shiftKey: true }))).toBeNull()
+    expect(resolveKeyAction(k('s', { ctrlKey: true, altKey: true }))).toBeNull()
+    // Ctrl なしの S はツールなどに割り当てていない
+    expect(resolveKeyAction(k('s'))).toBeNull()
+  })
+
   it('Ctrl+A（Mac は Cmd+A）で全体を選び、F で範囲を塗る', () => {
     expect(resolveKeyAction(k('a', { ctrlKey: true }))).toEqual({ type: 'selectAll' })
     expect(resolveKeyAction(k('A', { metaKey: true }))).toEqual({ type: 'selectAll' })
