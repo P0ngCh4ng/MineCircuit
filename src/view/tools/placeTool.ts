@@ -91,7 +91,11 @@ export class PlaceTool implements Tool {
       return
     }
     // 同じブロックがすでにあるときは変化なし（null）なので、何もしない
-    if (this.ctx.apply(placeBlock(bp, pos, placed, replace))) this.ctx.revealLayer(pos[1])
+    if (!this.ctx.apply(placeBlock(bp, pos, placed, replace))) return
+    this.ctx.revealLayer(pos[1])
+    // 置けるが、状態が足りずに計算から外れるときは知らせる（#149）
+    const missing = this.ctx.stateProblem(placed)
+    if (missing) this.ctx.notify(missing)
   }
 
   deactivate(): void {

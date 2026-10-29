@@ -596,6 +596,13 @@ Modpackがあれば、置くブロックを jar のブロックから名前で�
 - 一覧から選んだブロックの状態は、variants 形式なら最初のキーの値、multipart 形式などなら取りうる値のそれぞれ最初の値にする（`initialPropertiesFor`）。ゲームの初期値とは限らないので、画面で取りうる値から選び直せる
 - Minecraft 本体のブロックは、本体の jar を見つけたときだけ一覧に出る（上の「Minecraft 本体の資産」）。見つからなければ ID の入力で選ぶ
 
+足りないブロック状態を補う（#149）。ID だけで選んだブロック（`create:shaft`）は、回転軸を決めるプロパティがなく、計算から外れる（#148）。
+
+- どのブロックに何が要るかは Mod ごとの知識なので、calc の組み込みの規則が出す。計算プラグインの `completeState`（Create は `calc/create/createDefaultStates.ts`）。画面は計算プラグインの一覧（`PluginRegistry.completeState`）に聞き、返った状態を受け取るだけにする（`view/edit/placementRules.ts`）。向きの合わせ方（`orientForPlacement`）と同じ向き
+- 補うのは、棚と ID の入力から選んだとき（`BrushPicker`）。スポイトは設計図にある状態をそのまま取るので補わない
+- 足りないものだけを足し、書いた値は変えない。Create の回るブロックは `axis=y`、向きで軸が決まるものは `facing=north`（水平にしか向かないブロックもあるため）。置いたあと、隣とつながる向きへの合わせ（`orientForPlacement`）で変わることがある
+- 補えない（値が読めない）ときも置くブロックにはするが、置くツールが置いた時点でお知らせに理由を出す（`EditToolContext.stateProblem`）
+
 ## 値の出どころ
 
 計算に使う値はどのModでも3種類に分かれる。
@@ -683,6 +690,8 @@ interface CalcPlugin {
   // その場所に置けるか（任意）。ゲームで置けない（置いても外れる）なら理由、置けるなら null。
   // 置く・回す前に画面が聞く。置く向きを自動で選ぶときは、置けない向きを候補から外す。計算では、規則に合わないブロックを issues に出す
   placementProblem?(bp: Blueprint, pos: Vec3, state: BlockState): string | null
+  // 足りないブロック状態を補う（任意。#149）。補った状態と、補えなかったときの理由。知らないブロックなら null
+  completeState?(state: BlockState): { state: BlockState; problem: string | null } | null
   // 置き方の補助（任意。3D で面をクリックしたとき）。クリックしたブロックと当たった点から、置く位置と状態を返す。
   // 使わないなら null（ふつうに面の隣に置く）。Create は歯車の補助（CogwheelBlockItem の helper と同じ）
   placementHelper?(bp: Blueprint, hit: { pos: Vec3; face: Direction; point: Vec3 }, state: BlockState): { pos: Vec3; state: BlockState } | null

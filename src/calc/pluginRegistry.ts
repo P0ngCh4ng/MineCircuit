@@ -51,6 +51,15 @@ export class PluginRegistry {
     return null
   }
 
+  /** 足りないブロック状態を補う。最初に答えたプラグインのもの。どれも答えなければ state のまま（理由なし） */
+  completeState(state: BlockState): { state: BlockState; problem: string | null } {
+    for (const p of this.plugins.values()) {
+      const r = p.completeState?.(state) ?? null
+      if (r) return r
+    }
+    return { state, problem: null }
+  }
+
   /** 置き方の補助。最初に位置を返したプラグインのもの。どれも使わなければ null */
   placementHelper(
     bp: Blueprint,

@@ -19,6 +19,7 @@ import type {
 } from '../calcPlugin'
 import { resolved, type Provenance } from '../provenance'
 import { loadCreateConfig } from './createConfig'
+import { completeCreateState } from './createDefaultStates'
 import { orientForPlacement, placementHelper, placementProblem } from './createPlacement'
 import { transformCreateBlockEntity, transformCreateState } from './createTransform'
 import { kineticThroughputValues, staticThroughputValues, type ThroughputEnv } from './createThroughput'
@@ -70,6 +71,7 @@ export function createStressPlugin(): CalcPlugin {
     orientForPlacement,
     placementProblem,
     placementHelper,
+    completeState: completeCreateState,
     transformState: transformCreateState,
     transformBlockEntity: transformCreateBlockEntity,
   }
