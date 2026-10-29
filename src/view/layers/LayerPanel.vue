@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 段の一覧。docs/ui.md「段の一覧」。
 // 段ごとにブロック数を出し、左の丸で表示・非表示を切り替える。段を押すとその段を今の段にする。
+// 表示方法（この段だけ など）は上のバー（shell/ViewControls.vue）の選択だけで切り替える（#156）。
 // 画面の段は 1 始まり（コードの y + 1）。上の段を上に並べる。
 import { computed, nextTick, ref, watch } from 'vue'
 import { useBlueprintStats } from '../analysis/useBlueprintStats'
@@ -39,14 +40,14 @@ const rows = computed<LayerRow[]>(() => {
   return counts.value.map((count, y) => ({ y, count, hidden: hidden.has(y) })).reverse()
 })
 
-const canShowAll = computed(() => view.hiddenLayers.size > 0 || view.layerMode !== 'all')
+const hasHidden = computed(() => view.hiddenLayers.size > 0)
 
 function toggle(y: number): void {
   view.setLayerHidden(y, !view.hiddenLayers.has(y))
 }
 
-function solo(): void {
-  view.soloLayer(nav.current.value, nav.height.value)
+function unhideAll(): void {
+  view.setHiddenLayers(new Set())
 }
 
 // 別の設計図を開いたら、前の設計図の非表示を消し、今の段を高さに収める
@@ -97,11 +98,8 @@ useKeyboardShortcuts({
       </li>
     </ul>
     <div class="foot">
-      <button type="button" data-action="show-all" title="非表示の段をなくし、表示方法を「すべて」にする" :disabled="!canShowAll" @click="view.showAllLayers()">
-        すべて表示
-      </button>
-      <button type="button" data-action="solo" title="今の段だけを表示し、ほかの段を隠す" :disabled="nav.height.value === 0" @click="solo">
-        この段だけ表示
+      <button type="button" data-action="unhide-all" title="丸で隠した段をすべて表示に戻す。表示方法は上のバーで選ぶ" :disabled="!hasHidden" @click="unhideAll">
+        隠した段を戻す
       </button>
     </div>
   </nav>

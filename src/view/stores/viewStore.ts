@@ -122,19 +122,6 @@ export const useViewStore = defineStore('view', () => {
     hiddenLayers.value = new Set(hidden)
   }
 
-  /** 段 y だけを表示し、高さ height の設計図のほかの段を非表示にする（段の一覧の「この段だけ表示」） */
-  function soloLayer(y: number, height: number): void {
-    const next = new Set<number>()
-    for (let i = 0; i < height; i++) if (i !== y) next.add(i)
-    hiddenLayers.value = next
-  }
-
-  /** すべての段を表示する（非表示を解除し、表示方法を「すべて」にする） */
-  function showAllLayers(): void {
-    hiddenLayers.value = new Set()
-    layerMode.value = 'all'
-  }
-
   return {
     mode,
     showLabels,
@@ -160,7 +147,5 @@ export const useViewStore = defineStore('view', () => {
     setLayerMode,
     setLayerHidden,
     setHiddenLayers,
-    soloLayer,
-    showAllLayers,
   }
 })
