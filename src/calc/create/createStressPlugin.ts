@@ -104,7 +104,7 @@ export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<
   const allProbes = withItemPath([...probes(graph, evaluation, env), ...staticProbes(bp, env)], path.records)
 
   return {
-    summary: summarize(evaluation, disableStress.source),
+    summary: summarize(graph, evaluation, disableStress.source),
     issues: [...evaluation.issues, ...placementIssues(bp), ...path.issues],
     assumptions: log.list(),
     probes: allProbes,
@@ -212,18 +212,26 @@ function placementIssues(bp: Blueprint): CalcIssue[] {
   return issues
 }
 
-function summarize(ev: KineticEvaluation, settingSource: Provenance): CalcSummaryItem[] {
-  const items: CalcSummaryItem[] = []
-  let totalStress = 0
-  let totalCapacity = 0
-  let totalSource: Provenance = settingSource
-  let number = 0
+/**
+ * ネット一覧（docs/create-stress.md「結果の形」、#152）。先頭に集計、続けてネットワークごとに1行。
+ * 別々のネットワークの使用と供給は足さない（過負荷が合計の余裕に隠れるため）
+ */
+function summarize(graph: KineticGraph, ev: KineticEvaluation, settingSource: Provenance): CalcSummaryItem[] {
+  const rows: CalcSummaryItem[] = []
+  let overloaded = 0
+  let stopped = 0
+  let source: Provenance = settingSource
   for (const net of ev.networks) {
-    if (!net.active) continue
-    number++
-    totalStress += net.stress
-    totalCapacity += net.capacity
-    totalSource = weakerSource(totalSource, net.source)
+    const blocks = net.nodes.filter((i) => graph.nodes[i]!.portId === null)
+    // 仮の入出力だけのネットワークはない（つなぐ先のブロックと同じネットワークになる）が、念のため除く
+    if (blocks.length === 0) continue
+    if (net.overloaded) overloaded++
+    else if (net.maxSpeed === 0) stopped++
+    source = weakerSource(source, net.source)
+    const sources = net.nodes.filter((i) => graph.nodes[i]!.source !== null).length
+    const loads = net.nodes.filter((i) => ev.nodes[i]!.stress !== 0 || graph.nodes[i]!.fixedStress !== null).length
+    const margin = net.capacity - net.stress
+    const marginText = margin >= 0 ? `余裕 ${formatNumber(margin)} SU` : `足りない ${formatNumber(-margin)} SU`
     const speeds =
       net.maxSpeed === 0
         ? '止まっている'
@@ -231,19 +239,22 @@ function summarize(ev: KineticEvaluation, settingSource: Provenance): CalcSummar
           ? `${formatNumber(net.maxSpeed)} RPM`
           : `${formatNumber(net.minSpeed)}〜${formatNumber(net.maxSpeed)} RPM`
     const state = net.overloaded ? '（過負荷）' : ''
-    items.push({
-      label: `ネットワーク ${number}`,
+    const pos = graph.nodes[blocks[0]!]!.pos
+    rows.push({
+      label: `ネットワーク ${rows.length + 1}`,
       value: resolved(
-        `使用 ${formatNumber(net.stress)} SU / 供給 ${formatNumber(net.capacity)} SU、${speeds}${state}`,
+        `使用 ${formatNumber(net.stress)} SU / 供給 ${formatNumber(net.capacity)} SU（${marginText}）、${speeds}${state}。` +
+          `動力源 ${sources}・負荷 ${loads}・ブロック ${formatNumber(blocks.length)}`,
         net.source,
       ),
+      pos: [pos[0], pos[1], pos[2]],
     })
   }
-  items.unshift({
-    label: '合計',
-    value: resolved(`使用 ${formatNumber(totalStress)} SU / 供給 ${formatNumber(totalCapacity)} SU`, totalSource),
+  rows.unshift({
+    label: 'まとめ',
+    value: resolved(`ネットワーク ${rows.length}／過負荷 ${overloaded}／止まっている ${stopped}`, source),
   })
-  return items
+  return rows
 }
 
 /**

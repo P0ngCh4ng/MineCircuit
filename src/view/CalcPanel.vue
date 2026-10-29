@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 右パネルの計算結果。プラグインごとに、合計・問題・仮定を出す。
 // 問題と仮定の位置をクリックすると、そのブロックを選択し、その段へ移ってネットワークを強調する（#31）。
+// 合計のうち位置のある行（ネット一覧の行、#152）も、押すと同じようにそのネットワークを強調する。
 import { computed } from 'vue'
 import { PROVENANCE_LABELS } from '../calc/provenance'
 import { formatPos } from './calc/probeModel'
@@ -38,7 +39,16 @@ const statusText = computed(() => {
         <template v-else>
           <dl v-if="o.result.summary.length > 0" class="summary">
             <template v-for="(item, i) in o.result.summary" :key="i">
-              <dt>{{ item.label }}</dt>
+              <dt>
+                <button
+                  v-if="item.pos"
+                  type="button"
+                  class="net"
+                  :title="`${item.label}を強調する（${formatPos(item.pos)}）`"
+                  @click="jumpTo(item.pos)"
+                >{{ item.label }}</button>
+                <template v-else>{{ item.label }}</template>
+              </dt>
               <dd>
                 {{ item.value.value }}
                 <span
@@ -145,6 +155,13 @@ ul {
   border: 1px solid currentcolor;
   border-radius: 3px;
   color: #b26a00;
+}
+
+.net {
+  font: inherit;
+  padding: 0 2px;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .pos {

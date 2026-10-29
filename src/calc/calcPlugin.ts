@@ -48,6 +48,8 @@ export interface CalcContext {
 export interface CalcSummaryItem {
   readonly label: string
   readonly value: Resolved<string>
+  /** あれば、押すとこの位置をプローブの対象にし、そのネットワークを強調する（ネット一覧、#152） */
+  readonly pos?: Vec3
 }
 
 /** 問題1つ分。pos は 3D 表示で強調する位置 */
@@ -56,6 +58,8 @@ export interface CalcIssue {
   readonly message: string
   /** なければエラー。警告は一覧だけに出し、3D・2D表示では強調しない（#148） */
   readonly severity?: 'warning'
+  /** ネットワーク全体などをまとめた問題の、全ブロックの位置（pos を含む）。強調はこの全部に付ける（#153） */
+  readonly positions?: readonly Vec3[]
 }
 
 /** 何を仮定して計算したか。位置がない仮定（「設定ファイルがないので内蔵の初期値を使った」など）もある */
