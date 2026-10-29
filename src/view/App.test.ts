@@ -91,7 +91,7 @@ describe('App', () => {
     expect(fact(wrapper, 'nbt')).toBe('1')
     expect(fact(wrapper, 'entities')).toBe('0')
     expect(fact(wrapper, 'version')).toBe('約 1.18.2（2975）')
-    expect(fact(wrapper, 'edits')).toBe('なし')
+    expect(fact(wrapper, 'edits')).toBe('変更なし')
     expect(wrapper.text()).not.toContain('設計図（.nbt）を開いてください')
     expect(useCalcStore().hasBlueprint).toBe(true)
     wrapper.unmount()
@@ -144,7 +144,7 @@ describe('App', () => {
     expect(undo.attributes('disabled')).toBeUndefined()
     expect(undo.attributes('title')).toBe('元に戻す：shaft を消す（Ctrl+Z）')
     expect(fact(wrapper, 'blocks')).toBe('4')
-    expect(fact(wrapper, 'edits')).toBe('1 回')
+    expect(fact(wrapper, 'edits')).toBe('1 回の変更')
 
     await undo.trigger('click')
     expect(doc.blueprint.get([0, 0, 0])?.id.toString()).toBe('create:shaft')

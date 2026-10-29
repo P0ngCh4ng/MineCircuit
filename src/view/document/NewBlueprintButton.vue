@@ -38,8 +38,8 @@ const spec = computed(() => ({
 }))
 const errors = computed(() => validateNewBlueprint(spec.value))
 
-/** 開いている設計図の編集の回数。0 でなければ、なくなることを知らせる */
-const unsavedEdits = computed(() => (session.current.value ? session.editCount.value : 0))
+/** 開いている設計図の書き出していない変更の回数。0 でなければ、なくなることを知らせる（「作る」が確認になる） */
+const unsavedEdits = computed(() => session.unsavedChanges.value)
 
 function show(): void {
   versionName.value = guessed.value?.name ?? ''
@@ -81,7 +81,7 @@ function create(): void {
         <small class="hint">{{ versionHint }}書き出す .nbt の DataVersion になります。</small>
       </label>
       <p v-if="unsavedEdits > 0" class="warning">
-        開いている設計図を閉じます。書き出していない編集（{{ unsavedEdits }} 回）はなくなります。
+        開いている設計図を閉じます。書き出していない変更（{{ unsavedEdits }} 回）はなくなります。
       </p>
       <ul v-if="submitted && errors.length > 0" class="errors" role="alert">
         <li v-for="e in errors" :key="e">{{ e }}</li>

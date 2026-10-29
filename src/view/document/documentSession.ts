@@ -64,8 +64,8 @@ export interface DocumentSession {
   readonly nextUndoLabel: ComputedRef<string | null>
   /** 次にやり直す操作の名前。なければ null */
   readonly nextRedoLabel: ComputedRef<string | null>
-  /** 画面の「編集 n 回」。開いていなければ 0 */
-  readonly editCount: ComputedRef<number>
+  /** 画面の「書き出してから n 回の変更」。開いていなければ 0 */
+  readonly unsavedChanges: ComputedRef<number>
 
   /** ファイルを読んで開く。開けたら true。開けなければ error に理由を入れ、今の設計図はそのまま */
   openFile(file: FileLike): Promise<boolean>
@@ -75,6 +75,11 @@ export interface DocumentSession {
   setBlueprint(blueprint: Blueprint, fileName?: string): BlueprintDocument
   /** 設計図を閉じる */
   close(): void
+  /**
+   * 書き出した印を付ける。at は書き出しを始めたときの doc.history.changeCount。
+   * 書き出しの途中で別の設計図に入れ替わっていても、書き出した doc に付ける
+   */
+  markExported(doc: BlueprintDocument, at: number): void
 
   /** 編集の操作を設計図に書き込み、履歴に積む。cmd が null（変化なし）なら何もせず false */
   apply(cmd: EditCommand | null): boolean
@@ -169,7 +174,7 @@ export function createDocumentSession(): DocumentSession {
     canRedo: historyValue((h) => h.canRedo, false),
     nextUndoLabel: historyValue((h) => h.nextUndo?.label ?? null, null),
     nextRedoLabel: historyValue((h) => h.nextRedo?.label ?? null, null),
-    editCount: historyValue((h) => h.count, 0),
+    unsavedChanges: historyValue((h) => h.unsavedChanges, 0),
     openFile: (file) => load(file.name, () => file.arrayBuffer()),
     openBytes: (fileName, data) => load(fileName, async () => data),
     setBlueprint,
@@ -177,6 +182,9 @@ export function createDocumentSession(): DocumentSession {
       openToken++
       opening.value = false
       replace(null)
+    },
+    markExported(doc, at) {
+      doc.history.markSaved(at)
     },
     apply(cmd) {
       const doc = current.value

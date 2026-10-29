@@ -52,7 +52,10 @@ async function run(): Promise<void> {
   if (!doc) return
   exporting.value = true
   try {
+    // 書き出しの途中の変更は書き出していないので、始めたときの回数で印を付ける（#150）
+    const at = doc.history.changeCount
     const result = await exportBlueprint(doc.blueprint, props.createSink())
+    if (result.status !== 'cancelled') session.markExported(doc, at)
     message.value = { text: exportResultMessage(result), error: false }
   } catch (e) {
     message.value = { text: exportErrorMessage(e), error: true }
