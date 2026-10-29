@@ -32,6 +32,8 @@ export interface EditToolContext {
   orient(bp: Blueprint, pos: Vec3, state: BlockState, from: Direction | null): BlockState
   /** pos に state を置けるか（#121）。ゲームで置けないなら理由、置けるなら null */
   placementProblem(bp: Blueprint, pos: Vec3, state: BlockState): string | null
+  /** 置くブロックの状態に足りないものがあるとき（回転軸が決まらず計算から外れる、など。#149）の理由。なければ null */
+  stateProblem(state: BlockState): string | null
   /** 置き方の補助（#123）。3D で面をクリックしたとき、置く位置と状態。使わないなら null */
   placementHelper(
     bp: Blueprint,

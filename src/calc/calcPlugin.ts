@@ -121,6 +121,11 @@ export interface CalcPlugin {
    */
   placementProblem?(bp: Blueprint, pos: Vec3, state: BlockState): string | null
   /**
+   * 足りないブロック状態を補う（任意。#149）。置くブロックを ID だけで選んだときに画面が聞く。
+   * 補った状態（補う必要がなければ元のまま）と、補えなかったときの理由。知らないブロックなら null
+   */
+  completeState?(state: BlockState): { state: BlockState; problem: string | null } | null
+  /**
    * ブロック状態の Mod 独自のプロパティを、範囲の回転・反転に合わせて変える（任意。#132）。
    * バニラの向きのプロパティ（edit/stateTransform.ts）も含めて、変換したあとの状態を返す。知らないブロックなら null
    */

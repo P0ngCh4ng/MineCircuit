@@ -15,6 +15,7 @@ import { blockColorCss } from '../viewport/blockColor'
 import { blockAbbreviation } from '../viewport/layerGrid2D'
 import { BLUEPRINT_TAB, shelfItems, shelfTabs, type ShelfItem } from './blockShelf'
 import { blueprintBlockStates, BrushInputError, parseBlockStateInput } from './brushInput'
+import { completeBlockState } from './placementRules'
 
 const session = useDocumentSession()
 const brush = useBrushStore()
@@ -160,8 +161,9 @@ watch(
   { immediate: true },
 )
 
+/** 棚・ID の入力から選んだブロックを置くブロックにする。足りない状態（Create の回転軸など）は補う（#149） */
 function use(state: BlockState): void {
-  brush.setFromBlock(state)
+  brush.setFromBlock(completeBlockState(state).state)
   inputError.value = null
   // 選んだらすぐ置けるように、置くツールにする
   tools.setTool('place')

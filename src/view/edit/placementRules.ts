@@ -33,6 +33,14 @@ export function placementProblem(bp: Blueprint, pos: Vec3, state: BlockState): s
   return registry.placementProblem(bp, pos, state)
 }
 
+/**
+ * ID だけで選んだブロックの足りない状態を補う（#149）。補った状態と、補えなかったときの理由。
+ * 補えなかったときも、置くブロックにはそのまま使える（置いた時点でお知らせに理由を出す）
+ */
+export function completeBlockState(state: BlockState): { state: BlockState; problem: string | null } {
+  return registry.completeState(state)
+}
+
 /** 範囲の回転・反転でのブロック状態（Mod 独自のプロパティは計算プラグインの規則、それ以外はバニラの規則） */
 export function transformBlockState(state: BlockState, t: BlockTransform): BlockState {
   return registry.transformState(state, t)

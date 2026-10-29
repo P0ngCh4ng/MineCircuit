@@ -13,7 +13,7 @@ import type { EditToolContext } from '../tools/editToolContext'
 import { EraseTool } from '../tools/eraseTool'
 import { PickTool } from '../tools/pickTool'
 import { PlaceTool } from '../tools/placeTool'
-import { orientForPlacement, placementHelper, placementProblem } from './placementRules'
+import { completeBlockState, orientForPlacement, placementHelper, placementProblem } from './placementRules'
 import type { MoveDirection } from '../tools/keymap'
 import { moveVector } from './moveDirection'
 import { useRegionActions } from './regionActions'
@@ -46,6 +46,7 @@ export function useEditToolContext(): EditToolContext {
     orient: orientForPlacement,
     placementProblem,
     placementHelper,
+    stateProblem: (state) => completeBlockState(state).problem,
     revealLayer(y) {
       if (layerVisibility(view.layerDisplay, y) === 'solid') return
       view.setLayerHidden(y, false)
