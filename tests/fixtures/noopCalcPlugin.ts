@@ -2,7 +2,7 @@
 // ブロックの数を数えるだけで、Mod の意味づけはしない。
 
 import { AssumptionLog } from '../../src/calc/assumptionLog'
-import type { CalcContext, CalcModpack, CalcPlugin, CalcResult } from '../../src/calc/calcPlugin'
+import type { CalcContext, CalcIssue, CalcModpack, CalcPlugin, CalcResult } from '../../src/calc/calcPlugin'
 import { nbtNumber } from '../../src/calc/nbtValues'
 import { candidate, resolved } from '../../src/calc/provenance'
 import type { Blueprint } from '../../src/domain/blueprint'
@@ -19,7 +19,7 @@ export interface NoopPluginOptions {
 
 /**
  * - 合計：ブロック数（出どころ blueprint）、係数（設定ファイル → 内蔵の初期値）
- * - 問題：生データの "Broken" が 0 でないブロック
+ * - 問題：生データの "Broken" が 0 でないブロック。2 なら警告
  * - 仮定：範囲外は空気とみなしたこと、仮の入出力の数
  */
 export function noopCalcPlugin(options: NoopPluginOptions = {}): CalcPlugin {
@@ -38,12 +38,14 @@ export function noopCalcPlugin(options: NoopPluginOptions = {}): CalcPlugin {
       if (options.fail) throw new Error('テスト用の失敗')
       const log = new AssumptionLog()
       let count = 0
-      const issues: { pos: Vec3; message: string }[] = []
+      const issues: CalcIssue[] = []
       for (const region of bp.regions) {
         region.forEachBlock((x, y, z, _state, be) => {
           count++
           const pos: Vec3 = [x + region.offset[0], y + region.offset[1], z + region.offset[2]]
-          if ((nbtNumber(be, 'Broken') ?? 0) !== 0) issues.push({ pos, message: '壊れている' })
+          const broken = nbtNumber(be, 'Broken') ?? 0
+          if (broken === 2) issues.push({ pos, message: '壊れそう', severity: 'warning' })
+          else if (broken !== 0) issues.push({ pos, message: '壊れている' })
         })
       }
       const configText = ctx.pack ? await ctx.pack.config('config/test.txt') : null

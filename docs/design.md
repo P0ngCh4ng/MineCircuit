@@ -694,7 +694,7 @@ interface CalcContext {
 
 interface CalcResult {
   summary: { label: string; value: Resolved<string> }[]   // 「使用 2,048 SU / 供給 4,096 SU」
-  issues: { pos: Vec3; message: string }[]                // 3D表示で強調する位置
+  issues: { pos: Vec3; message: string; severity?: 'warning' }[]  // 問題。重さがなければエラーで、3D・2D表示で強調する。警告は一覧だけ（#148）
   assumptions: { pos?: Vec3; message: string }[]          // 何を仮定して計算したか
   probes?: CalcProbe[]                                    // ブロックごとの値（プローブ）
   rotations?: CalcRotation[]                              // 回るブロックごとの回転（表示部分の色分け）

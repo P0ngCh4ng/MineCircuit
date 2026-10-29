@@ -25,6 +25,7 @@ import {
   faceFactor,
   isCrank,
   isPositive,
+  isKineticBlock,
   kineticShape,
   type Axis,
   type ChainInfo,
@@ -124,6 +125,17 @@ export interface KineticEvaluation {
 
 const SPEED_TOLERANCE = 1 / 65536
 
+const UNPOWERED_MESSAGE = '動力源につながっていません。回りません。'
+const STOPPED_MESSAGE = '回転数が 0 です。つながっている動力源が止まっています。'
+
+/** 回るブロックなのに、回転軸を決めるブロック状態がないか読めないとき（docs/create-stress.md「手順」1.） */
+function missingStateMessage(state: BlockState): string {
+  const shown = Object.entries(state.properties).map(([k, v]) => `${k}=${v}`).join(',')
+  return shown === ''
+    ? 'ブロック状態がないので、回転軸が決まりません。計算に入れていません。向き（axis・facing など）を付けて置き直してください。'
+    : `ブロック状態（${shown}）から回転軸が決まりません。計算に入れていません。向き（axis・facing など）を直してください。`
+}
+
 /** 出どころのうち、信頼できない方 */
 export function weakerSource(a: Provenance, b: Provenance): Provenance {
   return PROVENANCES.indexOf(a) >= PROVENANCES.indexOf(b) ? a : b
@@ -188,7 +200,7 @@ export class KineticGraph {
         const pos = addVec3([x, y, z], region.offset)
         const key = posKey(pos)
         if (byPos.has(key) || bp.locate(pos)?.region !== region) return
-        const node = makeNode(pos, state, be, values, log, mediumSpeed)
+        const node = makeNode(pos, state, be, values, log, mediumSpeed, issues)
         if (!node) return
         byPos.set(key, nodes.length)
         nodes.push(node)
@@ -316,11 +328,11 @@ export class KineticGraph {
     const n = this.nodes.length
     const issues: CalcIssue[] = [...this.buildIssues]
     const issueKeys = new Set<string>()
-    const addIssue = (pos: Vec3, message: string): void => {
+    const addIssue = (pos: Vec3, message: string, severity?: 'warning'): void => {
       const key = `${posKey(pos)}|${message}`
       if (issueKeys.has(key)) return
       issueKeys.add(key)
-      issues.push({ pos: [pos[0], pos[1], pos[2]], message })
+      issues.push(severity ? { pos: [pos[0], pos[1], pos[2]], message, severity } : { pos: [pos[0], pos[1], pos[2]], message })
     }
 
     // 4. 剛体のまとまりに分け、5. 比 k を決める
@@ -511,6 +523,17 @@ export class KineticGraph {
       }
     }
 
+    // 12. 止まっているブロック（#148）。過負荷と衝突のまとまりは、もう問題に出しているので除く
+    for (const net of networks) {
+      if (net.overloaded) continue
+      const powered = net.nodes.some((m) => this.nodes[m].source !== null)
+      const warning = powered ? STOPPED_MESSAGE : UNPOWERED_MESSAGE
+      for (const m of net.nodes) {
+        if (this.nodes[m].portId !== null || theoretical[m] !== 0 || broken[group[m]]) continue
+        addIssue(this.nodes[m].pos, warning, 'warning')
+      }
+    }
+
     return { nodes, networks, issues }
   }
 
@@ -646,6 +669,7 @@ function makeNode(
   values: CreateValueResolver,
   log: AssumptionLog,
   mediumSpeed: number,
+  issues: CalcIssue[],
 ): KineticNode | null {
   const ns = state.id.namespace
   const path = state.id.path
@@ -659,7 +683,10 @@ function makeNode(
     return null
   }
   const shape = kineticShape(path, state)
-  if (!shape) return null
+  if (!shape) {
+    if (isKineticBlock(path)) issues.push({ pos, message: missingStateMessage(state) })
+    return null
+  }
   if (shape.note) log.add(shape.note, pos)
   const facing = state.properties.facing
   const negativeFacing = facing === 'down' || facing === 'north' || facing === 'west'

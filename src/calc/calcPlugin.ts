@@ -54,6 +54,8 @@ export interface CalcSummaryItem {
 export interface CalcIssue {
   readonly pos: Vec3
   readonly message: string
+  /** なければエラー。警告は一覧だけに出し、3D・2D表示では強調しない（#148） */
+  readonly severity?: 'warning'
 }
 
 /** 何を仮定して計算したか。位置がない仮定（「設定ファイルがないので内蔵の初期値を使った」など）もある */

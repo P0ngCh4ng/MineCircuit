@@ -151,7 +151,21 @@ export function isCrank(path: string): boolean {
  * 必要なプロパティがないブロックは null。
  */
 export function kineticShape(path: string, state: BlockState): KineticShape | null {
-  const props = state.properties
+  return shapeFromProperties(path, state.properties)
+}
+
+/** ブロック状態を問わず回転に関わるブロックの値の見本。これで形が決まれば、回るブロックの名前 */
+const SAMPLE_PROPERTIES: Props = { axis: 'y', facing: 'north' }
+
+/**
+ * 回転に関わる Create のブロックか（`create:` を外した名前）。
+ * true なのに kineticShape が null なら、回転軸を決めるブロック状態がないか読めない（#148）
+ */
+export function isKineticBlock(path: string): boolean {
+  return shapeFromProperties(path, SAMPLE_PROPERTIES) !== null
+}
+
+function shapeFromProperties(path: string, props: Props): KineticShape | null {
   const axis = propAxis(props)
   const facing = propFacing(props)
 

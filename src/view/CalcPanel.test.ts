@@ -62,6 +62,21 @@ describe('CalcPanel（右パネルの計算結果）', () => {
     expect(calc.issuePositions).toEqual([[1, 0, 0]])
   })
 
+  it('警告は「警告」と付けて一覧に出し、3D・2D の強調には入れない（#148）', async () => {
+    const { calc, wrapper } = setup()
+    const bp = blueprintFixture({ size: [3, 1, 1] })
+      .place([0, 0, 0], 'create:shaft', { axis: 'x' }, nbt.compound({ Broken: nbt.byte(2) }))
+      .place([1, 0, 0], 'create:shaft', { axis: 'x' }, nbt.compound({ Broken: nbt.byte(1) }))
+      .toBlueprint()
+    await calc.attach(bp)
+    await flushPromises()
+    const items = wrapper.findAll('.issues li')
+    expect(items.map((li) => li.attributes('data-severity'))).toEqual(['warning', 'error'])
+    expect(items[0].find('.severity').text()).toBe('警告')
+    expect(items[1].find('.severity').exists()).toBe(false)
+    expect(calc.issuePositions).toEqual([[1, 0, 0]])
+  })
+
   it('問題の位置を押すと、そのブロックを選び、その段へ移ってプローブの対象にする', async () => {
     const { calc, wrapper } = setup()
     await calc.attach(sample())
