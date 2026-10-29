@@ -99,9 +99,11 @@ export const useCalcStore = defineStore('calc', () => {
     return ensureScheduler().runNow(request)
   }
 
-  /** 3D 表示で強調する位置（全プラグインの問題） */
+  /** 3D 表示で強調する位置（全プラグインの問題のうちエラー。警告は組み立て途中で多く出るので強調しない） */
   const issuePositions = computed<Vec3[]>(() =>
-    (outcomes.value ?? []).flatMap((o) => (o.status === 'ok' ? o.result.issues.map((i) => i.pos) : [])),
+    (outcomes.value ?? []).flatMap((o) =>
+      o.status === 'ok' ? o.result.issues.filter((i) => i.severity !== 'warning').map((i) => i.pos) : [],
+    ),
   )
 
   /** 回るブロックごとの回転（すべてのプラグインの分）。表示部分の「回転」で使う */

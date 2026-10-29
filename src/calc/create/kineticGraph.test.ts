@@ -264,6 +264,77 @@ describe('KineticGraph：つながりの規則', () => {
   })
 })
 
+describe('KineticGraph：組み間違いの検査（#148）', () => {
+  const motor = (b: BlueprintFixture, speed = 32) => b.place([0, 0, 0], 'create:creative_motor', { facing: 'east' }, scroll(speed))
+
+  it('回るブロックなのにブロック状態がなければ、計算に入れず問題に出す', () => {
+    const r = evaluate(motor(blueprintFixture()).place([1, 0, 0], 'create:mechanical_press').toBlueprint())
+    expect(r.graph.nodes.some((n) => n.pos.join() === '1,0,0')).toBe(false)
+    expect(r.issuesAt([1, 0, 0])).toEqual([expect.stringContaining('ブロック状態がないので、回転軸が決まりません')])
+    expect(r.ev.issues.find((i) => i.pos.join() === '1,0,0')?.severity).toBeUndefined()
+  })
+
+  it('値の読めないブロック状態も問題に出す。回らないブロックは何も出さない', () => {
+    const r = evaluate(
+      blueprintFixture()
+        .place([0, 0, 0], 'create:shaft', { axis: 'w' })
+        .place([2, 0, 0], 'create:andesite_casing')
+        .place([4, 0, 0], 'minecraft:stone')
+        .toBlueprint(),
+    )
+    expect(r.issuesAt([0, 0, 0])).toEqual([expect.stringContaining('ブロック状態（axis=w）から回転軸が決まりません')])
+    expect(r.issuesAt([2, 0, 0])).toEqual([])
+    expect(r.issuesAt([4, 0, 0])).toEqual([])
+  })
+
+  it('動力源につながらない回るブロックは警告', () => {
+    const r = evaluate(
+      motor(blueprintFixture())
+        .place([1, 0, 0], 'create:shaft', { axis: 'x' })
+        .place([3, 0, 0], 'create:shaft', { axis: 'x' })
+        .place([4, 0, 0], 'create:cogwheel', { axis: 'x' })
+        .toBlueprint(),
+    )
+    expect(r.issuesAt([1, 0, 0])).toEqual([])
+    for (const pos of [[3, 0, 0], [4, 0, 0]] as Vec3[]) {
+      expect(r.issuesAt(pos)).toEqual(['動力源につながっていません。回りません。'])
+    }
+    expect(r.ev.issues.filter((i) => i.severity === 'warning')).toHaveLength(2)
+  })
+
+  it('動力源が止まっていれば、つながったブロックは「回転数が 0」の警告', () => {
+    const r = evaluate(motor(blueprintFixture(), 0).place([1, 0, 0], 'create:shaft', { axis: 'x' }).toBlueprint())
+    expect(r.issuesAt([0, 0, 0])).toEqual(['回転数が 0 です。つながっている動力源が止まっています。'])
+    expect(r.issuesAt([1, 0, 0])).toEqual(['回転数が 0 です。つながっている動力源が止まっています。'])
+  })
+
+  it('仮の動力源につながっていれば警告を出さない', () => {
+    const bp = blueprintFixture().place([0, 0, 0], 'create:shaft', { axis: 'x' }).toBlueprint()
+    const port: VirtualPort = {
+      id: 'p1',
+      pluginId: 'create-stress',
+      kind: 'rotation-source',
+      pos: [0, 0, 0],
+      face: 'west',
+      params: { rpm: 32, capacity: 256 },
+    }
+    expect(evaluate(bp, [port]).ev.issues).toEqual([])
+  })
+
+  it('過負荷のネットワークには警告を重ねない', () => {
+    const r = evaluate(
+      blueprintFixture()
+        .place([0, 0, 0], 'create:hand_crank', { facing: 'west' })
+        .place([1, 0, 0], 'create:mechanical_press', { facing: 'east' })
+        .place([2, 0, 0], 'create:mechanical_press', { facing: 'east' })
+        .place([3, 0, 0], 'create:mechanical_press', { facing: 'east' })
+        .toBlueprint(),
+    )
+    expect(r.network([1, 0, 0]).overloaded).toBe(true)
+    expect(r.ev.issues.some((i) => i.severity === 'warning')).toBe(false)
+  })
+})
+
 describe('KineticGraph：範囲外と仮の入出力', () => {
   it('軸の口の先が設計図の外なら、空気とみなして仮定に載せる', () => {
     const bp = blueprintFixture({ size: [3, 1, 1] })

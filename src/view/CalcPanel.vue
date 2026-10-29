@@ -53,8 +53,9 @@ const statusText = computed(() => {
           <h4>問題（{{ o.result.issues.length }}）</h4>
           <p v-if="o.result.issues.length === 0" class="none">問題はありません。</p>
           <ul v-else class="issues">
-            <li v-for="(issue, i) in o.result.issues" :key="i">
+            <li v-for="(issue, i) in o.result.issues" :key="i" :data-severity="issue.severity ?? 'error'">
               <button type="button" class="pos" :title="`${formatPos(issue.pos)} へ移る`" @click="jumpTo(issue.pos)">{{ formatPos(issue.pos) }}</button>
+              <span v-if="issue.severity === 'warning'" class="severity">警告</span>
               {{ issue.message }}
             </li>
           </ul>
@@ -136,6 +137,14 @@ h4 {
 ul {
   margin: 0;
   padding-left: 16px;
+}
+
+.severity {
+  font-size: 11px;
+  padding: 0 4px;
+  border: 1px solid currentcolor;
+  border-radius: 3px;
+  color: #b26a00;
 }
 
 .pos {
