@@ -180,6 +180,7 @@ class TauriFileSink implements FileSink { /* @tauri-apps/plugin-dialog の save 
 | `fs:allow-read-file`・`fs:allow-read-dir`・`fs:allow-stat`・`fs:allow-exists` | 選んだフォルダ（Modpack）と選んだファイルを読む |
 | `fs:allow-open`・`fs:allow-read`・`fs:allow-seek` | jar の一部だけを読む（開く・位置を移す・読む）。開くのは読むためだけ（`read: true`）。閉じるのは `core:default` に入っている |
 | `fs:allow-write-file` | 保存の画面で選んだファイルに書く |
+| `core:window:allow-destroy` | ウィンドウを閉じる前に書き出していない変更を確かめ、閉じてよければ自分で閉じる（#173）。閉じるのを一度止めると、Tauri はウィンドウを destroy で閉じるため |
 
 - fs の許可には固定の範囲（`$HOME` など）を付けない。範囲は、dialog プラグインが利用者の選んだパスを実行中に足すものだけになる。フォルダを選ぶときは `recursive: true` を渡して中まで読めるようにし、persisted-scope がその範囲を次回も残す。
 - fs の範囲は読み書きで分かれていないので、選んだフォルダにも書けてしまう。書き込みは `TauriFileSink` が保存の画面で選んだパスにだけ行う、とコードで守る。
