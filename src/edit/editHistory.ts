@@ -60,6 +60,9 @@ function regionAt(bp: Blueprint, index: number): BlockVolume {
 export class EditHistory {
   private readonly undoStack: EditCommand[] = []
   private readonly redoStack: EditCommand[] = []
+  // 書き込み・元に戻す・やり直すの回数の合計と、最後に書き出したときのその値
+  private changes = 0
+  private savedAt = 0
   /** 画面・集計・計算の再実行の合図 */
   readonly onChange = new Signal<void>()
 
@@ -70,6 +73,7 @@ export class EditHistory {
     writeForward(this.bp, cmd)
     this.undoStack.push(cmd)
     this.redoStack.length = 0
+    this.changes++
     this.onChange.emit()
   }
 
@@ -79,6 +83,7 @@ export class EditHistory {
     if (!cmd) return null
     writeBackward(this.bp, cmd)
     this.redoStack.push(cmd)
+    this.changes++
     this.onChange.emit()
     return cmd
   }
@@ -89,6 +94,7 @@ export class EditHistory {
     if (!cmd) return null
     writeForward(this.bp, cmd)
     this.undoStack.push(cmd)
+    this.changes++
     this.onChange.emit()
     return cmd
   }
@@ -111,8 +117,32 @@ export class EditHistory {
     return this.redoStack.at(-1) ?? null
   }
 
-  /** 画面の「編集 n 回」。今の設計図に入っている操作の数 */
+  /** 今の設計図に入っている操作の数 */
   get count(): number {
     return this.undoStack.length
+  }
+
+  /** 書き込み・元に戻す・やり直すの回数の合計。書き出しを始めたときに控えて markSaved に渡す */
+  get changeCount(): number {
+    return this.changes
+  }
+
+  /**
+   * 画面の「書き出してから n 回の変更」。最後に書き出してからの、書き込み・元に戻す・やり直すの回数。
+   * 元に戻して書き出したときと同じ中身になっても 0 には戻さない（回数で数える）
+   */
+  get unsavedChanges(): number {
+    return this.changes - this.savedAt
+  }
+
+  /**
+   * 書き出した印を付ける。at は書き出しを始めたときの changeCount（省略すると今）。
+   * 書き出しの途中にした変更は、書き出していない変更として残る
+   */
+  markSaved(at: number = this.changes): void {
+    const next = Math.min(Math.max(at, this.savedAt), this.changes)
+    if (next === this.savedAt) return
+    this.savedAt = next
+    this.onChange.emit()
   }
 }

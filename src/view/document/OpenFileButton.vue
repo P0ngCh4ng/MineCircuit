@@ -1,11 +1,13 @@
 <script setup lang="ts">
 // 「ファイルを開く」ボタン。選んだ設計図を DocumentSession で開く。
-// ブラウザ版は <input type="file">、デスクトップ版（Tauri）はファイルを選ぶダイアログを使う
+// ブラウザ版は <input type="file">、デスクトップ版（Tauri）はファイルを選ぶダイアログを使う。
+// 書き出していない変更があれば、ファイルを選んだあと、開く前に確かめる（#150）
 import { ref } from 'vue'
 import { blueprintFileExtensions } from '../../io/readers/readBlueprint'
 import { pickDesktopBlueprintFile } from '../platform/fileAccess'
 import { isDesktop } from '../platform/platform'
 import { useDocumentSession } from './documentSession'
+import { confirmDiscard } from './unsavedChanges'
 
 const session = useDocumentSession()
 const opening = session.opening
@@ -23,7 +25,7 @@ async function onClick(): Promise<void> {
   pickError.value = null
   try {
     const file = await pickDesktopBlueprintFile(blueprintFileExtensions)
-    if (file) await session.openFile(file)
+    if (file && confirmDiscard(session)) await session.openFile(file)
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e)
     pickError.value = `ファイルを選ぶ画面を開けませんでした（${detail}）。もう一度「ファイルを開く…」を押してください。`
@@ -35,7 +37,7 @@ function onPicked(event: Event): void {
   const file = el.files?.[0]
   // 同じファイルをもう一度選んでも change が起きるように空にする
   el.value = ''
-  if (file) void session.openFile(file)
+  if (file && confirmDiscard(session)) void session.openFile(file)
 }
 </script>
 

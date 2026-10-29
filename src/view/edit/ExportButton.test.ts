@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, h } from 'vue'
-import { blueprintFixture } from '../../../tests/fixtures/blueprintFixture'
+import { blueprintFixture, state } from '../../../tests/fixtures/blueprintFixture'
 import { nbt } from '../../domain/nbt'
+import { placeBlock } from '../../edit/editCommand'
 import type { FileSink } from '../../io/fileSink'
 import { MemoryFileSink } from '../../io/memoryFileSink'
 import { BlueprintWriteError } from '../../io/writers/blueprintWriter'
@@ -83,6 +84,30 @@ describe('ExportButton', () => {
     expect(reread.get([0, 0, 0])?.id.toString()).toBe('minecraft:stone')
     expect(wrapper.find('[data-testid="export-message"]').text()).toContain('"mill.nbt"')
     expect(wrapper.find('[data-testid="export-message"]').text()).toContain('を書き出しました。')
+  })
+
+  it('書き出すと「書き出してからの変更」が 0 に戻る。やめたときは戻らない', async () => {
+    const session = createDocumentSession()
+    const doc = session.setBlueprint(blueprintFixture({ size: [2, 1, 1], name: 'mill.nbt' }).toBlueprint())
+    session.apply(placeBlock(doc.blueprint, [0, 0, 0], state('minecraft:stone'), false))
+    expect(session.unsavedChanges.value).toBe(1)
+
+    const cancelling = new MemoryFileSink()
+    cancelling.cancel = true
+    const first = watchSave(cancelling)
+    const cancelled = mountWith(session, first.sink)
+    await cancelled.find('[data-action="export"]').trigger('click')
+    await first.saved
+    await flushPromises()
+    expect(session.unsavedChanges.value).toBe(1)
+    cancelled.unmount()
+
+    const second = watchSave(new MemoryFileSink())
+    const wrapper = mountWith(session, second.sink)
+    await wrapper.find('[data-action="export"]').trigger('click')
+    await second.saved
+    await flushPromises()
+    expect(session.unsavedChanges.value).toBe(0)
   })
 
   it('生データのないブロックがあれば、確かめてから書き出す', async () => {

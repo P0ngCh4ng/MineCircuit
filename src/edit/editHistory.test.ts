@@ -214,6 +214,50 @@ describe('EditHistory：元に戻す・やり直す', () => {
     history.redo()
     expect(calls).toBe(4)
   })
+
+  it('書き出してからの変更：apply / undo / redo を数え、markSaved で 0 に戻す', () => {
+    const bp = makeBlueprint()
+    const history = new EditHistory(bp)
+    expect(history.unsavedChanges).toBe(0)
+    const cmd = eraseBlock(bp, [0, 0, 0])
+    if (!cmd) throw new Error('操作を作れません')
+    history.apply(cmd)
+    history.undo()
+    expect(history.unsavedChanges).toBe(2)
+    // 戻せる操作がないときは数えない
+    history.undo()
+    expect(history.unsavedChanges).toBe(2)
+
+    let calls = 0
+    history.onChange.connect(() => calls++)
+    history.markSaved()
+    expect(history.unsavedChanges).toBe(0)
+    expect(calls).toBe(1)
+    // 変わらないときは合図しない
+    history.markSaved()
+    expect(calls).toBe(1)
+
+    history.redo()
+    expect(history.unsavedChanges).toBe(1)
+  })
+
+  it('書き出しの途中の変更は、始めたときの回数で印を付けると残る', () => {
+    const bp = makeBlueprint()
+    const history = new EditHistory(bp)
+    const first = eraseBlock(bp, [0, 0, 0])
+    if (!first) throw new Error('操作を作れません')
+    history.apply(first)
+    const at = history.changeCount
+    const second = placeBlock(bp, [1, 1, 1], gearbox, false)
+    if (!second) throw new Error('操作を作れません')
+    history.apply(second)
+    history.markSaved(at)
+    expect(history.unsavedChanges).toBe(1)
+    // 前の書き出しの印で後の印を戻さない
+    history.markSaved()
+    history.markSaved(at)
+    expect(history.unsavedChanges).toBe(0)
+  })
 })
 
 describe('操作を作る関数', () => {

@@ -77,13 +77,13 @@ describe('NewBlueprintButton', () => {
     expect(wrapper.text()).toContain('1.20.1 と推定しました')
   })
 
-  it('開いている設計図に編集があれば、なくなることを知らせる', async () => {
+  it('開いている設計図に書き出していない変更があれば、なくなることを知らせる', async () => {
     const session = createDocumentSession()
     const doc = session.setBlueprint(blueprintFixture({ size: [1, 1, 1] }).toBlueprint())
     session.apply(placeBlock(doc.blueprint, [0, 0, 0], state('minecraft:stone'), false))
     const wrapper = mountWith(session)
     await wrapper.find('[data-action="new-blueprint"]').trigger('click')
-    expect(wrapper.text()).toContain('書き出していない編集（1 回）はなくなります。')
+    expect(wrapper.text()).toContain('書き出していない変更（1 回）はなくなります。')
   })
 
   it('やめると何も変えない', async () => {
