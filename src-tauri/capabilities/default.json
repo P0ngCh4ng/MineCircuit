@@ -1,10 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "MineCircuit のメインウィンドウに許可する操作。ネットワーク・シェル・自動更新は許可しない。ファイルは、ダイアログで利用者が選んだ場所だけを読み書きできる（固定の読み書きの範囲は持たない）。",
+  "description": "MineCircuit のメインウィンドウに許可する操作。ネットワーク・シェル・自動更新は許可しない。ウィンドウを閉じる前に書き出していない変更を確かめるため、自分のウィンドウを閉じる（destroy）ことだけ足す。ファイルは、ダイアログで利用者が選んだ場所だけを読み書きできる（固定の読み書きの範囲は持たない）。",
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-destroy",
     "dialog:allow-open",
     "dialog:allow-save",
     "fs:allow-read-file",
