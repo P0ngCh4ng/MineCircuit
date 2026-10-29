@@ -10,7 +10,8 @@ export interface ProbeSink {
 }
 
 /**
- * プローブ（docs/ui.md「ツール」）。キーはない。
+ * プローブ（docs/ui.md「ツール」）。キーは P。
+ * ほかのツールに替えたら、プローブの結果（右パネルの欄と強調）を消す（#154）。
  * マウスの下のブロックの回転数・応力を右パネルに出し、クリックしたブロックのネットワークを強調する。
  */
 export class ProbeTool implements Tool {
@@ -28,5 +29,6 @@ export class ProbeTool implements Tool {
 
   deactivate(): void {
     this.sink.setHovered(null)
+    this.sink.setProbed(null)
   }
 }

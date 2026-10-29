@@ -14,6 +14,7 @@ import { SHOW_ALL_LAYERS } from '../layers/layerDisplay'
 import { useCalcStore } from '../stores/calcStore'
 import { useProbeStore } from '../stores/probeStore'
 import { useToolStore } from '../stores/toolStore'
+import { resolveKeyAction } from '../tools/keymap'
 import { ProbeTool } from '../tools/probeTool'
 import { CalcOverlay3D } from '../viewport/calcOverlay3D'
 import ProbePanel from './ProbePanel.vue'
@@ -83,7 +84,7 @@ describe('ProbeTool', () => {
     tool.onClick({ pos: [1, 0, 0], empty: false }, { shift: false })
     tool.onClick({ pos: [1, 0, 1], empty: true }, { shift: false })
     tool.deactivate()
-    expect(calls).toEqual(['hover 1,0,0', 'hover null', 'probe 1,0,0', 'probe null', 'hover null'])
+    expect(calls).toEqual(['hover 1,0,0', 'hover null', 'probe 1,0,0', 'probe null', 'hover null', 'probe null'])
   })
 })
 
@@ -154,6 +155,23 @@ describe('プローブとネットのハイライト（Create の応力で）', 
 
     await wrapper.find('[data-action="clear-probe"]').trigger('click')
     expect(probe.probedPos).toBeNull()
+  })
+
+  it('P でプローブに替え、ほかのツールに替えたら結果の欄と強調を消す（#154）', async () => {
+    const { tools, probe, wrapper } = await setup()
+    const action = resolveKeyAction({ key: 'p', shiftKey: false, ctrlKey: false, metaKey: false, altKey: false })
+    expect(action).toEqual({ type: 'tool', id: 'probe' })
+    if (action?.type === 'tool') tools.setTool(action.id)
+    expect(tools.activeToolId).toBe('probe')
+    tools.click({ pos: [1, 0, 0], empty: false })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="probe-network"]').exists()).toBe(true)
+
+    tools.setTool('select')
+    await flushPromises()
+    expect(probe.probedPos).toBeNull()
+    expect(probe.networkPositions).toBeNull()
+    expect(wrapper.find('[data-testid="probe-panel"]').exists()).toBe(false)
   })
 
   it('別の設計図を開いたら強調を消す', async () => {

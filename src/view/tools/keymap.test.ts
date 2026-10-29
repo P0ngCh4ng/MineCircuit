@@ -7,8 +7,8 @@ function k(key: string, mods: Partial<Omit<KeyInput, 'key'>> = {}): KeyInput {
 }
 
 describe('resolveKeyAction', () => {
-  it('V / M / C / B / E / I でツールを切り替える（大文字・小文字とも）', () => {
-    const expected = { v: 'select', m: 'measure', c: 'connect', b: 'place', e: 'erase', i: 'pick' }
+  it('V / M / C / P / O / B / E / I でツールを切り替える（大文字・小文字とも）', () => {
+    const expected = { v: 'select', m: 'measure', c: 'connect', p: 'probe', o: 'port', b: 'place', e: 'erase', i: 'pick' }
     for (const [key, id] of Object.entries(expected)) {
       expect(resolveKeyAction(k(key))).toEqual({ type: 'tool', id })
       expect(resolveKeyAction(k(key.toUpperCase()))).toEqual({ type: 'tool', id })
@@ -78,10 +78,14 @@ describe('resolveKeyAction', () => {
     expect(resolveKeyAction(k('f', { altKey: true }))).toBeNull()
   })
 
-  it('F と G はツールの切り替えのキーと重ならない', () => {
+  it('F と G と R はツールの切り替えのキーと重ならない。ツールのキーどうしも重ならない', () => {
     const toolKeys = TOOL_CATALOG.flatMap((t) => (t.key ? [t.key.toLowerCase()] : []))
     expect(toolKeys).not.toContain('f')
     expect(toolKeys).not.toContain('g')
+    expect(toolKeys).not.toContain('r')
+    expect(new Set(toolKeys).size).toBe(toolKeys.length)
+    // すべてのツールにキーがある（#154）
+    expect(toolKeys.length).toBe(TOOL_CATALOG.length)
   })
 
   it('Ctrl や Alt と一緒のツールキー、割り当てのないキー、IME の変換中は無視する', () => {
