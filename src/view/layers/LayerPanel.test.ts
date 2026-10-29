@@ -50,7 +50,7 @@ describe('段の一覧と段の移動', () => {
     const wrapper = mountPanel(createDocumentSession())
     expect(wrapper.findAll('li')).toHaveLength(0)
     expect(wrapper.text()).toContain('設計図を開くと')
-    expect(wrapper.get('[data-action="solo"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-action="unhide-all"]').attributes('disabled')).toBeDefined()
     wrapper.unmount()
   })
 
@@ -84,20 +84,38 @@ describe('段の一覧と段の移動', () => {
     wrapper.unmount()
   })
 
-  it('「この段だけ表示」はほかの段を隠し、「すべて表示」で元に戻す', async () => {
+  it('「この段だけ」は上のバーの表示方法だけにあり、段の一覧には同じボタンを置かない', () => {
+    const session = createDocumentSession()
+    session.setBlueprint(blueprint())
+    const panel = mountPanel(session)
+    const controls = mountControls(session)
+    const labels = [...panel.findAll('button'), ...controls.findAll('button'), ...controls.findAll('option')].map((b) =>
+      b.text().trim(),
+    )
+    expect(labels.filter((t) => t === 'この段だけ')).toHaveLength(1)
+    expect(labels.filter((t) => t === 'すべて')).toHaveLength(1)
+    expect(panel.find('[data-action="solo"]').exists()).toBe(false)
+    expect(panel.find('[data-action="show-all"]').exists()).toBe(false)
+    expect(panel.text()).not.toMatch(/この段だけ|すべて表示/)
+    panel.unmount()
+  })
+
+  it('「隠した段を戻す」は丸で隠した段だけを表示に戻し、表示方法は変えない', async () => {
     const session = createDocumentSession()
     session.setBlueprint(blueprint())
     const wrapper = mountPanel(session)
     const view = useViewStore()
-    useLayerStore().setLayer(1)
-    expect(wrapper.get('[data-action="show-all"]').attributes('disabled')).toBeDefined()
-    await wrapper.get('[data-action="solo"]').trigger('click')
-    expect([...view.hiddenLayers].sort()).toEqual([0, 2])
-    view.setLayerMode('ghostAbove')
+    const button = () => wrapper.get('[data-action="unhide-all"]')
+    expect(button().attributes('disabled')).toBeDefined()
+    await wrapper.get('li[data-layer="0"] .eye').trigger('click')
+    await wrapper.get('li[data-layer="2"] .eye').trigger('click')
+    view.setLayerMode('only')
     await nextTick()
-    await wrapper.get('[data-action="show-all"]').trigger('click')
+    expect(button().attributes('disabled')).toBeUndefined()
+    await button().trigger('click')
     expect(view.hiddenLayers.size).toBe(0)
-    expect(view.layerMode).toBe('all')
+    expect(view.layerMode).toBe('only')
+    expect(button().attributes('disabled')).toBeDefined()
     wrapper.unmount()
   })
 
