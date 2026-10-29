@@ -63,6 +63,9 @@ class FakeContext implements EditToolContext {
   placementHelper(bp: Blueprint, hit: { pos: Vec3; face: Direction; point: Vec3 }, s: BlockState) {
     return registry.placementHelper(bp, hit, s)
   }
+  stateProblem(s: BlockState): string | null {
+    return registry.completeState(s).problem
+  }
 }
 
 const registry = createBuiltinRegistry()
@@ -212,6 +215,22 @@ describe('PickTool', () => {
     tool.onClick({ pos: [2, 0, 2], empty: true }, NO_SHIFT)
     expect(ctx.brushState?.key).toBe('create:shaft[axis=y]')
     expect(ctx.history.count).toBe(0)
+  })
+})
+
+describe('PlaceTool：足りない状態（#149）', () => {
+  it('回転軸が決まらないブロックは置いたうえで、計算から外れることを知らせる', () => {
+    const bp = sample()
+    const ctx = new FakeContext(bp)
+    ctx.brushState = state('create:shaft', { axis: 'w' })
+    const tool = new PlaceTool(ctx)
+    tool.onClick({ pos: [2, 0, 2], empty: true }, { shift: false, alt: true })
+    expect(bp.get([2, 0, 2])?.key).toBe('create:shaft[axis=w]')
+    expect(ctx.message).toContain('計算から外れます')
+
+    ctx.brushState = state('create:shaft', { axis: 'x' })
+    tool.onClick({ pos: [0, 0, 2], empty: true }, { shift: false, alt: true })
+    expect(ctx.message).toBeNull()
   })
 })
 

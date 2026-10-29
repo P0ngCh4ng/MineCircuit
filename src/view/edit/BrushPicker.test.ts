@@ -198,4 +198,19 @@ describe('BrushPicker（Modpack から探す）', () => {
     expect(useBrushStore().state?.key).toBe('create:shaft[axis=y]')
     expect(wrapper.find('[data-testid="brush-props"]').exists()).toBe(false)
   })
+
+  it('ID だけの Create の回るブロックは、既定の状態を補う（#149）', async () => {
+    const wrapper = mountPicker()
+    const input = wrapper.find('[data-testid="brush-input"]')
+    await input.setValue('create:shaft')
+    await wrapper.find('form').trigger('submit')
+    expect(useBrushStore().state?.key).toBe('create:shaft[axis=y]')
+    await input.setValue('create:creative_motor')
+    await wrapper.find('form').trigger('submit')
+    expect(useBrushStore().state?.key).toBe('create:creative_motor[facing=north]')
+    // 回転に関わらないブロックはそのまま
+    await input.setValue('minecraft:glass')
+    await wrapper.find('form').trigger('submit')
+    expect(useBrushStore().state?.key).toBe('minecraft:glass')
+  })
 })
