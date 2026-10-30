@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type DOMWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { blueprintFixture, state } from '../../tests/fixtures/blueprintFixture'
 import { noopCalcPlugin } from '../../tests/fixtures/noopCalcPlugin'
@@ -9,6 +9,7 @@ import { resolved } from '../calc/provenance'
 import { nbt } from '../domain/nbt'
 import { placeBlock } from '../edit/editCommand'
 import { EditHistory } from '../edit/editHistory'
+import { usePortTool } from './calc/usePortTool'
 import CalcPanel from './CalcPanel.vue'
 import { useCalcStore } from './stores/calcStore'
 import { useLayerStore } from './stores/layerStore'
@@ -23,6 +24,11 @@ function setup(plugins = [noopCalcPlugin()]) {
   calc.setBackend(new InlineCalcBackend(new PluginRegistry(plugins)), { delayMs: 100 })
   const wrapper = mount(CalcPanel, { global: { plugins: [pinia] } })
   return { calc, wrapper }
+}
+
+/** v-show で隠していなければ true（取り付けていない部品では isVisible が使えないため） */
+function shown(el: DOMWrapper<Element>): boolean {
+  return !(el.attributes('style') ?? '').includes('display: none')
 }
 
 function sample() {
@@ -101,7 +107,7 @@ describe('CalcPanel（右パネルの計算結果）', () => {
       ...plugin,
       run: async (...args: Parameters<typeof plugin.run>) => {
         const r = await run(...args)
-        return { ...r, summary: [...r.summary, { label: 'ネットワーク 1', value: resolved('使用 0 SU', 'blueprint'), pos: [1, 0, 0] as const }] }
+        return { ...r, summary: [...r.summary, { label: 'ネットワーク 1', value: resolved('使用 0 SU', 'blueprint'), pos: [1, 0, 0] as const, network: true }] }
       },
     }
     const { calc, wrapper } = setup([withNet])
@@ -111,6 +117,51 @@ describe('CalcPanel（右パネルの計算結果）', () => {
     expect(buttons.map((b) => b.text())).toEqual(['ネットワーク 1'])
     await buttons[0].trigger('click')
     expect(useProbeStore().probedPos).toEqual([1, 0, 0])
+  })
+
+  it('計算をタブに分け、ネットワークの行はまとめでなくネットワークのタブに出す（#157）', async () => {
+    const plugin = noopCalcPlugin()
+    const run = plugin.run.bind(plugin)
+    const withNet = {
+      ...plugin,
+      run: async (...args: Parameters<typeof plugin.run>) => {
+        const r = await run(...args)
+        return { ...r, summary: [...r.summary, { label: 'ネットワーク 1', value: resolved('使用 0 SU', 'blueprint'), pos: [1, 0, 0] as const, network: true }] }
+      },
+    }
+    const { calc, wrapper } = setup([withNet])
+    await calc.attach(sample())
+    await flushPromises()
+    const tabs = wrapper.findAll('[role="tab"]')
+    expect(tabs.map((t) => t.text())).toEqual(['まとめ', 'ネットワーク（1）', '問題（1）', '入出力（0）', '仮定（1）'])
+    const panel = (id: string) => wrapper.find(`[data-tabpanel="${id}"]`)
+    expect(shown(panel('summary'))).toBe(true)
+    expect(panel('summary').text()).toContain('ブロック数')
+    expect(panel('summary').text()).not.toContain('ネットワーク 1')
+    expect(shown(panel('networks'))).toBe(false)
+
+    await wrapper.find('[data-tab="networks"]').trigger('click')
+    expect(shown(panel('summary'))).toBe(false)
+    expect(shown(panel('networks'))).toBe(true)
+    expect(panel('networks').text()).toContain('ネットワーク 1')
+    expect(wrapper.find('[data-tab="networks"]').attributes('aria-selected')).toBe('true')
+
+    await wrapper.find('[data-tab="issues"]').trigger('click')
+    expect(shown(panel('issues'))).toBe(true)
+    expect(panel('issues').text()).toContain('壊れている')
+  })
+
+  it('仮の入出力のツールに替えると、入出力のタブを開く（#157）', async () => {
+    const { calc, wrapper } = setup()
+    await calc.attach(sample())
+    await flushPromises()
+    expect(shown(wrapper.find('[data-tabpanel="ports"]'))).toBe(false)
+    usePortTool()
+    useToolStore().setTool('port')
+    await flushPromises()
+    expect(wrapper.find('[data-tab="ports"]').attributes('aria-selected')).toBe('true')
+    expect(shown(wrapper.find('[data-tabpanel="ports"]'))).toBe(true)
+    expect(wrapper.find('[data-testid="port-panel"]').exists()).toBe(true)
   })
 
   it('問題の位置を押すと、そのブロックを選び、その段へ移ってプローブの対象にする', async () => {
