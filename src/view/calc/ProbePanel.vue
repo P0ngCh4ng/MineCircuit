@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// 右パネルのプローブ（#31）。マウスの下（なければクリックした）ブロックの回転数・応力などを、出どころ付きで出す。
+// 右パネルのプローブ（#31）。マウスの下（なければクリックした）ブロックの回転数・応力などを、値だけ一時的に出す。
+// 出どころ・ネットワーク・問題は、ブロックを選んで「選択中のブロック」の欄で見る（#158）。
 // クリックしたブロックのネットワークを強調していれば、その数と解除のボタンを出す。
 import { computed } from 'vue'
-import { PROVENANCE_LABELS } from '../../calc/provenance'
 import { useDocumentSession } from '../document/documentSession'
 import { useCalcStore } from '../stores/calcStore'
 import { useProbeStore } from '../stores/probeStore'
@@ -23,6 +23,9 @@ const blockId = computed(() => {
   return pos && bp ? (bp.get(pos)?.id.toString() ?? null) : null
 })
 
+/** プラグインをまたいで、値を1列に並べる */
+const values = computed(() => probe.readings.flatMap((r) => r.values.map((item) => ({ pluginId: r.pluginId, item }))))
+
 const emptyText = computed(() => {
   if (!calc.hasBlueprint) return '設計図を開くと、ブロックの回転数と応力を見られます。'
   if (!probe.shownPos) return 'ブロックにマウスを重ねると、回転数と応力が出ます。クリックすると、つながったブロックを強調します。'
@@ -40,22 +43,12 @@ const emptyText = computed(() => {
       <span v-if="blockId" class="id">{{ blockId }}</span>
     </p>
     <p v-if="emptyText" class="empty">{{ emptyText }}</p>
-    <article v-for="r in probe.readings" :key="r.pluginId" class="reading" :data-plugin="r.pluginId">
-      <h3>{{ r.pluginLabel }}</h3>
-      <dl>
-        <template v-for="(item, i) in r.values" :key="i">
-          <dt>{{ item.label }}</dt>
-          <dd>
-            {{ item.value.value }}
-            <span
-              class="source"
-              :data-source="item.value.source"
-              :title="item.value.note ?? PROVENANCE_LABELS[item.value.source]"
-            >{{ PROVENANCE_LABELS[item.value.source] }}</span>
-          </dd>
-        </template>
-      </dl>
-    </article>
+    <ul v-if="values.length > 0" class="values">
+      <li v-for="(v, i) in values" :key="i" :data-plugin="v.pluginId">
+        <span class="label">{{ v.item.label }}</span>
+        {{ v.item.value.value }}
+      </li>
+    </ul>
     <p v-if="probe.probedPos" class="network" data-testid="probe-network">
       <span v-if="probe.networkPositions">
         {{ formatPos(probe.probedPos) }} とつながった {{ probe.networkPositions.length }} ブロックを強調中
@@ -68,22 +61,23 @@ const emptyText = computed(() => {
 
 <style scoped>
 .probe-panel {
-  font-size: 13px;
-  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
 }
 
 h2 {
-  font-size: 14px;
-  margin: 0 0 8px;
-}
-
-h3 {
-  font-size: 13px;
-  margin: 8px 0 4px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
 }
 
 .target {
-  margin: 0 0 4px;
+  margin: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 4px 8px;
@@ -100,44 +94,40 @@ h3 {
 
 .empty {
   opacity: 0.7;
-  margin: 4px 0;
+  margin: 0;
+  line-height: 1.5;
 }
 
-dl {
+.values {
+  margin: 0;
+  padding: 0;
+  list-style: none;
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 2px 8px;
-  margin: 0;
+  gap: 1px;
+  font-variant-numeric: tabular-nums;
 }
 
-dd {
-  margin: 0;
-}
-
-.source {
-  font-size: 11px;
-  padding: 0 4px;
-  border: 1px solid currentcolor;
-  border-radius: 3px;
+.label {
   opacity: 0.7;
-  white-space: nowrap;
-}
-
-.source[data-source='assumed'] {
-  color: #b26a00;
-  opacity: 1;
-}
-
-.source[data-source='virtual'] {
-  color: #8a4fd8;
-  opacity: 1;
+  margin-right: 6px;
 }
 
 .network {
-  margin: 8px 0 0;
+  margin: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 8px;
+}
+
+button {
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
 }
 </style>

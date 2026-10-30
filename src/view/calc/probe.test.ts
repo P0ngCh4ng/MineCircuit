@@ -18,7 +18,7 @@ import { resolveKeyAction } from '../tools/keymap'
 import { ProbeTool } from '../tools/probeTool'
 import { CalcOverlay3D } from '../viewport/calcOverlay3D'
 import ProbePanel from './ProbePanel.vue'
-import { networkAt, probeAt } from './probeModel'
+import { issuesAt, networkAt, networkRowsAt, probeAt } from './probeModel'
 import { useProbeTool } from './useProbeTool'
 
 /** クリエイティブモーター → 軸 → 軸 → プレス、離れたところに軸が1本 */
@@ -69,6 +69,49 @@ describe('probeModel', () => {
     expect(networkAt(outcomes, [5, 0, 0])).toEqual([[5, 0, 0]])
     expect(networkAt(outcomes, [6, 0, 0])).toBeNull()
     expect(networkAt(outcomes, [9, 9, 9])).toBeNull()
+  })
+
+  const withRows: PluginOutcome[] = [
+    {
+      pluginId: 'a',
+      label: 'A',
+      status: 'ok',
+      result: {
+        summary: [
+          { label: 'まとめ', value: resolved('ネットワーク 2', 'blueprint') },
+          { label: 'ネットワーク 1', value: resolved('使用 8 SU', 'blueprint'), pos: [1, 0, 0], network: true },
+          { label: 'ネットワーク 2', value: resolved('使用 0 SU', 'blueprint'), pos: [5, 0, 0], network: true },
+        ],
+        issues: [
+          { pos: [5, 0, 0], message: '止まっている', severity: 'warning' },
+          { pos: [1, 0, 0], message: 'まとめた過負荷', positions: [[1, 0, 0], [0, 0, 0]] },
+          { pos: [0, 0, 0], message: '知らせ', severity: 'info' },
+        ],
+        assumptions: [],
+        probes: [
+          { pos: [0, 0, 0], values: [], network: 0 },
+          { pos: [1, 0, 0], values: [], network: 0 },
+          { pos: [5, 0, 0], values: [], network: 1 },
+          { pos: [6, 0, 0], values: [] },
+        ],
+      },
+    },
+  ]
+
+  it('ブロックが属するネットワークの、ネット一覧の行を返す（#158）', () => {
+    expect(networkRowsAt(withRows, [0, 0, 0]).map((r) => r.row.label)).toEqual(['ネットワーク 1'])
+    expect(networkRowsAt(withRows, [5, 0, 0]).map((r) => r.row.label)).toEqual(['ネットワーク 2'])
+    expect(networkRowsAt(withRows, [6, 0, 0])).toEqual([])
+    expect(networkRowsAt(null, [0, 0, 0])).toEqual([])
+  })
+
+  it('ブロックが入る問題を、まとめた問題も含めて重い順に返す（#158）', () => {
+    expect(issuesAt(withRows, [0, 0, 0])).toEqual([
+      { pluginId: 'a', severity: 'error', message: 'まとめた過負荷' },
+      { pluginId: 'a', severity: 'info', message: '知らせ' },
+    ])
+    expect(issuesAt(withRows, [5, 0, 0]).map((i) => i.severity)).toEqual(['warning'])
+    expect(issuesAt(withRows, [6, 0, 0])).toEqual([])
   })
 })
 
@@ -133,7 +176,8 @@ describe('プローブとネットのハイライト（Create の応力で）', 
     expect(text).toContain('回転数')
     expect(text).toContain('16 RPM')
     expect(text).toContain('応力')
-    expect(wrapper.findAll('.source').length).toBeGreaterThan(0)
+    // 値だけ出し、出どころは選択中のブロックの欄で見る（#158）
+    expect(wrapper.findAll('.source').length).toBe(0)
 
     tools.click({ pos: [1, 0, 0], empty: false })
     await flushPromises()

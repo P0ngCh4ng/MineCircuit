@@ -1,15 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, h, markRaw } from 'vue'
 import { blueprintFixture } from '../../../tests/fixtures/blueprintFixture'
 import { fakeJar } from '../../../tests/fixtures/fakeJar'
+import { createBuiltinRegistry } from '../../calc/builtinPlugins'
+import { InlineCalcBackend } from '../../calc/calcScheduler'
 import { nbt } from '../../domain/nbt'
 import { eraseBlock } from '../../edit/editCommand'
 import { scanJar } from '../../io/modpack/jarScanner'
 import { Modpack } from '../../io/modpack/modpack'
 import { createDocumentSession, provideDocumentSession, type DocumentSession } from '../document/documentSession'
+import { useCalcStore } from '../stores/calcStore'
 import { setModpackLoadEnvironment, useModpackContentStore } from '../stores/modpackContent'
+import { useProbeStore } from '../stores/probeStore'
 import { useToolStore } from '../stores/toolStore'
 import BlockDetail from './BlockDetail.vue'
 
@@ -56,6 +60,59 @@ describe('BlockDetail', () => {
     const wrapper = mountWith(session)
     expect(wrapper.text()).toContain('選択ツール（V）でブロックをクリックすると')
     expect(wrapper.find('.clear').exists()).toBe(false)
+  })
+
+  /** クリエイティブモーター（16 RPM）→ 軸 → プレス、離れたところに動力源のない軸 */
+  function line() {
+    return blueprintFixture({ size: [5, 1, 3] })
+      .place([0, 0, 0], 'create:creative_motor', { facing: 'east' }, nbt.compound({ ScrollValue: nbt.int(16) }))
+      .place([1, 0, 0], 'create:shaft', { axis: 'x' })
+      .place([2, 0, 0], 'create:mechanical_press', { facing: 'east' })
+      .place([0, 0, 2], 'create:shaft', { axis: 'x' })
+      .toBlueprint()
+  }
+
+  async function withCalc() {
+    const calc = useCalcStore()
+    calc.setBackend(new InlineCalcBackend(createBuiltinRegistry()), { delayMs: 0 })
+    const session = createDocumentSession()
+    const doc = session.setBlueprint(line())
+    const wrapper = mountWith(session)
+    await calc.attach(doc.blueprint)
+    await flushPromises()
+    return { wrapper, tools: useToolStore() }
+  }
+
+  it('選んだブロックの回転数・応力（出どころつき）・ネットワーク・問題を出す（#158）', async () => {
+    const { wrapper, tools } = await withCalc()
+    tools.setSelected([2, 0, 0])
+    await flushPromises()
+    const calc = wrapper.find('[data-testid="block-calc"]')
+    expect(calc.text()).toContain('回転数')
+    expect(calc.text()).toContain('16 RPM')
+    expect(calc.text()).toContain('応力')
+    expect(calc.text()).toContain('SU')
+    expect(calc.findAll('.source').length).toBeGreaterThan(0)
+    expect(calc.find('[data-testid="block-network"] .network-name').text()).toBe('ネットワーク 1')
+    await calc.find('[data-action="highlight-network"]').trigger('click')
+    expect(useProbeStore().probedPos).toEqual([2, 0, 0])
+
+    // 動力源のない軸は、警告の問題を出す
+    tools.setSelected([0, 0, 2])
+    await flushPromises()
+    const issues = wrapper.findAll('[data-testid="block-calc"] .issues li')
+    expect(issues.map((li) => li.attributes('data-severity'))).toEqual(['warning'])
+    expect(issues[0]!.text()).toContain('動力源につながっていません')
+  })
+
+  it('何も選んでいないときは、設計図全体のまとめと問題の件数を出す（#158）', async () => {
+    const { wrapper } = await withCalc()
+    const summary = wrapper.find('[data-testid="blueprint-calc"]')
+    expect(summary.exists()).toBe(true)
+    expect(summary.find('[data-detail="issue-counts"]').text()).toMatch(/エラー 0s*警告 1s*情報 0/)
+    expect(summary.text()).toContain('ネットワーク 2／過負荷 0')
+    // ネット一覧の行はここには出さない
+    expect(summary.text()).not.toContain('ネットワーク 1')
   })
 
   it('ID・位置（段は1始まり）・ブロック状態・生データのツリーを出す', async () => {
