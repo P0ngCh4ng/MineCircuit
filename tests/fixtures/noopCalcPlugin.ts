@@ -19,7 +19,7 @@ export interface NoopPluginOptions {
 
 /**
  * - 合計：ブロック数（出どころ blueprint）、係数（設定ファイル → 内蔵の初期値）
- * - 問題：生データの "Broken" が 0 でないブロック。2 なら警告
+ * - 問題：生データの "Broken" が 0 でないブロック。2 なら警告、3 なら情報
  * - 仮定：範囲外は空気とみなしたこと、仮の入出力の数
  */
 export function noopCalcPlugin(options: NoopPluginOptions = {}): CalcPlugin {
@@ -45,6 +45,7 @@ export function noopCalcPlugin(options: NoopPluginOptions = {}): CalcPlugin {
           const pos: Vec3 = [x + region.offset[0], y + region.offset[1], z + region.offset[2]]
           const broken = nbtNumber(be, 'Broken') ?? 0
           if (broken === 2) issues.push({ pos, message: '壊れそう', severity: 'warning' })
+          else if (broken === 3) issues.push({ pos, message: '直した跡がある', severity: 'info' })
           else if (broken !== 0) issues.push({ pos, message: '壊れている' })
         })
       }

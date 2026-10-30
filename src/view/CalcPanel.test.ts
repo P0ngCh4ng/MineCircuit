@@ -69,19 +69,22 @@ describe('CalcPanel（右パネルの計算結果）', () => {
     expect(calc.issuePositions).toEqual([[1, 0, 0]])
   })
 
-  it('警告は「警告」と付けて一覧に出し、3D・2D の強調には入れない（#148）', async () => {
+  it('問題を重さごとに重い順で分けて出し、3D・2D の強調はエラーだけ（#148・#159）', async () => {
     const { calc, wrapper } = setup()
-    const bp = blueprintFixture({ size: [3, 1, 1] })
+    const bp = blueprintFixture({ size: [4, 1, 1] })
       .place([0, 0, 0], 'create:shaft', { axis: 'x' }, nbt.compound({ Broken: nbt.byte(2) }))
-      .place([1, 0, 0], 'create:shaft', { axis: 'x' }, nbt.compound({ Broken: nbt.byte(1) }))
+      .place([1, 0, 0], 'create:shaft', { axis: 'x' }, nbt.compound({ Broken: nbt.byte(3) }))
+      .place([2, 0, 0], 'create:shaft', { axis: 'x' }, nbt.compound({ Broken: nbt.byte(1) }))
+      .place([3, 0, 0], 'create:shaft', { axis: 'x' }, nbt.compound({ Broken: nbt.byte(2) }))
       .toBlueprint()
     await calc.attach(bp)
     await flushPromises()
-    const items = wrapper.findAll('.issues li')
-    expect(items.map((li) => li.attributes('data-severity'))).toEqual(['warning', 'error'])
-    expect(items[0].find('.severity').text()).toBe('警告')
-    expect(items[1].find('.severity').exists()).toBe(false)
-    expect(calc.issuePositions).toEqual([[1, 0, 0]])
+    const groups = wrapper.findAll('.issue-group')
+    expect(groups.map((g) => g.attributes('data-severity'))).toEqual(['error', 'warning', 'info'])
+    expect(groups.map((g) => g.find('h4').text())).toEqual(['エラー（1）', '警告（2）', '情報（1）'])
+    expect(groups[1].findAll('li').map((li) => li.find('.pos').text())).toEqual(['[0, 0, 0]', '[3, 0, 0]'])
+    expect(calc.issuePositions).toEqual([[2, 0, 0]])
+    expect(calc.issueCounts).toEqual({ error: 1, warning: 2, info: 1 })
   })
 
   it('まとめた問題は、その全ブロックを強調する（#153）', async () => {
