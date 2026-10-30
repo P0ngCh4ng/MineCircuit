@@ -1,5 +1,6 @@
 // 置くブロックの棚の中身（docs/ui.md「編集」）。画面に依存しない計算だけを置く。
-// - 選択肢（「Mod」の欄で選ぶ）：「この設計図」と、Modpack の Mod（namespace）ごと。設計図で使っている Mod を先に、残りを名前順
+// - 選択肢（「Mod」の欄で選ぶ）：「この設計図」と、Modpack の Mod（namespace）ごと。設計図で使っている Mod を先に、残りを名前順。
+//   Modpack がなければ、代わりに「基本の部品」（計算プラグインの basicBlocks。#162）
 // - 中身：この設計図ならブロック状態そのもの、Mod ならブロック状態の定義の最初の組み合わせ。表示名の順
 // - 絞り込み：日本語名・英語名・ID に、空白で区切った言葉がすべて入っているもの
 
@@ -10,6 +11,14 @@ import type { ModInfo } from '../../io/modpack/modMetadata'
 
 /** 「この設計図」の選択肢の id */
 export const BLUEPRINT_TAB = 'blueprint'
+/** 「基本の部品」の選択肢の id（Modpack がないとき。#162） */
+export const BASIC_TAB = 'basic'
+
+/** 基本の部品1つ分。状態と、アプリで書いた名前 */
+export interface BasicShelfBlock {
+  readonly state: BlockState
+  readonly name: string
+}
 
 export interface ShelfTab {
   /** `blueprint` か `ns:<namespace>` */
@@ -43,10 +52,17 @@ export function modLabel(pack: ShelfModpack, ns: string): string {
   return pack.mods.find((m) => m.modId === ns)?.name ?? ns
 }
 
-/** 選択肢の一覧。Modpack がなければ「この設計図」だけ */
-export function shelfTabs(pack: ShelfModpack | null, blueprintNamespaces: ReadonlySet<string>): ShelfTab[] {
+/** 選択肢の一覧。Modpack がなければ「この設計図」と、基本の部品があれば「基本の部品」 */
+export function shelfTabs(
+  pack: ShelfModpack | null,
+  blueprintNamespaces: ReadonlySet<string>,
+  hasBasic = false,
+): ShelfTab[] {
   const tabs: ShelfTab[] = [{ id: BLUEPRINT_TAB, label: 'この設計図' }]
-  if (!pack) return tabs
+  if (!pack) {
+    if (hasBasic) tabs.push({ id: BASIC_TAB, label: '基本の部品' })
+    return tabs
+  }
   const namespaces = [...new Set(pack.blockIds().map(namespaceOf))]
   const used = namespaces.filter((ns) => blueprintNamespaces.has(ns))
   const rest = namespaces.filter((ns) => !blueprintNamespaces.has(ns))
@@ -70,14 +86,20 @@ export function matchesFilter(item: ShelfItem, filter: string): boolean {
 
 /**
  * 選択肢の中身（絞り込んだあと）。blueprintStates は設計図にあるブロック状態。
- * Mod は pack がなければ空
+ * Mod は pack がなければ空。基本の部品は basic の順のまま（名前順にしない）
  */
 export function shelfItems(
   tabId: string,
   pack: ShelfModpack | null,
   blueprintStates: readonly BlockState[],
   filter = '',
+  basic: readonly BasicShelfBlock[] = [],
 ): ShelfItem[] {
+  if (tabId === BASIC_TAB) {
+    return basic
+      .map((b) => ({ state: b.state, id: b.state.id.toString(), ja: b.name, en: null }))
+      .filter((i) => matchesFilter(i, filter))
+  }
   const name = (id: ResourceLocation, lang: 'ja_jp' | 'en_us') => pack?.displayName(id, lang) ?? null
   let items: ShelfItem[]
   if (tabId === BLUEPRINT_TAB) {

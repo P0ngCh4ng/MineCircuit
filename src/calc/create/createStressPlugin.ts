@@ -19,6 +19,7 @@ import type {
 } from '../calcPlugin'
 import { resolved, type Provenance } from '../provenance'
 import { loadCreateConfig } from './createConfig'
+import { CREATE_BASIC_BLOCKS } from './createBasicBlocks'
 import { completeCreateState } from './createDefaultStates'
 import { orientForPlacement, placementHelper, placementProblem } from './createPlacement'
 import { transformCreateBlockEntity, transformCreateState } from './createTransform'
@@ -72,6 +73,7 @@ export function createStressPlugin(): CalcPlugin {
     placementProblem,
     placementHelper,
     completeState: completeCreateState,
+    basicBlocks: CREATE_BASIC_BLOCKS,
     transformState: transformCreateState,
     transformBlockEntity: transformCreateBlockEntity,
   }

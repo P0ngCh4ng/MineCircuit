@@ -13,9 +13,9 @@ import { useModpackContentStore } from '../stores/modpackContent'
 import { useToolStore } from '../stores/toolStore'
 import { blockColorCss } from '../viewport/blockColor'
 import { blockAbbreviation } from '../viewport/layerGrid2D'
-import { BLUEPRINT_TAB, shelfItems, shelfTabs, type ShelfItem } from './blockShelf'
+import { BASIC_TAB, BLUEPRINT_TAB, shelfItems, shelfTabs, type ShelfItem } from './blockShelf'
 import { blueprintBlockStates, BrushInputError, parseBlockStateInput } from './brushInput'
-import { completeBlockState } from './placementRules'
+import { basicBlocks, completeBlockState } from './placementRules'
 
 const session = useDocumentSession()
 const brush = useBrushStore()
@@ -34,9 +34,12 @@ const states = computed<BlockState[]>(() => {
   return bp ? blueprintBlockStates(bp) : []
 })
 
-const tabs = computed(() => shelfTabs(content.pack, new Set(states.value.map((s) => s.id.namespace))))
+/** Modpack がないときの「基本の部品」（#162） */
+const basic = basicBlocks()
 
-// 選んでいたものがなくなったら（Modpack を外した）、この設計図に戻す。設計図が空なら最初の Mod にする
+const tabs = computed(() => shelfTabs(content.pack, new Set(states.value.map((s) => s.id.namespace)), basic.length > 0))
+
+// 選んでいたものがなくなったら（Modpack を外した・読んだ）、この設計図に戻す。設計図が空なら最初の Mod（Modpack がなければ基本の部品）にする
 watch(
   tabs,
   (list) => {
@@ -103,7 +106,7 @@ function onModKeydown(e: KeyboardEvent): void {
 /** 今の Mod の中身（絞り込んだあと）。"[" を含む入力は ID の入力なので絞り込まない */
 const items = computed<ShelfItem[]>(() => {
   const text = input.value.trim()
-  return shelfItems(tabId.value, content.pack, states.value, text.includes('[') ? '' : text)
+  return shelfItems(tabId.value, content.pack, states.value, text.includes('[') ? '' : text, basic)
 })
 
 // 棚に並べるブロックのアイコンを頼む
@@ -191,7 +194,11 @@ function onKeydown(e: KeyboardEvent): void {
 /** Enter：ID と状態の入力ならそれを使う。絞り込んだ結果が1つだけならそれを使う */
 function onSubmit(): void {
   const text = input.value.trim()
-  const asId = text.includes('[') || (text.includes(':') && items.value.length === 0) || !content.pack
+  // Modpack がないときは ID の入力として扱う（基本の部品を開いているときは、名前でも選べる）
+  const asId =
+    text.includes('[') ||
+    (text.includes(':') && items.value.length === 0) ||
+    (!content.pack && (tabId.value !== BASIC_TAB || items.value.length === 0))
   if (!asId && items.value.length === 1) {
     use(items.value[0]!.state)
     input.value = ''
@@ -240,7 +247,12 @@ function onSubmit(): void {
         </select>
       </label>
     </div>
-    <p v-if="current" class="note">R で水平に回す、Shift+R で縦にする。</p>
+    <div v-if="current" class="rotate" role="group" aria-label="置くブロックを回す">
+      <button type="button" data-action="brush-rotate" title="置くブロックを水平に回す（R）" @click="brush.rotate(false)">回す（R）</button>
+      <button type="button" data-action="brush-rotate-vertical" title="置くブロックを縦にする（Shift+R）" @click="brush.rotate(true)">
+        縦にする（Shift+R）
+      </button>
+    </div>
 
     <div class="field mod-field">
       <label for="brush-mod">Mod</label>
@@ -385,6 +397,12 @@ h2 {
   display: block;
   font-size: 10px;
   opacity: 0.65;
+}
+
+.rotate {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .props {

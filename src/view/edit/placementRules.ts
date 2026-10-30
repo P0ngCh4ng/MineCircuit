@@ -41,6 +41,11 @@ export function completeBlockState(state: BlockState): { state: BlockState; prob
   return registry.completeState(state)
 }
 
+/** Modpack がないときの棚に出す基本の部品（#162） */
+export function basicBlocks(): { state: BlockState; name: string }[] {
+  return registry.basicBlocks()
+}
+
 /** 範囲の回転・反転でのブロック状態（Mod 独自のプロパティは計算プラグインの規則、それ以外はバニラの規則） */
 export function transformBlockState(state: BlockState, t: BlockTransform): BlockState {
   return registry.transformState(state, t)

@@ -605,6 +605,11 @@ Modpackがあれば、置くブロックを jar のブロックから名前で�
 - 足りないものだけを足し、書いた値は変えない。Create の回るブロックは `axis=y`、向きで軸が決まるものは `facing=north`（水平にしか向かないブロックもあるため）。置いたあと、隣とつながる向きへの合わせ（`orientForPlacement`）で変わることがある
 - 補えない（値が読めない）ときも置くブロックにはするが、置くツールが置いた時点でお知らせに理由を出す（`EditToolContext.stateProblem`）
 
+基本の部品（#162）。Modpack がないと Mod ごとの棚が出せないので、計算プラグインが扱えるブロックのうち基本のものを、既定の状態つきで棚の「基本の部品」に出す。
+
+- 一覧は計算プラグインの `basicBlocks`（Create は `calc/create/createBasicBlocks.ts`）。画面は `PluginRegistry.basicBlocks` に聞き（`view/edit/placementRules.ts`）、`view/edit/blockShelf.ts` が選択肢「基本の部品」（`BASIC_TAB`）にする。Modpack を読んでいれば Mod ごとの棚があるので出さない
+- 状態は `completeState` と同じ規則で補ったもの（`create:shaft[axis=y]` など）。名前はアプリで書いた短い日本語で、Mod の翻訳ファイルは使わない
+
 ## 値の出どころ
 
 計算に使う値はどのModでも3種類に分かれる。
@@ -694,6 +699,8 @@ interface CalcPlugin {
   placementProblem?(bp: Blueprint, pos: Vec3, state: BlockState): string | null
   // 足りないブロック状態を補う（任意。#149）。補った状態と、補えなかったときの理由。知らないブロックなら null
   completeState?(state: BlockState): { state: BlockState; problem: string | null } | null
+  // Modpack がないときの棚に出す基本の部品（任意。#162）。既定の状態と、アプリで書いた短い名前
+  readonly basicBlocks?: readonly { state: BlockState; name: string }[]
   // 置き方の補助（任意。3D で面をクリックしたとき）。クリックしたブロックと当たった点から、置く位置と状態を返す。
   // 使わないなら null（ふつうに面の隣に置く）。Create は歯車の補助（CogwheelBlockItem の helper と同じ）
   placementHelper?(bp: Blueprint, hit: { pos: Vec3; face: Direction; point: Vec3 }, state: BlockState): { pos: Vec3; state: BlockState } | null
