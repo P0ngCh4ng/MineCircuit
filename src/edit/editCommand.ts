@@ -1,4 +1,4 @@
-import type { BlockState } from '../domain/blockState'
+import { BlockState } from '../domain/blockState'
 import type { BlockTransform } from '../domain/blockTransform'
 import type { Blueprint } from '../domain/blueprint'
 import type { CellValue, RawEntity } from '../domain/blockVolume'
@@ -137,6 +137,22 @@ export function rotateBlock(
   if (next.equals(before.state)) return null
   return {
     label: `${blockName(before.state)} を回す`,
+    changes: [{ pos, before, after: { state: next, blockEntity: before.blockEntity } }],
+  }
+}
+
+/**
+ * pos のブロックのブロック状態の項目 name を value にする操作を作る（右パネルで選んで直す。#165）。
+ * 生データ（nbt）はそのまま引き継ぐ。項目がなければ足す。
+ * 空き・範囲の外・すでに同じ値・名前か値が空のときは null。
+ */
+export function setBlockProperty(bp: Blueprint, pos: Vec3, name: string, value: string): EditCommand | null {
+  const before = currentCell(bp, pos)
+  if (!before?.state || name === '' || value === '') return null
+  if (before.state.properties[name] === value) return null
+  const next = new BlockState(before.state.id, { ...before.state.properties, [name]: value })
+  return {
+    label: `${blockName(before.state)} の ${name} を ${value} にする`,
     changes: [{ pos, before, after: { state: next, blockEntity: before.blockEntity } }],
   }
 }

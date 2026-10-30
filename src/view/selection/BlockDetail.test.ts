@@ -125,7 +125,7 @@ describe('BlockDetail', () => {
     expect(wrapper.find('[data-detail="name"]').text()).toBe('create:creative_motor')
     expect(wrapper.find('[data-detail="id"]').exists()).toBe(false)
     expect(wrapper.find('[data-detail="pos"]').text()).toBe('0, 0, 0（段 1）')
-    expect(wrapper.find('[data-prop-value="facing"]').text()).toBe('up')
+    expect((wrapper.find('[data-prop-value="facing"] select').element as HTMLSelectElement).value).toBe('up')
     expect(wrapper.find('[data-detail="region"]').exists()).toBe(false)
 
     const top = wrapper.findAll('.tree > li')
@@ -148,6 +148,46 @@ describe('BlockDetail', () => {
     const first = items.find('li[data-label="[0]"]')
     expect(first.find('details').attributes('open')).toBeUndefined()
     expect(first.find('li[data-label="Count"] .v').text()).toBe('2b')
+  })
+
+  it('ブロック状態の axis を選んで直し、元に戻せる。生データは残る（#165）', async () => {
+    const session = createDocumentSession()
+    const bp = blueprintFixture({ size: [2, 1, 1] })
+      .place([0, 0, 0], 'create:shaft', { axis: 'x' }, nbt.compound({ Speed: nbt.int(8) }))
+      .toBlueprint()
+    const doc = session.setBlueprint(bp)
+    const wrapper = mountWith(session)
+    useToolStore().setSelected([0, 0, 0])
+    await wrapper.vm.$nextTick()
+    const select = wrapper.find('[data-prop-value="axis"] select')
+    expect(select.findAll('option').map((o) => o.text())).toEqual(['x', 'y', 'z'])
+
+    await select.setValue('y')
+    expect(doc.blueprint.get([0, 0, 0])?.key).toBe('create:shaft[axis=y]')
+    expect(doc.blueprint.blockEntityAt([0, 0, 0])).not.toBeNull()
+    expect(session.canUndo.value).toBe(true)
+
+    session.undo()
+    await wrapper.vm.$nextTick()
+    expect(doc.blueprint.get([0, 0, 0])?.key).toBe('create:shaft[axis=x]')
+    expect((wrapper.find('[data-prop-value="axis"] select').element as HTMLSelectElement).value).toBe('x')
+  })
+
+  it('候補が分からない項目は文字を打って直す。空にしたら元に戻す（#165）', async () => {
+    const session = createDocumentSession()
+    const bp = blueprintFixture({ size: [1, 1, 1] }).place([0, 0, 0], 'test:block', { mode: 'fast' }).toBlueprint()
+    const doc = session.setBlueprint(bp)
+    const wrapper = mountWith(session)
+    useToolStore().setSelected([0, 0, 0])
+    await wrapper.vm.$nextTick()
+    const input = wrapper.find('[data-prop-value="mode"] input')
+    await input.setValue('slow')
+    expect(doc.blueprint.get([0, 0, 0])?.key).toBe('test:block[mode=slow]')
+    await wrapper.vm.$nextTick()
+    const again = wrapper.find('[data-prop-value="mode"] input')
+    await again.setValue('  ')
+    expect(doc.blueprint.get([0, 0, 0])?.key).toBe('test:block[mode=slow]')
+    expect((again.element as HTMLInputElement).value).toBe('slow')
   })
 
   it('生データのないブロックでは、ないと出す', async () => {

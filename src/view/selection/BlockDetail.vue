@@ -2,11 +2,17 @@
 // 右パネルの「選択中のブロック」（#12）。docs/ui.md「全体の配置」。
 // 選択ツールで選んだブロックの名前・ID・位置・ブロック状態と、生データ（nbt）のツリーを出す。
 // 計算の値（回転数・応力・ネットワーク・問題）も出す。何も選んでいなければ設計図全体のまとめ（#158）。
+// ブロック状態の値は選んで直せる。直すのは元に戻せる編集の操作（setBlockProperty）で行う（#165）。
 // 名前は Modpack を読み込んでいれば表示名、なければ ID。
 import { computed } from 'vue'
 import BlockCalcValues from '../calc/BlockCalcValues.vue'
 import BlueprintCalcSummary from '../calc/BlueprintCalcSummary.vue'
+import { setBlockProperty } from '../../edit/editCommand'
+import { propertyValueOptionsFor } from '../../edit/orientationOptions'
+import { propertyChoices } from '../../edit/propertyChoices'
 import { useDocumentSession } from '../document/documentSession'
+import { placementProblem } from '../edit/placementRules'
+import { useBrushStore } from '../stores/brushStore'
 import { useCalcStore } from '../stores/calcStore'
 import { useModpackContentStore } from '../stores/modpackContent'
 import { useToolStore } from '../stores/toolStore'
@@ -18,6 +24,7 @@ const session = useDocumentSession()
 const tools = useToolStore()
 const content = useModpackContentStore()
 const calc = useCalcStore()
+const brush = useBrushStore()
 
 const detail = computed(() => {
   void session.version.value
@@ -32,12 +39,34 @@ const detail = computed(() => {
     state,
     id,
     name: id ? content.displayName(id) : null,
-    properties: state ? Object.entries(state.properties) : [],
+    // 候補は、Modpack を読んでいればブロック状態の定義から、なければよく使う項目の一般の値
+    properties: state ? propertyChoices(state, propertyValueOptionsFor(content.pack, state.id)) : [],
     // リージョンが2つ以上あるときだけ、どのリージョンかを出す
     region: bp.regions.length > 1 ? (bp.locate(pos)?.region.name ?? null) : null,
     tree: blockEntity ? nbtTreeNode('', blockEntity) : null,
   }
 })
+
+/**
+ * ブロック状態の項目 name を value に直す。ゲームで置けない向きなら直さず、理由を状態表示に出す（#121）。
+ * 直せなかったときは、欄を今の値に戻す
+ */
+function changeProperty(name: string, event: Event): void {
+  const input = event.target as HTMLInputElement | HTMLSelectElement
+  const d = detail.value
+  const bp = session.current.value?.blueprint
+  if (!d || !bp) return
+  const current = d.state?.properties[name] ?? ''
+  const cmd = setBlockProperty(bp, d.pos, name, input.value.trim())
+  const after = cmd?.changes[0]?.after.state
+  const problem = after ? placementProblem(bp, d.pos, after) : null
+  if (problem) brush.setMessage(problem)
+  if (problem || !session.apply(cmd)) {
+    input.value = current
+    return
+  }
+  brush.setMessage(null)
+}
 
 const posText = computed(() => {
   const p = detail.value?.pos
@@ -75,9 +104,29 @@ const posText = computed(() => {
           <dt>リージョン</dt>
           <dd data-detail="region">{{ detail.region }}</dd>
         </template>
-        <template v-for="[k, v] in detail.properties" :key="k">
-          <dt :data-prop="k">{{ k }}</dt>
-          <dd :data-prop-value="k">{{ v }}</dd>
+        <template v-for="p in detail.properties" :key="p.name">
+          <dt :data-prop="p.name">
+            <label :for="`block-prop-${p.name}`">{{ p.name }}</label>
+          </dt>
+          <dd :data-prop-value="p.name">
+            <select
+              v-if="p.values"
+              :id="`block-prop-${p.name}`"
+              class="prop"
+              :value="p.current"
+              @change="changeProperty(p.name, $event)"
+            >
+              <option v-for="v in p.values" :key="v" :value="v">{{ v }}</option>
+            </select>
+            <input
+              v-else
+              :id="`block-prop-${p.name}`"
+              class="prop"
+              type="text"
+              :value="p.current"
+              @change="changeProperty(p.name, $event)"
+            />
+          </dd>
         </template>
       </dl>
       <p v-if="detail.state && detail.properties.length === 0" class="note">ブロック状態の項目はありません。</p>
@@ -164,6 +213,12 @@ h2 {
   margin: 0;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+.prop {
+  max-width: 100%;
+  font: inherit;
+  font-size: 12px;
 }
 
 .nbt {

@@ -376,13 +376,16 @@ interface EditCommand {
 function placeBlock(bp: Blueprint, pos: Vec3, state: BlockState, replace: boolean): EditCommand | null
 function eraseBlock(bp: Blueprint, pos: Vec3): EditCommand | null
 function rotateBlock(bp: Blueprint, pos: Vec3, vertical: boolean): EditCommand | null
+// ブロック状態の項目 name を value にする（右パネルで選んで直す。#165）。生データは引き継ぐ
+function setBlockProperty(bp: Blueprint, pos: Vec3, name: string, value: string): EditCommand | null
 // 生データの項目 key を tag にする。生データがなければ initial の写しから作る
 function setBlockEntityTag(bp: Blueprint, pos: Vec3, key: string, tag: NbtTag, initial: RawNbt | null, label: string | null): EditCommand | null
 // 範囲の操作は下の「範囲の編集」
 ```
 
 - 新しく置いたブロックは `blockEntity: null`。計算では値の出どころの仕組みで初期値を使う
-- 回転では生データ（nbt）をそのまま引き継ぐ
+- 回転では生データ（nbt）をそのまま引き継ぐ。ブロック状態の項目を直す操作（`setBlockProperty`）も同じ
+- 右パネルでブロック状態の値を選ぶときの候補（`edit/propertyChoices.ts`）。Modpack があれば、ブロック状態の定義から読んだ取りうる値（`propertyValueOptionsFor`）。なければ、よく使う項目だけ一般の値（`axis`：x・y・z、`facing`：6方向、`horizontal_facing`：水平の4方向、`true`・`false` の項目：その2つ）。どちらでも分からない項目は、文字を打って直す。今の値は候補になくても必ず入れる
 - 生データの項目を変える操作は、元の生データを書き換えず、写しを作って項目だけを差し替える。元に戻すと元の生データ（同じもの）を書き戻す。どのブロックのどの項目を変えられるか、生データがないときに何を入れるかは、Mod ごとの知識なので calc に置く（`calc/blockSettings.ts` の `blockSettingsFor`）。画面はそれを表示するだけ
 - 置くツールで範囲の外へ置くことは受け付けない。設計図を広げるのは範囲の操作（動かす・回す・貼り付け）だけ
 
