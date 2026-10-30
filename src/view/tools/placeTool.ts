@@ -18,12 +18,14 @@ export interface PlaceCell {
 /**
  * マウスの下のもの（PickTarget）から、置く先を決める。docs/ui.md「編集」。
  * - 空きマス（3D の今の段の床、2D の空きマス）：そのマス
- * - 3D で当たったブロック：当たった面の隣。Shift なら当たったブロックを置き換え
- * - 面のないブロック（2D の埋まったマス）：そのマスを置き換え
+ * - 当たったブロック：Shift なら置き換え（2D と 3D で同じ。#164）
+ * - 3D で当たったブロック：当たった面の隣
+ * - 面のないブロック（2D の埋まったマス）：そのマス（埋まっているので置かずに知らせる）
  */
 export function placeCell(target: PickTarget, mods: PickModifiers): PlaceCell {
   if (target.empty) return { pos: target.pos, replace: false }
-  if (target.face === undefined || mods.shift) return { pos: target.pos, replace: true }
+  if (mods.shift) return { pos: target.pos, replace: true }
+  if (target.face === undefined) return { pos: target.pos, replace: false }
   const d = directionVector(target.face)
   const p = target.pos
   return { pos: [p[0] + d[0], p[1] + d[1], p[2] + d[2]], replace: false }
