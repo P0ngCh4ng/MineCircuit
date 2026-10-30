@@ -54,6 +54,30 @@ export const useToolStore = defineStore('tool', () => {
     controller.hover(target)
   }
 
+  /** 3D/2D表示から呼ぶ。今のツールがドラッグを受け取れば true（置くツールの一直線。#161） */
+  function beginDrag(target: PickTarget, mods: PickModifiers = { shift: false }): boolean {
+    return controller.beginDrag(target, mods)
+  }
+
+  /** ドラッグ中のマウスの移動。下の状態表示のマウス位置も変える */
+  function dragTo(target: PickTarget | null): void {
+    hoverTarget.value = target
+    controller.dragTo(target)
+  }
+
+  function endDrag(target: PickTarget | null, mods: PickModifiers = { shift: false }): void {
+    controller.endDrag(target, mods)
+  }
+
+  function cancelDrag(): void {
+    controller.cancelDrag()
+  }
+
+  /** ツールがドラッグを受け取っている間は true */
+  function isDragging(): boolean {
+    return controller.isDragging
+  }
+
   /** 3D/2D表示から呼ぶ */
   function click(target: PickTarget, mods: PickModifiers = { shift: false }): void {
     controller.click(target, mods)
@@ -107,6 +131,11 @@ export const useToolStore = defineStore('tool', () => {
     isAvailable,
     setTool,
     hover,
+    beginDrag,
+    dragTo,
+    endDrag,
+    cancelDrag,
+    isDragging,
     click,
     setSelected,
     extendSelection,

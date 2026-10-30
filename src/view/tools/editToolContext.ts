@@ -1,5 +1,6 @@
 import type { BlockState } from '../../domain/blockState'
 import type { Blueprint } from '../../domain/blueprint'
+import type { Box } from '../../domain/box'
 import type { Direction } from '../../domain/direction'
 import type { Vec3 } from '../../domain/vec3'
 import type { EditCommand } from '../../edit/editCommand'
@@ -23,6 +24,10 @@ export interface EditToolContext {
   setHovered(pos: Vec3 | null): void
   /** 置くブロックの見本を出すマス。null で消す */
   setGhost(pos: Vec3 | null, blocked?: boolean): void
+  /**
+   * ドラッグで一直線に置く見本（#161）。置くマスと状態、線の端から端までの箱。null で消す
+   */
+  setLinePreview(preview: { cells: readonly { pos: Vec3; state: BlockState }[]; box: Box } | null): void
   /** 段 y が今の表示で隠れていれば、その段へ移って見えるようにする */
   revealLayer(y: number): void
   /**

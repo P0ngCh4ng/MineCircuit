@@ -15,6 +15,7 @@ import { usePasteStore } from '../stores/pasteStore'
 import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
+import type { PickModifiers, PickTarget } from '../tools/tool'
 import { blockColor } from './blockColor'
 import { BlueprintScene } from './blueprintScene'
 import { CalcOverlay3D } from './calcOverlay3D'
@@ -78,6 +79,9 @@ scene.scene.add(selectionOverlay.group)
 // 貼り付けの見本（#133）
 const pasteOverlay = new PasteOverlay3D()
 scene.scene.add(pasteOverlay.group)
+// 置くツールで一直線に置く見本（#161）。貼り付けの見本と同じ形で出す
+const lineOverlay = new PasteOverlay3D()
+scene.scene.add(lineOverlay.group)
 let renderer: SceneRenderer | null = null
 let resizeObserver: ResizeObserver | null = null
 let stopTheme: (() => void) | null = null
@@ -94,27 +98,93 @@ function pickAt(e: PointerEvent | MouseEvent) {
   return renderer ? scene.pick(renderer.rayAt(e.clientX, e.clientY)) : null
 }
 
+/**
+ * 置くツールのドラッグ（#161）。ブロックか床を押したら、カメラを回さずに一直線に引く。
+ * 少し動いたら始め、動かずに離したときはふつうのクリック。refused はツールが受け取らなかった（置くブロックがない など）
+ */
+interface PlaceDrag {
+  readonly pointerId: number
+  readonly target: PickTarget
+  begun: boolean
+  refused: boolean
+}
+let placeDrag: PlaceDrag | null = null
+
+function modsOf(e: PointerEvent | MouseEvent): PickModifiers {
+  return { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey }
+}
+
 function onPointerMove(e: PointerEvent): void {
+  if (placeDrag && placeDrag.pointerId === e.pointerId) {
+    const start = downAt
+    if (!placeDrag.begun && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > CLICK_TOLERANCE) {
+      placeDrag.begun = true
+      placeDrag.refused = !tools.beginDrag(placeDrag.target, modsOf(e))
+    }
+    if (placeDrag.begun && !placeDrag.refused) tools.dragTo(pickAt(e))
+    return
+  }
   // ボタンを押している間はカメラの操作なので、マウスの下は調べない
   if (e.buttons !== 0) return
   tools.hover(pickAt(e))
 }
 
 function onPointerLeave(): void {
+  if (placeDrag) return
   tools.hover(null)
+}
+
+/** 置くツールのドラッグを終える。カメラの操作を戻す */
+function finishPlaceDrag(e: PointerEvent): void {
+  placeDrag = null
+  renderer?.setOrbitEnabled?.(true)
+  try {
+    if (canvas.value?.hasPointerCapture?.(e.pointerId)) canvas.value.releasePointerCapture(e.pointerId)
+  } catch {
+    // 放せなくても困らない
+  }
 }
 
 function onPointerDown(e: PointerEvent): void {
   downAt = e.button === 0 ? { x: e.clientX, y: e.clientY } : null
+  placeDrag = null
+  if (e.button !== 0 || tools.activeToolId !== 'place' || paste.active) return
+  const target = pickAt(e)
+  if (!target) return
+  // OrbitControls より先に呼ばれるので、ここで止めればカメラは回らない
+  placeDrag = { pointerId: e.pointerId, target, begun: false, refused: false }
+  renderer?.setOrbitEnabled?.(false)
+  try {
+    canvas.value?.setPointerCapture?.(e.pointerId)
+  } catch {
+    // 捕まえられなくても、ドラッグはできる
+  }
+}
+
+function onPointerCancel(e: PointerEvent): void {
+  if (!placeDrag) return
+  if (placeDrag.begun && !placeDrag.refused) tools.cancelDrag()
+  finishPlaceDrag(e)
+  downAt = null
 }
 
 function onPointerUp(e: PointerEvent): void {
+  const drag = placeDrag
+  if (drag && drag.pointerId === e.pointerId) {
+    finishPlaceDrag(e)
+    if (drag.begun) {
+      downAt = null
+      if (!drag.refused) tools.endDrag(pickAt(e), modsOf(e))
+      tools.hover(pickAt(e))
+      return
+    }
+  }
   const start = downAt
   downAt = null
   if (!start || e.button !== 0) return
   if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > CLICK_TOLERANCE) return
   const target = pickAt(e)
-  if (target) tools.click(target, { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey })
+  if (target) tools.click(target, modsOf(e))
   // クリックで設計図が変わることがあるので、マウスの下を調べ直す
   tools.hover(pickAt(e))
 }
@@ -231,6 +301,15 @@ onMounted(() => {
       },
       { immediate: true },
     ),
+    // 一直線に置く見本（#161）
+    watch(
+      () => brush.linePreview,
+      (line) => {
+        lineOverlay.update(line?.cells ?? [], line?.box ?? null, false)
+        render()
+      },
+      { immediate: true },
+    ),
     // 貼り付けの見本（#133）
     watch(
       () => [paste.cells, paste.box, paste.blocked] as const,
@@ -292,6 +371,7 @@ onBeforeUnmount(() => {
   portOverlay.dispose()
   selectionOverlay.dispose()
   pasteOverlay.dispose()
+  lineOverlay.dispose()
   tools.hover(null)
 })
 
@@ -307,6 +387,7 @@ defineExpose({ scene, calcOverlay, rotationOverlay, portOverlay, selectionOverla
       @pointerleave="onPointerLeave"
       @pointerdown="onPointerDown"
       @pointerup="onPointerUp"
+      @pointercancel="onPointerCancel"
       @contextmenu.prevent
     ></canvas>
     <p v-if="failure" class="failure" role="alert">{{ failure }}</p>

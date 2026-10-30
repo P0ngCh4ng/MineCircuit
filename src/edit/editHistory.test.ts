@@ -5,7 +5,7 @@ import { Blueprint } from '../domain/blueprint'
 import { nbt, type RawNbt } from '../domain/nbt'
 import { ResourceLocation } from '../domain/resourceLocation'
 import type { Vec3 } from '../domain/vec3'
-import { eraseBlock, placeBlock, rotateBlock, type EditCommand } from './editCommand'
+import { eraseBlock, placeBlock, placeBlocks, rotateBlock, type EditCommand } from './editCommand'
 import { EditHistory } from './editHistory'
 
 const stone = new BlockState(ResourceLocation.parse('minecraft:stone'))
@@ -102,7 +102,19 @@ const operations: [string, (bp: Blueprint) => EditCommand | null][] = [
   ['生データのあるブロックを回す（水平）', (bp) => rotateBlock(bp, [1, 0, 0], false)],
   ['生データのあるブロックを回す（縦）', (bp) => rotateBlock(bp, [2, 1, 2], true)],
   ['2つめのリージョンのブロックを回す', (bp) => rotateBlock(bp, [3, 0, 0], true)],
+  // 2つのリージョンをまたぐ一直線（埋まったマスは飛ばす。#161）
+  ['一直線に置く', (bp) => placeBlocks(bp, [[1, 1, 0], [2, 1, 0], [3, 1, 0], [4, 1, 0], [3, 0, 0]], shaftX)],
 ]
+
+describe('placeBlocks（#161）', () => {
+  it('空きマスだけに置き、埋まったマス・範囲の外・重なりは飛ばす。1つも置けなければ null', () => {
+    const bp = makeBlueprint()
+    const cmd = placeBlocks(bp, [[0, 0, 0], [0, 1, 0], [0, 1, 0], [9, 0, 0], [1, 1, 1]], shaftZ)
+    expect(cmd?.changes.map((c) => c.pos)).toEqual([[0, 1, 0], [1, 1, 1]])
+    expect(cmd?.label).toBe('shaft を一直線に置く（2 個）')
+    expect(placeBlocks(bp, [[0, 0, 0], [9, 9, 9]], shaftZ)).toBeNull()
+  })
+})
 
 describe('EditHistory：元に戻す・やり直す', () => {
   it.each(operations)('%s：元に戻すと完全に元の状態になり、やり直すと操作のあとと同じになる', (_name, make) => {

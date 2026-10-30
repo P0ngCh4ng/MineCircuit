@@ -43,6 +43,17 @@ export interface Tool {
   activate?(): void
   /** 別のツールに切り替わるとき（任意）。途中の状態（計測の1点目など）を片付ける */
   deactivate?(): void
+  /**
+   * ドラッグを始めたとき（任意。置くツールの一直線。#161）。押した所の target を渡す。
+   * ドラッグを受け取るなら true。false ならドラッグとして扱わない
+   */
+  dragStart?(target: PickTarget, mods: PickModifiers): boolean
+  /** ドラッグ中にマウスが動いたとき。何も指していなければ null */
+  dragMove?(target: PickTarget | null): void
+  /** ドラッグを終えたとき（ボタンを離した）。離した所の target（なければ null） */
+  dragEnd?(target: PickTarget | null, mods: PickModifiers): void
+  /** ドラッグをやめたとき（ポインターを取られた、ツールを替えた） */
+  dragCancel?(): void
 }
 
 /**

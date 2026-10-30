@@ -7,6 +7,7 @@ import { isSingleCell } from '../../domain/box'
 import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
 import { useAppearanceStore } from '../stores/appearanceStore'
+import { useBrushStore } from '../stores/brushStore'
 import { useCalcStore } from '../stores/calcStore'
 import { clampLayer, useLayerStore } from '../stores/layerStore'
 import { useProbeStore } from '../stores/probeStore'
@@ -38,6 +39,7 @@ const probe = useProbeStore()
 const measures = useMeasureStore()
 const ports = usePortStore()
 const paste = usePasteStore()
+const brush = useBrushStore()
 const appearance = useAppearanceStore()
 /** テクスチャで描く（#85）。色で描くとき、見た目がないときは null */
 const cellPainter = computed(() => createTextureCellPainter(appearance.active))
@@ -149,7 +151,25 @@ function draw(): void {
     paste.box,
     paste.blocked,
   )
+  // 置くツールで一直線に置く見本（#161）
+  const line = brush.linePreview
+  if (line) {
+    drawPastePreview2D(
+      ctx,
+      grid,
+      layer.value,
+      line.cells.map((c) => ({ pos: c.pos, id: c.state.id.toString() })),
+      line.box,
+      false,
+    )
+  }
 }
+// 一直線に置く見本が変わったら描き直す（#161）
+watch(
+  () => brush.linePreview,
+  () => draw(),
+  { flush: 'post' },
+)
 // 貼り付けの見本が変わったら描き直す（#133）
 watch(
   () => [paste.cells, paste.box, paste.blocked],
@@ -220,12 +240,24 @@ function canvasPoint(e: MouseEvent): { x: number; y: number } | null {
  * 動かずに離したときは、ふつうのクリック（onClick）に任せる
  */
 interface DragSelect {
+  readonly kind: 'select'
   readonly pointerId: number
   readonly start: Cell2D
   readonly anchorLayer: number | null
   moved: boolean
 }
-let drag: DragSelect | null = null
+/**
+ * 置くツールのドラッグ（#161）。押したマスから別のマスへ動いたら、一直線に置くドラッグを始める。
+ * 動かずに離したときは、ふつうのクリック（onClick）に任せる
+ */
+interface DragPlace {
+  readonly kind: 'place'
+  readonly pointerId: number
+  readonly start: Cell2D
+  readonly target: PickTarget
+  moved: boolean
+}
+let drag: DragSelect | DragPlace | null = null
 /** ドラッグで範囲を選んだ直後のクリックを、選択の操作にしない */
 let suppressClick = false
 
@@ -237,11 +269,25 @@ function updateDrag(e: PointerEvent): void {
   if (!drag || !bp || !grid || !p) return
   const cell = clampedCell2D(p.x, p.y, grid, bp.size)
   if (!drag.moved && !isDrag2D(drag.start, cell)) return
+  if (drag.kind === 'place') {
+    updatePlaceDrag(drag, cell)
+    return
+  }
   drag.moved = true
   // Shift+ドラッグなら、起点の段から今の段までの高さにする
   const anchor = e.shiftKey ? drag.anchorLayer : null
   // 起点はドラッグを始めたマス（Shift+ドラッグなら起点の段）。続く Shift+クリックはそこから広げる
   tools.setSelectionBox(dragSelectionBox(drag.start, cell, layer.value, anchor), [drag.start[0], anchor ?? layer.value, drag.start[1]])
+}
+
+/** 置くツールのドラッグで、今のマス（マス目の中に収める）まで線を引く（#161） */
+function updatePlaceDrag(d: DragPlace, cell: Cell2D): void {
+  if (!d.moved) {
+    d.moved = true
+    // ツールが受け取らなければ（置くブロックがない など）、離したときのクリックも出さない
+    if (!tools.beginDrag(d.target)) return
+  }
+  tools.dragTo({ pos: [cell[0], layer.value, cell[1]], empty: blueprint.value?.get([cell[0], layer.value, cell[1]]) === null })
 }
 
 /** 表示を動かすドラッグ（#155）。押した位置と、そのときのマス目の置き方 */
@@ -326,16 +372,19 @@ function onPointerDown(e: PointerEvent): void {
   suppressClick = false
   drag = null
   if (startPan(e)) return
-  if (e.button !== 0 || tools.activeToolId !== 'select') return
+  const kind = tools.activeToolId === 'select' ? 'select' : tools.activeToolId === 'place' ? 'place' : null
+  if (e.button !== 0 || kind === null) return
   const bp = blueprint.value
   const grid = layout.value
   const p = canvasPoint(e)
   if (!bp || !grid || !p || !insideGrid2D(p.x, p.y, grid, bp.size)) return
-  drag = {
-    pointerId: e.pointerId,
-    start: clampedCell2D(p.x, p.y, grid, bp.size),
-    anchorLayer: tools.selectedPos ? tools.selectedPos[1] : null,
-    moved: false,
+  const start = clampedCell2D(p.x, p.y, grid, bp.size)
+  if (kind === 'select') {
+    drag = { kind, pointerId: e.pointerId, start, anchorLayer: tools.selectedPos ? tools.selectedPos[1] : null, moved: false }
+  } else {
+    const target = pickAt(e)
+    if (!target) return
+    drag = { kind, pointerId: e.pointerId, start, target, moved: false }
   }
   // マス目の外へ出ても離したことが分かるように
   try {
@@ -346,6 +395,8 @@ function onPointerDown(e: PointerEvent): void {
 }
 
 function endDrag(e: PointerEvent): void {
+  // 置くツールのドラッグの途中で取られたときは、線をやめる
+  if (drag?.kind === 'place' && tools.isDragging()) tools.cancelDrag()
   try {
     if (canvas.value?.hasPointerCapture?.(e.pointerId)) canvas.value.releasePointerCapture(e.pointerId)
   } catch {
@@ -361,8 +412,10 @@ function onPointerUp(e: PointerEvent): void {
   }
   if (!drag || drag.pointerId !== e.pointerId) return
   updateDrag(e)
-  // 範囲を選んだときは、続いて来るクリックで選び直さない
+  // 範囲を選んだとき・線を引いたときは、続いて来るクリックで選び直さない・置かない
   if (drag.moved) suppressClick = true
+  // 一直線に置く（#161）。離したマスまでで置く
+  if (drag.kind === 'place' && tools.isDragging()) tools.endDrag(null, { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey })
   endDrag(e)
 }
 

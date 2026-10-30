@@ -43,6 +43,7 @@ export function useEditToolContext(): EditToolContext {
     notify: (message) => brush.setMessage(message),
     setHovered: (pos) => tools.setHovered(pos),
     setGhost: (pos, blocked) => brush.setGhost(pos, blocked),
+    setLinePreview: (preview) => brush.setLinePreview(preview),
     orient: orientForPlacement,
     placementProblem,
     placementHelper,

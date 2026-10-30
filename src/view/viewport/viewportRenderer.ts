@@ -24,6 +24,8 @@ export interface SceneRenderer {
   showView(view: CameraView, size: Vec3): void
   fitAll(size: Vec3): void
   rayAt(clientX: number, clientY: number): PickRay
+  /** 左ドラッグでカメラを回すのを止める・戻す（置くツールで一直線に引く間。#161）。任意 */
+  setOrbitEnabled?(enabled: boolean): void
   dispose(): void
 }
 
@@ -74,6 +76,10 @@ export class ViewportRenderer implements SceneRenderer {
     const t = this.controls.target
     const p = this.camera.position
     this.onHeadingChange?.(t.x - p.x, t.z - p.z)
+  }
+
+  setOrbitEnabled(enabled: boolean): void {
+    this.controls.enabled = enabled
   }
 
   /** 描画の大きさを表示部分に合わせる（CSS ピクセル） */

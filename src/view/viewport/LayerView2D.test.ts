@@ -6,6 +6,7 @@ import { createDocumentSession, DOCUMENT_SESSION_KEY } from '../document/documen
 import { useLayerStore } from '../stores/layerStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
+import type { PickTarget } from '../tools/tool'
 import ViewControls from '../shell/ViewControls.vue'
 import ViewModeSwitch from '../shell/ViewModeSwitch.vue'
 import { layoutGrid2D } from './layerGrid2D'
@@ -144,6 +145,39 @@ describe('LayerView2D', () => {
     await canvas.trigger('pointermove', { buttons: 1, ...at(3, 2) })
     await canvas.trigger('pointerup', { button: 0, ...at(3, 2) })
     expect(tools.selectionBox).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('置くツールでドラッグすると、ツールに一直線のドラッグを渡し、続くクリックで置かない（#161）', async () => {
+    const { wrapper, at } = mountView()
+    const tools = useToolStore()
+    const log: string[] = []
+    const pos = (t: PickTarget | null) => (t ? t.pos.join(',') : 'null')
+    tools.register({
+      id: 'place',
+      onHover: () => {},
+      onClick: (t) => log.push(`click:${pos(t)}`),
+      dragStart: (t) => (log.push(`start:${pos(t)}`), true),
+      dragMove: (t) => log.push(`move:${pos(t)}`),
+      dragEnd: (t) => log.push(`end:${pos(t)}`),
+    })
+    tools.setTool('place')
+    const canvas = wrapper.get('canvas')
+
+    await canvas.trigger('pointerdown', { button: 0, pointerId: 1, ...at(0, 1) })
+    await canvas.trigger('pointermove', { buttons: 1, pointerId: 1, ...at(2, 1) })
+    await canvas.trigger('pointerup', { button: 0, pointerId: 1, ...at(3, 1) })
+    await canvas.trigger('click', at(3, 1))
+    expect(log).toEqual(['start:0,0,1', 'move:2,0,1', 'move:3,0,1', 'end:null'])
+    // 範囲は選ばない
+    expect(tools.selectionBox).toBeNull()
+
+    // 動かさずに離したときは、ふつうのクリック
+    log.length = 0
+    await canvas.trigger('pointerdown', { button: 0, pointerId: 2, ...at(1, 1) })
+    await canvas.trigger('pointerup', { button: 0, pointerId: 2, ...at(1, 1) })
+    await canvas.trigger('click', at(1, 1))
+    expect(log).toEqual(['click:1,0,1'])
     wrapper.unmount()
   })
 

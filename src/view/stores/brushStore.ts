@@ -5,11 +5,20 @@
 import { defineStore } from 'pinia'
 import { computed, markRaw, ref, shallowRef, watch } from 'vue'
 import type { BlockState } from '../../domain/blockState'
+import type { Box } from '../../domain/box'
 import type { Vec3 } from '../../domain/vec3'
 import { BlockBrush } from '../../edit/blockBrush'
 import { propertyValueOptionsFor } from '../../edit/orientationOptions'
 import { useModpackContentStore } from './modpackContent'
 import { useToolStore } from './toolStore'
+
+/** 一直線に置く見本（#161） */
+export interface LinePreview {
+  /** 置くマス（空きマスだけ）と状態 */
+  readonly cells: readonly { readonly pos: Vec3; readonly state: BlockState }[]
+  /** 線の始点から終点までの箱 */
+  readonly box: Box
+}
 
 export const NO_ROTATION_MESSAGE = 'このブロックには回せる向きがありません'
 
@@ -27,6 +36,8 @@ export const useBrushStore = defineStore('brush', () => {
   const ghostPos = shallowRef<Vec3 | null>(null)
   /** 見本のマスに、設置の規則で置けないか（#121） */
   const ghostBlocked = ref(false)
+  /** ドラッグで一直線に置くときの見本（#161）。置くマスと状態、線の端から端までの箱。出さなければ null */
+  const linePreview = shallowRef<LinePreview | null>(null)
 
   /** 置くブロックの状態。画面ではこれを読む */
   const state = computed<BlockState | null>(() => {
@@ -68,6 +79,11 @@ export const useBrushStore = defineStore('brush', () => {
     ghostBlocked.value = pos !== null && blocked
   }
 
+  /** 一直線に置く見本を変える（置くツールのドラッグから呼ぶ）。null で消す */
+  function setLinePreview(next: LinePreview | null): void {
+    linePreview.value = next
+  }
+
   // Modpack を読み終えた・外したら、取りうる値を読み直す
   watch(
     () => content.pack,
@@ -87,5 +103,5 @@ export const useBrushStore = defineStore('brush', () => {
     { flush: 'sync' },
   )
 
-  return { state, message, ghostPos, ghostBlocked, setFromBlock, rotate, setMessage, setGhost }
+  return { state, message, ghostPos, ghostBlocked, linePreview, setFromBlock, rotate, setMessage, setGhost, setLinePreview }
 })

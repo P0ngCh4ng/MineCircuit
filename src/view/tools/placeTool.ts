@@ -1,8 +1,9 @@
-import type { BlockState } from '../../domain/blockState'
+import { BlockState } from '../../domain/blockState'
 import type { Blueprint } from '../../domain/blueprint'
 import { directionVector, oppositeDirection, type Direction } from '../../domain/direction'
+import { boxFromCorners } from '../../domain/box'
 import type { Vec3 } from '../../domain/vec3'
-import { placeBlock } from '../../edit/editCommand'
+import { placeBlock, placeBlocks } from '../../edit/editCommand'
 import { isInside, outOfRangeMessage, type EditToolContext } from './editToolContext'
 import type { PickModifiers, PickTarget, Tool } from './tool'
 
@@ -31,6 +32,41 @@ export function placeCell(target: PickTarget, mods: PickModifiers): PlaceCell {
   return { pos: [p[0] + d[0], p[1] + d[1], p[2] + d[2]], replace: false }
 }
 
+/** 一直線に置いたとき、置けなかったマスの知らせ（#161） */
+export function lineSkippedMessage(skipped: number): string {
+  return `埋まっているマス・範囲の外・置けないマスの ${skipped} 個は飛ばしました。`
+}
+export const LINE_NOTHING_MESSAGE = '線の上に置けるマスがありません。空いているマスを通るように引いてください。'
+
+/** 一直線の軸 */
+export type LineAxis = 'x' | 'y' | 'z'
+
+/**
+ * 始点から終点へ引いた一直線のマス（#161）。始点からの差が一番大きい軸に沿って、始点から終点の位置まで。
+ * 差が同じなら x、z、y の順に選ぶ。始点と終点が同じなら始点だけ（軸は null）
+ */
+export function lineCells(start: Vec3, end: Vec3): { cells: Vec3[]; axis: LineAxis | null } {
+  const d = [end[0] - start[0], end[1] - start[1], end[2] - start[2]] as const
+  let axis: 0 | 1 | 2 = 0
+  for (const i of [2, 1] as const) if (Math.abs(d[i]) > Math.abs(d[axis])) axis = i
+  const len = Math.abs(d[axis])
+  if (len === 0) return { cells: [[...start]], axis: null }
+  const step = Math.sign(d[axis])
+  const cells: Vec3[] = []
+  for (let i = 0; i <= len; i++) {
+    const p: [number, number, number] = [start[0], start[1], start[2]]
+    p[axis] += step * i
+    cells.push(p)
+  }
+  return { cells, axis: (['x', 'y', 'z'] as const)[axis] }
+}
+
+/** axis のプロパティを持つブロック（シャフトなど）なら、軸を線の向きにそろえる（#161）。持たなければそのまま */
+export function alignAxis(state: BlockState, axis: LineAxis | null): BlockState {
+  if (axis === null || state.properties['axis'] === undefined || state.properties['axis'] === axis) return state
+  return new BlockState(state.id, { ...state.properties, axis })
+}
+
 /** 置く先から見て、優先する隣の向き。3D で面をクリックしたときは、クリックしたブロックの側 */
 function fromOf(target: PickTarget, cell: PlaceCell): Direction | null {
   return !cell.replace && target.face !== undefined ? oppositeDirection(target.face) : null
@@ -39,6 +75,8 @@ function fromOf(target: PickTarget, cell: PlaceCell): Direction | null {
 /** 置くツール（B）。クリックした所に置くブロックを置く。範囲の外には置かせず、理由を出す */
 export class PlaceTool implements Tool {
   readonly id = 'place' as const
+  /** ドラッグで一直線に置くときの始点と、最後に指していた終点（#161） */
+  private line: { start: Vec3; end: Vec3 } | null = null
 
   constructor(private readonly ctx: EditToolContext) {}
 
@@ -100,7 +138,77 @@ export class PlaceTool implements Tool {
     if (missing) this.ctx.notify(missing)
   }
 
+  /**
+   * ドラッグで一直線に置く（#161）。押した所の置く先が始点。置くブロックがなければ知らせて受け取らない
+   */
+  dragStart(target: PickTarget): boolean {
+    const bp = this.ctx.blueprint()
+    if (!bp) return false
+    if (!this.ctx.brush()) {
+      this.ctx.notify(NO_BRUSH_MESSAGE)
+      return false
+    }
+    const start = placeCell(target, { shift: false }).pos
+    if (!isInside(bp, start)) return false
+    this.line = { start, end: start }
+    this.ctx.setGhost(null)
+    this.showLine()
+    return true
+  }
+
+  dragMove(target: PickTarget | null): void {
+    if (!this.line || !target) return
+    this.line.end = placeCell(target, { shift: false }).pos
+    this.showLine()
+  }
+
+  dragEnd(target: PickTarget | null): void {
+    if (target) this.dragMove(target)
+    const plan = this.planLine()
+    this.line = null
+    this.ctx.setLinePreview(null)
+    const bp = this.ctx.blueprint()
+    if (!plan || !bp) return
+    if (plan.place.length === 0) {
+      this.ctx.notify(LINE_NOTHING_MESSAGE)
+      return
+    }
+    // 1回の編集の操作として置く。元に戻すと全部消える
+    if (!this.ctx.apply(placeBlocks(bp, plan.place, plan.state))) return
+    const first = plan.place[0]
+    if (first) this.ctx.revealLayer(first[1])
+    this.ctx.notify(plan.skipped > 0 ? lineSkippedMessage(plan.skipped) : this.ctx.stateProblem(plan.state))
+  }
+
+  dragCancel(): void {
+    this.line = null
+    this.ctx.setLinePreview(null)
+  }
+
+  /** 今の線で置くマス（空いていて、範囲の中で、置ける所）と状態、飛ばすマスの数 */
+  private planLine(): { place: Vec3[]; state: BlockState; skipped: number; cells: Vec3[] } | null {
+    const bp = this.ctx.blueprint()
+    const brush = this.ctx.brush()
+    if (!this.line || !bp || !brush) return null
+    const { cells, axis } = lineCells(this.line.start, this.line.end)
+    const state = alignAxis(brush, axis)
+    const place = cells.filter((pos) => isInside(bp, pos) && bp.get(pos) === null && this.ctx.placementProblem(bp, pos, state) === null)
+    return { place, state, skipped: cells.length - place.length, cells }
+  }
+
+  private showLine(): void {
+    const plan = this.planLine()
+    const first = plan?.cells[0]
+    const last = plan?.cells[plan.cells.length - 1]
+    if (!plan || !first || !last) {
+      this.ctx.setLinePreview(null)
+      return
+    }
+    this.ctx.setLinePreview({ cells: plan.place.map((pos) => ({ pos, state: plan.state })), box: boxFromCorners(first, last) })
+  }
+
   deactivate(): void {
+    this.dragCancel()
     this.ctx.setGhost(null)
   }
 }
