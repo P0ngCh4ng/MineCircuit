@@ -950,7 +950,7 @@ flowchart LR
 
 ```ts
 interface Tool {
-  readonly id: 'select' | 'measure' | 'connect' | 'probe' | 'place' | 'erase' | 'pick'
+  readonly id: 'select' | 'measure' | 'network' | 'sameBlock' | 'probe' | 'port' | 'place' | 'erase' | 'pick'
   onHover(target: PickTarget | null): void
   onClick(target: PickTarget, mods: { shift: boolean }): void
 }

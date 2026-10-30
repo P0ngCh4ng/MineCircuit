@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 表示部分の左下に出す、計測（M）とつながり（C）の結果。docs/ui.md「2D表示と計測」「ツール」。
+// 表示部分の左下に出す、計測（M）と同じブロック（S）の結果。docs/ui.md「2D表示と計測」「ツール」。
 // このストアを作ると2つのツールが使えるようになるので、表示部分にいつも置いておく。
 import { computed } from 'vue'
 import { countLayers } from '../../analysis/floodSameState'
@@ -22,7 +22,7 @@ function signed(n: number): string {
 
 const first = computed(() => measures.measurePoints[0] ?? null)
 const result = computed(() => measures.measurement)
-const group = computed(() => measures.connectGroup)
+const group = computed(() => measures.sameBlockGroup)
 const groupLayers = computed(() => (group.value ? countLayers(group.value.positions) : 0))
 </script>
 
@@ -50,8 +50,8 @@ const groupLayers = computed(() => (group.value ? countLayers(group.value.positi
     </template>
   </div>
 
-  <div v-else-if="tool === 'connect'" class="readout" role="status" aria-live="polite" data-testid="connect-readout">
-    <h3>つながり</h3>
+  <div v-else-if="tool === 'sameBlock'" class="readout" role="status" aria-live="polite" data-testid="same-block-readout">
+    <h3>同じブロック</h3>
     <p v-if="!group" class="note">ブロックをクリックすると、隣り合う同じ種類のブロックをまとめて強調します。</p>
     <dl v-else>
       <dt>種類</dt>

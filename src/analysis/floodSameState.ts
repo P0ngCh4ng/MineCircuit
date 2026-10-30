@@ -1,5 +1,5 @@
 // 隣り合う同じ種類のブロックを集める。docs/design.md「analysis：計測」。
-// 「つながり」ツールで使う。面で隣り合う（6方向）ブロックのうち、ブロック状態（ID と properties）が
+// 「同じブロック」ツールで使う。面で隣り合う（6方向）ブロックのうち、ブロック状態（ID と properties）が
 // 同じものをたどるだけで、回転や配管のつながりではない。本当のつながりは計算プラグインが作る。
 
 import type { Blueprint } from '../domain/blueprint'

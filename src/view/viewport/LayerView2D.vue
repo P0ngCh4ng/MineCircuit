@@ -130,12 +130,12 @@ function draw(): void {
   })
   // 選択範囲の長方形。範囲の外の段では点線（#130）
   drawSelectionBox2D(ctx, grid, layer.value, box, theme)
-  // 計測とつながり（#16）
+  // 計測と同じブロック（#16）
   drawAnalysisOverlay2D(
     ctx,
     grid,
     layer.value,
-    { measurePoints: measures.measurePoints, connectGroup: measures.connectGroup?.positions ?? null },
+    { measurePoints: measures.measurePoints, connectGroup: measures.sameBlockGroup?.positions ?? null },
     ANALYSIS_COLORS_2D[dark.value ? 'dark' : 'light'],
   )
   // 仮の入出力（#70）
@@ -174,9 +174,9 @@ watch(
   { flush: 'post' },
 )
 
-// 計測とつながりが変わったら描き直す（#16）
+// 計測と同じブロックが変わったら描き直す（#16）
 watch(
-  () => [measures.measurePoints, measures.connectGroup],
+  () => [measures.measurePoints, measures.sameBlockGroup],
   () => draw(),
   { flush: 'post' },
 )

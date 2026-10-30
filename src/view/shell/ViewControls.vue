@@ -6,7 +6,7 @@ import EditControls from '../edit/EditControls.vue'
 import { useDocumentSession } from '../document/documentSession'
 import { LAYER_MODES, type LayerMode } from '../layers/layerDisplay'
 import { useLayerNavigation } from '../layers/useLayerNavigation'
-import { useSearchStore } from '../stores/searchStore'
+import { useHighlightStore } from '../stores/highlightStore'
 import { useViewStore } from '../stores/viewStore'
 import { CAMERA_VIEWS } from '../viewport/cameraViews'
 import AppearanceModeSwitch from './AppearanceModeSwitch.vue'
@@ -14,7 +14,7 @@ import ViewModeSwitch from './ViewModeSwitch.vue'
 
 const session = useDocumentSession()
 const view = useViewStore()
-const search = useSearchStore()
+const highlight = useHighlightStore()
 const noBlueprint = computed(() => session.current.value === null)
 /** 視点（斜め・上・正面・横）は3D表示だけで使う。「全体を表示」は2Dでも使う（#155） */
 const noCamera = computed(() => noBlueprint.value || view.mode !== '3d')
@@ -102,9 +102,9 @@ function onModeChange(e: Event): void {
       <button
         type="button"
         data-action="clear-highlight"
-        title="ブロック一覧で選んだブロックの強調をやめ、すべてを普通に表示する"
-        :disabled="search.highlightId === null"
-        @click="search.clearHighlight()"
+        title="強調（ネットワーク・同じブロック・ブロック一覧）をやめ、すべてを普通に表示する（Esc）"
+        :disabled="!highlight.active"
+        @click="highlight.clearAll()"
       >
         強調を解除
       </button>

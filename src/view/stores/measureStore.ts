@@ -1,4 +1,4 @@
-// 計測ツール（M）とつながりツール（C）の結果。docs/ui.md「ツール」「2D表示と計測」。
+// 計測ツール（M）と同じブロックツール（S）の結果。docs/ui.md「ツール」「2D表示と計測」。
 // ストアを作ると2つのツールを toolStore に登録する。3D/2D表示と左下の結果の表示がここを読む。
 
 import { defineStore } from 'pinia'
@@ -8,12 +8,12 @@ import { measure, type Measurement } from '../../analysis/measure'
 import type { BlockState } from '../../domain/blockState'
 import type { Vec3 } from '../../domain/vec3'
 import { useDocumentSession } from '../document/documentSession'
-import { ConnectTool } from '../tools/connectTool'
+import { SameBlockTool } from '../tools/sameBlockTool'
 import { MeasureTool } from '../tools/measureTool'
 import { useToolStore } from './toolStore'
 
-/** つながりツールで強調しているまとまり */
-export interface ConnectGroup {
+/** 同じブロックツールで強調しているまとまり */
+export interface SameBlockGroup {
   /** クリックしたブロック */
   readonly start: Vec3
   /** まとまりのブロック状態 */
@@ -28,8 +28,8 @@ export const useMeasureStore = defineStore('measure', () => {
 
   /** 計測ツールで選んだ点（0〜2個） */
   const measurePoints = shallowRef<readonly Vec3[]>([])
-  /** つながりツールでクリックしたブロック。なければ null */
-  const connectStart = shallowRef<Vec3 | null>(null)
+  /** 同じブロックツールでクリックしたブロック。なければ null */
+  const sameBlockStart = shallowRef<Vec3 | null>(null)
 
   /** 2点そろったときの計測の結果 */
   const measurement = computed<Measurement | null>(() => {
@@ -38,11 +38,11 @@ export const useMeasureStore = defineStore('measure', () => {
   })
 
   /** 強調しているまとまり。編集・元に戻すのあとは求め直す。始めのブロックが消えたら null */
-  const connectGroup = computed<ConnectGroup | null>(() => {
+  const sameBlockGroup = computed<SameBlockGroup | null>(() => {
     // 設計図は同じオブジェクトのまま中身が変わるので、version を読む
     void session.version.value
     const bp = session.current.value?.blueprint ?? null
-    const start = connectStart.value
+    const start = sameBlockStart.value
     if (!bp || !start) return null
     const state = bp.get(start)
     if (!state) return null
@@ -53,25 +53,25 @@ export const useMeasureStore = defineStore('measure', () => {
     measurePoints.value = points
   }
 
-  function setConnectStart(pos: Vec3 | null): void {
-    connectStart.value = pos
+  function setSameBlockStart(pos: Vec3 | null): void {
+    sameBlockStart.value = pos
   }
 
   const measureTool = new MeasureTool({ setMeasurePoints })
-  tools.register(new ConnectTool({ setConnectStart }))
+  tools.register(new SameBlockTool({ setSameBlockStart }))
   tools.register(measureTool)
 
-  // 別の設計図を開いたら、計測とつながりを消す
+  // 別の設計図を開いたら、計測と同じブロックを消す
   watch(
     () => session.current.value?.blueprint ?? null,
     (next, prev) => {
       if (next === prev) return
       measureTool.reset()
-      setConnectStart(null)
+      setSameBlockStart(null)
     },
     // 開いた直後のクリックを消さないように、開いたその場で消す
     { flush: 'sync' },
   )
 
-  return { measurePoints, measurement, connectStart, connectGroup, setMeasurePoints, setConnectStart }
+  return { measurePoints, measurement, sameBlockStart, sameBlockGroup, setMeasurePoints, setSameBlockStart }
 })

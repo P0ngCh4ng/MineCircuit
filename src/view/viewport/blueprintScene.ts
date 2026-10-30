@@ -78,7 +78,7 @@ export class BlueprintScene {
   private highlightPositions: readonly Vec3[] | null = null
   private theme: ViewportTheme = LIGHT_THEME
   private stats = { solid: 0, ghost: 0, meshes: 0 }
-  /** 計測とつながりの重ね描き（#16） */
+  /** 計測と同じブロックの重ね描き（#16） */
   readonly analysisOverlay = new AnalysisOverlay3D()
   private connectGroup: readonly Vec3[] | null = null
 
@@ -158,7 +158,7 @@ export class BlueprintScene {
     this.analysisOverlay.setMeasurePoints(points)
   }
 
-  /** つながりツールのまとまり。隠した段のブロックは強調しない */
+  /** 同じブロックツールのまとまり。隠した段のブロックは強調しない */
   setConnectGroup(positions: readonly Vec3[] | null): void {
     this.connectGroup = positions
     this.updateConnectGroup()

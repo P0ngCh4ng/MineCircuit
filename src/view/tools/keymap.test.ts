@@ -7,8 +7,8 @@ function k(key: string, mods: Partial<Omit<KeyInput, 'key'>> = {}): KeyInput {
 }
 
 describe('resolveKeyAction', () => {
-  it('V / M / C / P / O / B / E / I でツールを切り替える（大文字・小文字とも）', () => {
-    const expected = { v: 'select', m: 'measure', c: 'connect', p: 'probe', o: 'port', b: 'place', e: 'erase', i: 'pick' }
+  it('V / M / C / S / P / O / B / E / I でツールを切り替える（大文字・小文字とも）', () => {
+    const expected = { v: 'select', m: 'measure', c: 'network', s: 'sameBlock', p: 'probe', o: 'port', b: 'place', e: 'erase', i: 'pick' }
     for (const [key, id] of Object.entries(expected)) {
       expect(resolveKeyAction(k(key))).toEqual({ type: 'tool', id })
       expect(resolveKeyAction(k(key.toUpperCase()))).toEqual({ type: 'tool', id })
@@ -62,8 +62,8 @@ describe('resolveKeyAction', () => {
     expect(resolveKeyAction(k('S', { metaKey: true }))).toEqual({ type: 'export' })
     expect(resolveKeyAction(k('s', { ctrlKey: true, shiftKey: true }))).toBeNull()
     expect(resolveKeyAction(k('s', { ctrlKey: true, altKey: true }))).toBeNull()
-    // Ctrl なしの S はツールなどに割り当てていない
-    expect(resolveKeyAction(k('s'))).toBeNull()
+    // Ctrl なしの S は同じブロックのツール（#163）
+    expect(resolveKeyAction(k('s'))).toEqual({ type: 'tool', id: 'sameBlock' })
   })
 
   it('Ctrl+A（Mac は Cmd+A）で全体を選び、F で範囲を塗る', () => {

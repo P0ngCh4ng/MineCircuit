@@ -17,6 +17,7 @@ import StatusBar from './shell/StatusBar.vue'
 import TopBar from './shell/TopBar.vue'
 import { useAppearanceSync } from './stores/appearanceSync'
 import { useCalcStore } from './stores/calcStore'
+import { useHighlightStore } from './stores/highlightStore'
 import { useModpackContentStore } from './stores/modpackContent'
 import { useToolStore } from './stores/toolStore'
 import { useViewStore } from './stores/viewStore'
@@ -28,6 +29,8 @@ const calc = useCalcStore()
 const content = useModpackContentStore()
 const view = useViewStore()
 const session = useDocumentSession()
+// 強調を1つにまとめる（#163）
+const highlight = useHighlightStore()
 const rotate = useRotateAction()
 const edit = useEditTools()
 const clipboard = useClipboardActions()
@@ -58,8 +61,12 @@ watch(
 
 useKeyboardShortcuts({
   tool: (a) => tools.setTool(a.id),
-  // 貼り付けの途中なら、貼り付けをやめる
-  clearSelection: () => clipboard.cancel() || tools.setSelected(null),
+  // 貼り付けの途中なら、貼り付けをやめる。そうでなければ選択とすべての強調を消す（#163）
+  clearSelection: () => {
+    if (clipboard.cancel()) return
+    tools.setSelected(null)
+    highlight.clearAll()
+  },
   undo: () => session.undo(),
   redo: () => session.redo(),
   // 貼り付けの見本を出していれば、見本を回す
