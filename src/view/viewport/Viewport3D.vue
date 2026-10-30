@@ -267,9 +267,9 @@ onMounted(() => {
       },
       { immediate: true },
     ),
-    // 計測とつながり（#16）
+    // 計測と同じブロック（#16）
     watch(
-      () => [measures.measurePoints, measures.connectGroup] as const,
+      () => [measures.measurePoints, measures.sameBlockGroup] as const,
       ([points, group]) => {
         scene.setMeasurePoints(points)
         scene.setConnectGroup(group?.positions ?? null)

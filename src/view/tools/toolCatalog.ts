@@ -17,7 +17,8 @@ export interface ToolInfo {
 export const TOOL_CATALOG: readonly ToolInfo[] = [
   { id: 'select', label: '選択', key: 'V', description: 'ブロックの情報を右パネルに出す' },
   { id: 'measure', label: '計測', key: 'M', description: '2つのブロックの距離を測る' },
-  { id: 'connect', label: 'つながり', key: 'C', description: '隣り合う同じ種類のブロックをまとめて強調する' },
+  { id: 'network', label: 'ネットワーク', key: 'C', description: 'クリックしたブロックと、回転でつながったブロックを強調する' },
+  { id: 'sameBlock', label: '同じブロック', key: 'S', description: '隣り合う同じ種類のブロックをまとめて強調する' },
   { id: 'probe', label: 'プローブ', key: 'P', description: '回転数と応力を見る' },
   { id: 'port', label: '仮の入出力', key: 'O', description: 'ブロックの面に仮の動力源や負荷を置く' },
   { id: 'place', label: '置く', key: 'B', description: 'ブロックを置く・置き換える', groupStart: true },

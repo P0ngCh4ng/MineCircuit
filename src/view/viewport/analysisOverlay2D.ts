@@ -1,6 +1,6 @@
-// 2D表示の、計測（#16）とつながり（#16）の重ね描き。drawLayer2D のあとに呼ぶ。
+// 2D表示の、計測（#16）と同じブロック（#16）の重ね描き。drawLayer2D のあとに呼ぶ。
 // - 計測：選んだ点の枠と、2点の中心を結ぶ点線。今の段にない点は点線の枠にする
-// - つながり：今の段にあるまとまりのブロックを塗って枠を付ける
+// - 同じブロック：今の段にあるまとまりのブロックを塗って枠を付ける
 
 import type { Vec3 } from '../../domain/vec3'
 import type { GridLayout2D } from '../tools/picker'
@@ -20,13 +20,13 @@ export const ANALYSIS_COLORS_2D: Readonly<Record<'light' | 'dark', AnalysisColor
 export interface AnalysisOverlay2D {
   /** 計測の点（0〜2個） */
   readonly measurePoints: readonly Vec3[]
-  /** つながりのまとまり。なければ null */
+  /** 同じブロックのまとまり。なければ null */
   readonly connectGroup: readonly Vec3[] | null
 }
 
 export type AnalysisCanvas2D = Canvas2DLike & Pick<CanvasRenderingContext2D, 'setLineDash'>
 
-/** 今の段（layer）に、計測とつながりを重ねて描く */
+/** 今の段（layer）に、計測と同じブロックを重ねて描く */
 export function drawAnalysisOverlay2D(
   ctx: AnalysisCanvas2D,
   layout: GridLayout2D,

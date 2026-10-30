@@ -1,6 +1,6 @@
-// 3D表示の、計測（#16）とつながり（#16）の重ね描き。
+// 3D表示の、計測（#16）と同じブロック（#16）の重ね描き。
 // - 計測：選んだ点の枠と、2点の中心を結ぶ点線
-// - つながり：まとまりのブロックごとの枠（線を1つのジオメトリにまとめる）
+// - 同じブロック：まとまりのブロックごとの枠（線を1つのジオメトリにまとめる）
 // BlueprintScene が持ち、シーンに足す。座標はブロック座標のまま（ブロック p は [p, p+1)）。
 
 import * as THREE from 'three'
@@ -88,7 +88,7 @@ export class AnalysisOverlay3D {
     }
   }
 
-  /** つながりのまとまり。null か空なら消す */
+  /** 同じブロックのまとまり。null か空なら消す */
   setConnectGroup(positions: readonly Vec3[] | null): void {
     if (this.connectObject) disposeLine(this.connectObject)
     this.connectObject = null

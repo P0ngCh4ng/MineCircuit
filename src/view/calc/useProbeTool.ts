@@ -1,4 +1,4 @@
-// プローブのツールを使えるようにし、問題の一覧から位置へ移る処理を作る（#31）。
+// プローブとネットワーク（C。#163）のツールを使えるようにし、問題の一覧から位置へ移る処理を作る（#31）。
 
 import { watch } from 'vue'
 import type { Vec3 } from '../../domain/vec3'
@@ -7,9 +7,10 @@ import { useLayerStore } from '../stores/layerStore'
 import { useProbeStore } from '../stores/probeStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
+import { NetworkTool } from '../tools/networkTool'
 import { ProbeTool } from '../tools/probeTool'
 
-/** プローブを登録する。App の setup で1回呼ぶ */
+/** プローブとネットワークのツールを登録する。App の setup で1回呼ぶ */
 export function useProbeTool(): void {
   const tools = useToolStore()
   const probe = useProbeStore()
@@ -24,6 +25,7 @@ export function useProbeTool(): void {
       setProbed: (pos) => probe.setProbed(pos),
     }),
   )
+  tools.register(new NetworkTool({ setProbed: (pos) => probe.setProbed(pos) }))
 
   // 別の設計図を開いたら、前の設計図の強調を消す
   watch(session.current, () => probe.clear())

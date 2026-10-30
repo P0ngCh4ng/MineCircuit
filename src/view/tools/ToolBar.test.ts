@@ -26,7 +26,8 @@ describe('ToolBar', () => {
     expect(buttons.map((b) => b.attributes('data-tool'))).toEqual([
       'select',
       'measure',
-      'connect',
+      'network',
+      'sameBlock',
       'probe',
       'port',
       'place',

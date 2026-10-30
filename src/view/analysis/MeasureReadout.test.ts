@@ -28,11 +28,11 @@ function mountReadout() {
   return { wrapper, session, tools: useToolStore(), measures: useMeasureStore() }
 }
 
-describe('MeasureReadout と計測・つながりツール', () => {
-  it('計測ツールとつながりツールが使えるようになる。選択ツールの間は何も出さない', () => {
+describe('MeasureReadout と計測・同じブロックツール', () => {
+  it('計測ツールと同じブロックツールが使えるようになる。選択ツールの間は何も出さない', () => {
     const { wrapper, tools } = mountReadout()
     expect(tools.isAvailable('measure')).toBe(true)
-    expect(tools.isAvailable('connect')).toBe(true)
+    expect(tools.isAvailable('sameBlock')).toBe(true)
     expect(tools.activeToolId).toBe('select')
     expect(wrapper.text()).toBe('')
   })
@@ -59,9 +59,9 @@ describe('MeasureReadout と計測・つながりツール', () => {
     expect(measures.measurePoints).toEqual([])
   })
 
-  it('つながり：まとまりの種類・個数・段の数を出し、回転のつながりではないと書く', async () => {
+  it('同じブロック：まとまりの種類・個数・段の数を出し、回転のつながりではないと書く', async () => {
     const { wrapper, tools, measures } = mountReadout()
-    tools.setTool('connect')
+    tools.setTool('sameBlock')
     await wrapper.vm.$nextTick()
     expect(wrapper.text()).toContain('回転や配管のつながりではありません')
 
@@ -70,28 +70,28 @@ describe('MeasureReadout と計測・つながりツール', () => {
     expect(wrapper.get('[data-readout="state"]').text()).toBe('create:shaft[axis=x]')
     expect(wrapper.get('[data-readout="count"]').text()).toBe('4 個')
     expect(wrapper.get('[data-readout="layers"]').text()).toBe('2 段')
-    expect(measures.connectGroup?.positions[0]).toEqual([1, 0, 0])
+    expect(measures.sameBlockGroup?.positions[0]).toEqual([1, 0, 0])
   })
 
   it('編集・元に戻すのあとは、まとまりを求め直す。始めのブロックが消えたら強調をやめる', async () => {
     const { wrapper, session, tools, measures } = mountReadout()
-    tools.setTool('connect')
+    tools.setTool('sameBlock')
     tools.click({ pos: [0, 0, 0], empty: false })
-    expect(measures.connectGroup?.positions).toHaveLength(4)
+    expect(measures.sameBlockGroup?.positions).toHaveLength(4)
 
     const bp = session.current.value!.blueprint
     session.apply(placeBlock(bp, [3, 0, 0], state('create:shaft[axis=x]'), false))
-    expect(measures.connectGroup?.positions).toHaveLength(5)
+    expect(measures.sameBlockGroup?.positions).toHaveLength(5)
     session.undo()
-    expect(measures.connectGroup?.positions).toHaveLength(4)
+    expect(measures.sameBlockGroup?.positions).toHaveLength(4)
 
     session.apply(eraseBlock(bp, [0, 0, 0]))
     await wrapper.vm.$nextTick()
-    expect(measures.connectGroup).toBeNull()
+    expect(measures.sameBlockGroup).toBeNull()
     expect(wrapper.text()).toContain('ブロックをクリックすると')
   })
 
-  it('別の設計図を開くと、計測とつながりを消す', async () => {
+  it('別の設計図を開くと、計測と同じブロックを消す', async () => {
     const { session, tools, measures } = mountReadout()
     tools.setTool('measure')
     tools.click({ pos: [0, 0, 0], empty: false })

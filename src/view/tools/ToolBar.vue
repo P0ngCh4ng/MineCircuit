@@ -10,7 +10,8 @@ const store = useToolStore()
 const ICONS: Record<ToolId, string[]> = {
   select: ['M5 3l10 6.5-4.6 1.1L8.6 15z'],
   measure: ['M3 14L14 3l3 3L6 17z', 'M7 10l1.5 1.5M9.5 7.5L11 9M12 5l1.5 1.5'],
-  connect: ['M2.5 7.5h5v5h-5zM12.5 7.5h5v5h-5zM7.5 2.5h5v5h-5z', 'M7.5 10h5'],
+  network: ['M5 5m-2.5 0a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M15 5m-2.5 0a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M10 15m-2.5 0a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0', 'M7.5 5h5M6.3 7.2l2.4 5.6M13.7 7.2l-2.4 5.6'],
+  sameBlock: ['M2.5 7.5h5v5h-5zM12.5 7.5h5v5h-5zM7.5 2.5h5v5h-5z', 'M7.5 10h5'],
   probe: ['M12 3l5 5-7 7-3 1 1-3z', 'M4 16l-1.5 1.5'],
   port: ['M9 4.5h8v11H9z', 'M2 10h5M5 7.5L7.5 10 5 12.5'],
   place: ['M10 2.5l6.5 3.5v8L10 17.5 3.5 14V6z', 'M10 7v6M7 10h6'],

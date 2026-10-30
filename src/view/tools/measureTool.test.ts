@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Vec3 } from '../../domain/vec3'
-import { ConnectTool } from './connectTool'
 import { MeasureTool } from './measureTool'
+import { NetworkTool } from './networkTool'
+import { SameBlockTool } from './sameBlockTool'
 import type { PickTarget } from './tool'
 import { ToolController } from './toolController'
 
@@ -34,15 +35,30 @@ describe('MeasureTool', () => {
   })
 })
 
-describe('ConnectTool', () => {
+describe('SameBlockTool', () => {
   it('ブロックをクリックしたら始めの位置を渡し、空きマスや切り替えでは消す', () => {
     const seen: (Vec3 | null)[] = []
-    const tool = new ConnectTool({ setConnectStart: (p) => seen.push(p) })
+    const tool = new SameBlockTool({ setSameBlockStart: (p) => seen.push(p) })
     tool.activate()
     tool.onClick(block([1, 2, 3]), NO_MODS)
     tool.onClick({ pos: [0, 0, 0], empty: true }, NO_MODS)
     tool.onClick(block([1, 2, 3]), NO_MODS)
     tool.deactivate()
     expect(seen).toEqual([null, [1, 2, 3], null, [1, 2, 3], null])
+  })
+})
+
+describe('NetworkTool', () => {
+  it('ブロックをクリックしたらその位置を、空きマスなら null を渡す。切り替えても強調を残す', () => {
+    const seen: (Vec3 | null)[] = []
+    const controller = new ToolController()
+    controller.register({ id: 'select', onHover: () => {}, onClick: () => {} })
+    controller.register(new NetworkTool({ setProbed: (p) => seen.push(p) }))
+    controller.setActive('network')
+    controller.click(block([1, 0, 2]))
+    controller.click({ pos: [0, 0, 0], empty: true })
+    controller.click(block([3, 0, 0]))
+    controller.setActive('select')
+    expect(seen).toEqual([[1, 0, 2], null, [3, 0, 0]])
   })
 })

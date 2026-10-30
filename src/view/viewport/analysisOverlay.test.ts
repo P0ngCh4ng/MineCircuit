@@ -7,7 +7,7 @@ function sample() {
   return blueprintFixture({ size: [3, 3, 3] }).fill([0, 0, 0], [2, 2, 0], 'minecraft:stone').toBlueprint()
 }
 
-describe('BlueprintScene の計測とつながり', () => {
+describe('BlueprintScene の計測と同じブロック', () => {
   it('計測の点は枠で、2点そろったら点線で結ぶ', () => {
     const scene = new BlueprintScene()
     scene.setBlueprint(sample())
@@ -22,7 +22,7 @@ describe('BlueprintScene の計測とつながり', () => {
     scene.dispose()
   })
 
-  it('つながりのまとまりは、隠した段のブロックを除いて枠を描く', () => {
+  it('同じブロックのまとまりは、隠した段のブロックを除いて枠を描く', () => {
     const scene = new BlueprintScene()
     scene.setBlueprint(sample())
     scene.setConnectGroup([
@@ -62,7 +62,7 @@ function recorder() {
 describe('drawAnalysisOverlay2D', () => {
   const layout = { originX: 0, originY: 0, cellSize: 10 }
 
-  it('つながりは今の段のマスだけを塗る', () => {
+  it('同じブロックは今の段のマスだけを塗る', () => {
     const { ctx, calls } = recorder()
     drawAnalysisOverlay2D(ctx, layout, 0, { measurePoints: [], connectGroup: [[1, 0, 2], [1, 1, 2]] }, ANALYSIS_COLORS_2D.light)
     expect(calls.filter((c) => c.startsWith('fill'))).toEqual(['fill 10,20'])
