@@ -161,6 +161,7 @@ describe('Create の応力プラグイン', () => {
         label: 'ネットワーク 1',
         value: { value: '使用 128 SU / 供給 262,144 SU（余裕 262,016 SU）、16 RPM。動力源 1・負荷 1・ブロック 2', source: 'builtin' },
         pos: [0, 0, 0],
+        network: true,
       },
     ])
     expect(result.assumptions.map((a) => a.message)).toContain('Modpack がないので、Create の内蔵の初期値を使った')

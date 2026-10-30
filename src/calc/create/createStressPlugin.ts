@@ -265,6 +265,7 @@ function summarize(graph: KineticGraph, ev: KineticEvaluation, settingSource: Pr
         net.source,
       ),
       pos: [pos[0], pos[1], pos[2]],
+      network: true,
     })
   }
   rows.unshift({

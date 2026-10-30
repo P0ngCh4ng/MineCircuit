@@ -232,9 +232,11 @@ describe('PortPanel', () => {
     return { wrapper, ports: usePortStore(), tools: useToolStore() }
   }
 
-  it('ツールを使っていなくて、置いてもいなければ出さない', () => {
+  it('ツールを使っていなければ、置く種類は出さず、一覧だけ出す（#157）', () => {
     const { wrapper } = mountPanel()
-    expect(wrapper.find('[data-testid="port-panel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="port-panel"]').exists()).toBe(true)
+    expect(wrapper.find('select[data-testid="port-kind"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('まだ置いていません。')
   })
 
   it('置いた仮の入出力の値を変え、消せる', async () => {

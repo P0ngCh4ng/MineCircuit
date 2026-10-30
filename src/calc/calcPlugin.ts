@@ -50,6 +50,8 @@ export interface CalcSummaryItem {
   readonly value: Resolved<string>
   /** あれば、押すとこの位置をプローブの対象にし、そのネットワークを強調する（ネット一覧、#152） */
   readonly pos?: Vec3
+  /** ネット一覧の行。右パネルの「まとめ」でなく「ネットワーク」のタブに出す（#157） */
+  readonly network?: boolean
 }
 
 /** 問題1つ分。pos は 3D 表示で強調する位置 */
