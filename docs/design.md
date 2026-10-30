@@ -706,12 +706,24 @@ interface CalcContext {
 
 interface CalcResult {
   summary: { label: string; value: Resolved<string>; pos?: Vec3; network?: boolean }[]   // 「使用 2,048 SU / 供給 4,096 SU」。pos があれば、押すとその位置をプローブの対象にする（ネット一覧、#152）。network はネット一覧の行で、右パネルの「ネットワーク」のタブに出す（#157）
-  issues: { pos: Vec3; message: string; severity?: 'warning'; positions?: Vec3[] }[]  // 問題。重さがなければエラーで、3D・2D表示で強調する。警告は一覧だけ（#148）。positions はまとめた問題の全ブロック（#153）
+  issues: { pos: Vec3; message: string; severity?: IssueSeverity; positions?: Vec3[] }[]  // 問題。重さは下の表（#159）。positions はまとめた問題の全ブロック（#153）
   assumptions: { pos?: Vec3; message: string }[]          // 何を仮定して計算したか
   probes?: CalcProbe[]                                    // ブロックごとの値（プローブ）
   rotations?: CalcRotation[]                              // 回るブロックごとの回転（表示部分の色分け）
 }
 
+type IssueSeverity = 'error' | 'warning' | 'info'   // 問題の重さ。省略はエラー
+```
+
+問題の重さ（#159）。右パネルの「問題」のタブは重さごとに分けて出し、下の状態表示に重さごとの件数を常に出す。
+
+| 重さ | 意味 | 3D・2Dの強調 | Create の応力での例 |
+| --- | --- | --- | --- |
+| エラー（`error`） | ゲームで動かない、壊れる | する | 過負荷、回転の向きの衝突、回転数が足りない、つなげない仮の入出力 |
+| 警告（`warning`） | 今は動くか、組み立て途中なら出てよいが、確かめたほうがよい | しない（組み立て途中で多く出るため） | 動力源につながらない・回転数が 0（#148）、応力の使用率が 90% を超える |
+| 情報（`info`） | 知らせるだけ | しない | （今は使っていない） |
+
+```ts
 // 表示部分で「回転」を入れたときに使う。プラグインが回るものとして数えたブロックだけ
 interface CalcRotation {
   pos: Vec3

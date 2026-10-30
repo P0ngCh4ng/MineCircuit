@@ -8,7 +8,7 @@ import { DIRECTIONS, directionVector, oppositeDirection, type Direction } from '
 import type { RawNbt } from '../../domain/nbt'
 import { addVec3, type Vec3 } from '../../domain/vec3'
 import type { AssumptionLog } from '../assumptionLog'
-import type { CalcIssue } from '../calcPlugin'
+import type { CalcIssue, IssueSeverity } from '../calcPlugin'
 import { nbtBoolean, nbtNumber, nbtString } from '../nbtValues'
 import { PROVENANCES, candidate, resolved, type Provenance, type Resolved } from '../provenance'
 import type { VirtualPort } from '../virtualPort'
@@ -127,6 +127,8 @@ const SPEED_TOLERANCE = 1 / 65536
 
 const UNPOWERED_MESSAGE = '動力源につながっていません。回りません。'
 const STOPPED_MESSAGE = '回転数が 0 です。つながっている動力源が止まっています。'
+/** 応力の使用率がこれを超えたら警告する（#159）。負荷を少し足すだけで過負荷になる */
+export const HIGH_STRESS_USAGE = 0.9
 
 /** 回るブロックなのに、回転軸を決めるブロック状態がないか読めないとき（docs/create-stress.md「手順」1.） */
 function missingStateMessage(state: BlockState): string {
@@ -506,7 +508,7 @@ export class KineticGraph {
     })
 
     // ネットワーク全体の問題は1件にまとめる（#153）
-    const addNetworkIssue = (members: readonly number[], message: string, severity?: 'warning'): void => {
+    const addNetworkIssue = (members: readonly number[], message: string, severity?: IssueSeverity): void => {
       const positions = members.map((m) => this.nodes[m].pos).map((p): Vec3 => [p[0], p[1], p[2]])
       if (positions.length === 0) return
       const text = `${message}（ブロック ${formatNumber(positions.length)} 個）`
@@ -519,6 +521,13 @@ export class KineticGraph {
           `応力が足りません（使用 ${formatNumber(net.stress)} SU / 供給 ${formatNumber(net.capacity)} SU）。ネットワーク全体が止まります。`,
         )
         continue
+      }
+      if (!settings.disableStress && net.capacity > 0 && net.stress > net.capacity * HIGH_STRESS_USAGE) {
+        addNetworkIssue(
+          net.nodes.filter((i) => this.nodes[i].portId === null),
+          `応力の余裕が少なくなっています（使用 ${formatNumber(net.stress)} SU / 供給 ${formatNumber(net.capacity)} SU、使用率 ${formatNumber(Math.floor((net.stress / net.capacity) * 100))}%）。負荷を足すと止まります。`,
+          'warning',
+        )
       }
       for (const i of net.nodes) {
         const node = this.nodes[i]
