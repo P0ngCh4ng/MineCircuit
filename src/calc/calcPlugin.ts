@@ -54,12 +54,21 @@ export interface CalcSummaryItem {
   readonly network?: boolean
 }
 
+/**
+ * 問題の重さ（#159。docs/design.md「calc：計算プラグイン」の表）。
+ * エラーはゲームで動かない・壊れるもの。警告は確かめたほうがよいもの（組み立て途中なら出てよい）。情報は知らせるだけ
+ */
+export type IssueSeverity = 'error' | 'warning' | 'info'
+
+/** 重い順 */
+export const ISSUE_SEVERITIES: readonly IssueSeverity[] = ['error', 'warning', 'info']
+
 /** 問題1つ分。pos は 3D 表示で強調する位置 */
 export interface CalcIssue {
   readonly pos: Vec3
   readonly message: string
-  /** なければエラー。警告は一覧だけに出し、3D・2D表示では強調しない（#148） */
-  readonly severity?: 'warning'
+  /** なければエラー。3D・2D表示で強調するのはエラーだけ（#148・#159） */
+  readonly severity?: IssueSeverity
   /** ネットワーク全体などをまとめた問題の、全ブロックの位置（pos を含む）。強調はこの全部に付ける（#153） */
   readonly positions?: readonly Vec3[]
 }
@@ -151,6 +160,11 @@ export interface CalcPlugin {
     hit: { readonly pos: Vec3; readonly face: Direction; readonly point: Vec3 },
     state: BlockState,
   ): { pos: Vec3; state: BlockState } | null
+}
+
+/** 問題の重さ。省略はエラー */
+export function issueSeverity(issue: CalcIssue): IssueSeverity {
+  return issue.severity ?? 'error'
 }
 
 /** 空の結果 */

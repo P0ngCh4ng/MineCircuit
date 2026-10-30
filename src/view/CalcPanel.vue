@@ -4,10 +4,11 @@
 // 問題と仮定の位置をクリックすると、そのブロックを選択し、その段へ移ってネットワークを強調する（#31）。
 // 位置のある合計の行（ネット一覧の行 #152、生産ラインの行 #168）も、押すと同じようにその位置へ移る。
 import { computed, ref, watch } from 'vue'
-import type { CalcSummaryItem } from '../calc/calcPlugin'
+import { ISSUE_SEVERITIES, issueSeverity, type CalcSummaryItem } from '../calc/calcPlugin'
 import { PROVENANCE_LABELS } from '../calc/provenance'
 import PortPanel from './calc/PortPanel.vue'
 import { formatPos } from './calc/probeModel'
+import { SEVERITY_LABELS } from './calc/severityLabels'
 import { useJumpTo } from './calc/useProbeTool'
 import { useCalcStore } from './stores/calcStore'
 import { usePortStore } from './stores/portStore'
@@ -46,11 +47,17 @@ const statusText = computed(() => {
 const plugins = computed(() =>
   (calc.outcomes ?? []).map((o) => {
     const summary: readonly CalcSummaryItem[] = o.status === 'ok' ? o.result.summary : []
+    const issues = o.status === 'ok' ? o.result.issues : []
     return {
       outcome: o,
       totals: summary.filter((item) => !item.network),
       networks: summary.filter((item) => item.network),
-      issues: o.status === 'ok' ? o.result.issues : [],
+      issues,
+      // 問題は重さごとに分け、重い順に出す（#159）
+      issueGroups: ISSUE_SEVERITIES.map((severity) => ({
+        severity,
+        items: issues.filter((i) => issueSeverity(i) === severity),
+      })).filter((g) => g.items.length > 0),
       assumptions: o.status === 'ok' ? o.result.assumptions : [],
     }
   }),
@@ -157,13 +164,15 @@ const tabs = computed<{ id: CalcTab; label: string }[]>(() => [
 
             <div v-show="tab === 'issues'" role="tabpanel" data-tabpanel="issues">
               <p v-if="p.issues.length === 0" class="none">問題はありません。</p>
-              <ul v-else class="issues">
-                <li v-for="(issue, i) in p.issues" :key="i" :data-severity="issue.severity ?? 'error'">
-                  <button type="button" class="pos" :title="`${formatPos(issue.pos)} へ移る`" @click="jumpTo(issue.pos)">{{ formatPos(issue.pos) }}</button>
-                  <span v-if="issue.severity === 'warning'" class="severity">警告</span>
-                  {{ issue.message }}
-                </li>
-              </ul>
+              <div v-for="g in p.issueGroups" :key="g.severity" class="issue-group" :data-severity="g.severity">
+                <h4><span class="severity" :data-severity="g.severity">{{ SEVERITY_LABELS[g.severity] }}</span>（{{ g.items.length }}）</h4>
+                <ul class="issues">
+                  <li v-for="(issue, i) in g.items" :key="i" :data-severity="g.severity">
+                    <button type="button" class="pos" :title="`${formatPos(issue.pos)} へ移る`" @click="jumpTo(issue.pos)">{{ formatPos(issue.pos) }}</button>
+                    {{ issue.message }}
+                  </li>
+                </ul>
+              </div>
             </div>
 
             <div v-show="tab === 'assumptions'" role="tabpanel" data-tabpanel="assumptions">
@@ -246,6 +255,12 @@ h3 {
   margin: 8px 0 4px;
 }
 
+h4 {
+  font-size: 12px;
+  font-weight: normal;
+  margin: 6px 0 2px;
+}
+
 .status {
   margin: 0;
   font-size: 12px;
@@ -298,10 +313,22 @@ ul {
 
 .severity {
   font-size: 11px;
+  font-weight: 600;
   padding: 0 4px;
   border: 1px solid currentcolor;
   border-radius: 3px;
+}
+
+.severity[data-severity='error'] {
+  color: #c62828;
+}
+
+.severity[data-severity='warning'] {
   color: #b26a00;
+}
+
+.severity[data-severity='info'] {
+  color: #2f6fd0;
 }
 
 .net {

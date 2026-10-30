@@ -64,7 +64,10 @@ describe('KineticGraph：docs/create-stress.md の例', () => {
     expect(net.capacity).toBe(256)
     expect(net.stress).toBe(256)
     expect(net.overloaded).toBe(false)
-    expect(r.ev.issues).toEqual([])
+    // ちょうど足りるのは使用率 100% なので、余裕が少ない警告だけ（#159）
+    expect(r.ev.issues.map((i) => [i.severity, i.message])).toEqual([
+      ['warning', '応力の余裕が少なくなっています（使用 256 SU / 供給 256 SU、使用率 100%）。負荷を足すと止まります。（ブロック 5 個）'],
+    ])
   })
 
   it('例1：プレスを1台足すと過負荷になり、全部 0 RPM', () => {
@@ -373,6 +376,30 @@ describe('KineticGraph：範囲外と仮の入出力', () => {
     expect(net.overloaded).toBe(false)
     // 仮の入出力を置いた面は範囲外の仮定に載せない
     expect(r.log.list().some((a) => a.message === OUT_OF_RANGE_NOTE)).toBe(false)
+  })
+
+  it('応力の使用率が 90% を超えたら、ネットワークごとに1件の警告（#159）', () => {
+    const bp = blueprintFixture({ size: [2, 1, 1] })
+      .place([0, 0, 0], 'create:shaft', { axis: 'x' })
+      .place([1, 0, 0], 'create:shaft', { axis: 'x' })
+      .toBlueprint()
+    const withLoad = (stress: number): VirtualPort[] => [
+      { id: 'in', pos: [0, 0, 0], face: 'west', pluginId: 'create-stress', kind: 'rotation-source', params: { rpm: 32, capacity: 1000 } },
+      { id: 'out', pos: [1, 0, 0], face: 'east', pluginId: 'create-stress', kind: 'rotation-load', params: { stress } },
+    ]
+    // ちょうど 90% は出さない
+    expect(evaluate(bp, withLoad(900)).ev.issues).toEqual([])
+    expect(evaluate(bp, withLoad(901)).ev.issues).toEqual([
+      {
+        pos: [0, 0, 0],
+        message: '応力の余裕が少なくなっています（使用 901 SU / 供給 1,000 SU、使用率 90%）。負荷を足すと止まります。（ブロック 2 個）',
+        severity: 'warning',
+        positions: [[0, 0, 0], [1, 0, 0]],
+      },
+    ])
+    // 過負荷ならエラーだけ（警告を重ねない）
+    const over = evaluate(bp, withLoad(1001)).ev.issues
+    expect(over.map((i) => i.severity ?? 'error')).toEqual(['error'])
   })
 
   it('軸の口がない面には仮の入出力をつなげない', () => {

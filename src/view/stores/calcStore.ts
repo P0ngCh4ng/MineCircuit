@@ -4,7 +4,7 @@
 import { defineStore } from 'pinia'
 import { computed, markRaw, ref, shallowRef } from 'vue'
 import { createBuiltinRegistry } from '../../calc/builtinPlugins'
-import type { CalcModpack, CalcRotation } from '../../calc/calcPlugin'
+import { issueSeverity, type CalcModpack, type CalcRotation, type IssueSeverity } from '../../calc/calcPlugin'
 import {
   CalcScheduler,
   InlineCalcBackend,
@@ -99,14 +99,23 @@ export const useCalcStore = defineStore('calc', () => {
     return ensureScheduler().runNow(request)
   }
 
-  /** 3D 表示で強調する位置（全プラグインの問題のうちエラー。警告は組み立て途中で多く出るので強調しない） */
+  /** 3D 表示で強調する位置（全プラグインの問題のうちエラー。警告と情報は組み立て途中で多く出るので強調しない） */
   const issuePositions = computed<Vec3[]>(() =>
     (outcomes.value ?? []).flatMap((o) =>
       o.status === 'ok'
-        ? o.result.issues.filter((i) => i.severity !== 'warning').flatMap((i) => i.positions ?? [i.pos])
+        ? o.result.issues.filter((i) => issueSeverity(i) === 'error').flatMap((i) => i.positions ?? [i.pos])
         : [],
     ),
   )
+
+  /** 重さごとの問題の件数（全プラグインの分）。下の状態表示に出す（#159） */
+  const issueCounts = computed<Record<IssueSeverity, number>>(() => {
+    const counts: Record<IssueSeverity, number> = { error: 0, warning: 0, info: 0 }
+    for (const o of outcomes.value ?? []) {
+      if (o.status === 'ok') for (const i of o.result.issues) counts[issueSeverity(i)]++
+    }
+    return counts
+  })
 
   /** 回るブロックごとの回転（すべてのプラグインの分）。表示部分の「回転」で使う */
   const rotations = computed<readonly CalcRotation[]>(() =>
@@ -120,6 +129,7 @@ export const useCalcStore = defineStore('calc', () => {
     hasBlueprint,
     ports,
     issuePositions,
+    issueCounts,
     rotations,
     setBackend,
     attach,
