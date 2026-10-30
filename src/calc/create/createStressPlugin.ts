@@ -24,7 +24,7 @@ import { orientForPlacement, placementHelper, placementProblem } from './createP
 import { transformCreateBlockEntity, transformCreateState } from './createTransform'
 import { kineticThroughputValues, staticThroughputValues, type ThroughputEnv } from './createThroughput'
 import { CreateValueResolver } from './createValueResolver'
-import { itemPathValues, traceItemPaths, type ItemPathRecord } from './createItemPath'
+import { bottleneckValue, itemPathValues, lineSummary, traceItemPaths, type ItemPathRecord, type LineFlow } from './createItemPath'
 import {
   CREATE_STRESS_PLUGIN_ID,
   ITEM_INPUT_PORT_KIND,
@@ -103,10 +103,11 @@ export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<
     { bp, recipes, log, rpmAt: runningSpeeds(graph, evaluation), bulkPressing: values.bulkPressing().value },
   )
   const env: ThroughputEnv = { bp, values, recipes, log, pathItems: (pos) => path.itemsAt(pos) }
-  const allProbes = withItemPath([...probes(graph, evaluation, env), ...staticProbes(bp, env)], path.records)
+  const allProbes = withBottleneck(withItemPath([...probes(graph, evaluation, env), ...staticProbes(bp, env)], path.records), path.line)
 
   return {
-    summary: summarize(graph, evaluation, disableStress.source),
+    // 生産ラインの行は、ネットワークの行の前（まとめのすぐ後）に出す
+    summary: withLine(summarize(graph, evaluation, disableStress.source), path.line),
     issues: [...evaluation.issues, ...placementIssues(bp), ...path.issues],
     assumptions: log.list(),
     probes: allProbes,
@@ -143,6 +144,20 @@ function withItemPath(list: CalcProbe[], records: readonly ItemPathRecord[]): Ca
     result[i] = { ...probe, values: [...probe.values.filter((v) => !labels.has(v.label)), ...values] }
   }
   return result
+}
+
+/** まとめの次に「生産ライン」の行を入れる（#168） */
+function withLine(rows: CalcSummaryItem[], line: LineFlow | null): CalcSummaryItem[] {
+  if (!line) return rows
+  return [...rows.slice(0, 1), lineSummary(line), ...rows.slice(1)]
+}
+
+/** 律速の機械のプローブに「律速」の値を足す（#168） */
+function withBottleneck(list: CalcProbe[], line: LineFlow | null): CalcProbe[] {
+  const value = line && bottleneckValue(line)
+  const b = line?.bottleneck
+  if (!value || !b) return list
+  return list.map((p) => (p.pos.join() === b.pos.join() ? { ...p, values: [...p.values, value] } : p))
 }
 
 /** Modpack のレシピ（docs/create-throughput.md「レシピ」）。読めなければ null（初期値で計算する） */
