@@ -40,8 +40,8 @@ export const DEFAULT_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, numb
   compacting: 0,
 }
 
-/** 機械の名前（仮定の文に使う） */
-const RECIPE_MACHINE_NAMES: Readonly<Record<ProcessingRecipeType, string>> = {
+/** 機械の名前（仮定の文と、律速の機械の名前に使う） */
+export const RECIPE_MACHINE_NAMES: Readonly<Record<ProcessingRecipeType, string>> = {
   milling: '石臼',
   crushing: '粉砕ホイール',
   cutting: 'ソー',
