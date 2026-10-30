@@ -69,7 +69,7 @@ const emptyText = computed(() => {
 <style scoped>
 .probe-panel {
   font-size: 13px;
-  margin-bottom: 16px;
+  padding: 10px 12px;
 }
 
 h2 {

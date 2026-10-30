@@ -705,7 +705,7 @@ interface CalcContext {
 }
 
 interface CalcResult {
-  summary: { label: string; value: Resolved<string>; pos?: Vec3 }[]   // 「使用 2,048 SU / 供給 4,096 SU」。pos があれば、押すとその位置をプローブの対象にする（ネット一覧、#152）
+  summary: { label: string; value: Resolved<string>; pos?: Vec3; network?: boolean }[]   // 「使用 2,048 SU / 供給 4,096 SU」。pos があれば、押すとその位置をプローブの対象にする（ネット一覧、#152）。network はネット一覧の行で、右パネルの「ネットワーク」のタブに出す（#157）
   issues: { pos: Vec3; message: string; severity?: 'warning'; positions?: Vec3[] }[]  // 問題。重さがなければエラーで、3D・2D表示で強調する。警告は一覧だけ（#148）。positions はまとめた問題の全ブロック（#153）
   assumptions: { pos?: Vec3; message: string }[]          // 何を仮定して計算したか
   probes?: CalcProbe[]                                    // ブロックごとの値（プローブ）
