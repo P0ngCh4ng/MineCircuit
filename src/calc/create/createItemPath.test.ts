@@ -7,7 +7,7 @@ import type { ProcessingRecipe, RecipeBook, RecipeResult } from '../../io/modpac
 import { AssumptionLog } from '../assumptionLog'
 import type { CalcModpack } from '../calcPlugin'
 import type { VirtualPort } from '../virtualPort'
-import { itemPathValues, traceItemPaths, type ItemPathResult } from './createItemPath'
+import { bottleneckValue, itemPathValues, lineSummary, traceItemPaths, type ItemPathResult } from './createItemPath'
 import { runCreateStress } from './createStressPlugin'
 import { chooseRecipe } from './createThroughput'
 
@@ -403,6 +403,85 @@ describe('物の通り道', () => {
   })
 })
 
+describe('律速（docs/create-throughput.md「律速（#168）」の例）', () => {
+  /** 小麦 → 石臼 → シュート → ベルト → デポに溜まる */
+  const line = (millRpm: number) => {
+    const fx = blueprintFixture()
+      .place([1, 3, 0], 'create:millstone')
+      .place([1, 2, 0], 'create:chute', { facing: 'down' })
+      .place([3, 1, 0], 'create:depot')
+    belt(fx, 1, 0, [1, 2], 'east')
+    return trace(fx, [port([1, 3, 0], 'up', 'minecraft:wheat', 1)], { '1,3,0': millRpm, '1,1,0': -32, '2,1,0': -32 }).result
+  }
+
+  it('256 RPM：石臼は 120 個/分。使用率 50%、出る数 105 個/分、入る数は 120 個/分まで増やせる', () => {
+    const result = line(256)
+    expect(result.line).toEqual({
+      inputPerMinute: 60,
+      outputPerMinute: 105,
+      bottleneck: { pos: [1, 3, 0], machine: '石臼', arrivingPerMinute: 60, capacityPerMinute: 120, utilization: 0.5 },
+      outputsUnknown: false,
+      source: 'virtual',
+    })
+    expect(lineSummary(result.line!)).toEqual({
+      label: '生産ライン',
+      value: {
+        value: '入る 60 個/分 → 律速 石臼 120 個/分のうち 60 個/分（50%） → 出る 105 個/分。入る数は 120 個/分まで増やせる',
+        source: 'virtual',
+      },
+      pos: [1, 3, 0],
+    })
+    expect(bottleneckValue(result.line!)?.value.value).toBe('生産ラインで一番忙しい機械。使用率 50%')
+  })
+
+  it('16 RPM：石臼は 8 個/分。使用率 750% で追いつかず、出る数は 14 個/分。増やせる数は出さない', () => {
+    const result = line(16)
+    expect(result.line?.bottleneck?.utilization).toBe(7.5)
+    expect(result.line?.outputPerMinute).toBeCloseTo(14)
+    expect(lineSummary(result.line!).value.value).toBe('入る 60 個/分 → 律速 石臼 8 個/分のうち 60 個/分（750%、追いつかない） → 出る 14 個/分')
+    expect(bottleneckValue(result.line!)?.value.value).toBe('生産ラインで一番忙しい機械。使用率 750%（追いつかない）')
+  })
+
+  it('使用率が一番高い機械を律速にする。同じなら先にたどった方', () => {
+    // 2つの石臼に別々の入口。256 RPM（120 個/分）に 60 個/分、64 RPM（⌈150 / 4⌉ = 38 tick、32 個/分）に 30 個/分
+    const fx = blueprintFixture().place([0, 0, 0], 'create:millstone').place([2, 0, 0], 'create:millstone')
+    const busy = trace(fx, [port([0, 0, 0], 'up', 'minecraft:wheat', 1), port([2, 0, 0], 'up', 'minecraft:wheat', 0.5)], {
+      '0,0,0': 256,
+      '2,0,0': 64,
+    }).result
+    expect(busy.line?.inputPerMinute).toBe(90)
+    expect(busy.line?.bottleneck?.pos).toEqual([2, 0, 0])
+    const tie = trace(fx, [port([2, 0, 0], 'up', 'minecraft:wheat', 1), port([0, 0, 0], 'up', 'minecraft:wheat', 1)], {
+      '0,0,0': 256,
+      '2,0,0': 256,
+    }).result
+    expect(tie.line?.bottleneck?.pos).toEqual([2, 0, 0])
+  })
+
+  it('処理する機械がなければ、律速を出さずに入る数と出る数だけ。入口がなければ null', () => {
+    const fx = blueprintFixture().place([0, 0, 0], 'create:depot')
+    const result = trace(fx, [port([0, 0, 0], 'up', 'minecraft:wheat', 1)]).result
+    expect(result.line?.bottleneck).toBeNull()
+    expect(lineSummary(result.line!).value.value).toBe('入る 60 個/分 → 出る 60 個/分。処理する機械がない')
+    expect(lineSummary(result.line!).pos).toBeUndefined()
+    expect(trace(fx, []).result.line).toBeNull()
+  })
+
+  it('Modpack がなければ、処理時間は Create の初期値（石臼 100）で律速を出し、出どころは仮定', () => {
+    // 256 RPM：⌈100 / 16⌉ = 7 tick で1個、171 個/分
+    const fx = blueprintFixture().place([0, 0, 0], 'create:millstone')
+    const { result, log } = trace(fx, [port([0, 0, 0], 'up', 'minecraft:wheat', 1)], { '0,0,0': 256 }, null)
+    expect(result.line?.bottleneck).toMatchObject({ machine: '石臼', arrivingPerMinute: 60 })
+    expect(result.line?.bottleneck?.capacityPerMinute).toBeCloseTo(1200 / 7)
+    expect(result.line?.source).toBe('assumed')
+    expect(result.line?.outputPerMinute).toBe(0)
+    expect(lineSummary(result.line!).value.value).toBe(
+      '入る 60 個/分 → 律速 石臼 171 個/分のうち 60 個/分（35%） → 出る 0 個/分（Modpack がないので、機械でできる物は数えていない）。入る数は 171 個/分まで増やせる',
+    )
+    expect(messages(log)).toContain('石臼のレシピが分からないので、処理時間を Create の初期値の 100 tick とした')
+  })
+})
+
 describe('物の通り道（runCreateStress）', () => {
   const pack: CalcModpack = { hasNamespace: (ns) => ns === 'create', config: async () => null, recipeBook: async () => BOOK }
   const bone = nbt.compound({
@@ -426,6 +505,9 @@ describe('物の通り道（runCreateStress）', () => {
     expect(value(result, '0,1,0', '溜まる物')?.value).toBe('create:wheat_flour 0.75 個/秒、minecraft:wheat_seeds 0.13 個/秒')
     expect(result.probes?.filter((p) => p.pos.join() === '0,1,0')).toHaveLength(1)
     expect(result.issues).toEqual([])
+    // 生産ラインの行はまとめの次。律速の機械のプローブに「律速」
+    expect(result.summary[1]).toMatchObject({ label: '生産ライン', pos: [0, 1, 0] })
+    expect(value(result, '0,1,0', '律速')?.value).toBe('生産ラインで一番忙しい機械。使用率 95%')
     expect(structuredClone(result)).toEqual(result)
   })
 

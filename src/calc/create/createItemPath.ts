@@ -13,7 +13,7 @@ import type { CalcIssue, CalcSummaryItem } from '../calcPlugin'
 import { nbtPos, nbtString } from '../nbtValues'
 import { resolved, type Provenance } from '../provenance'
 import type { VirtualPort } from '../virtualPort'
-import { chooseRecipe, formatRate, machineCapacityPerMinute, type RecipeChoice } from './createThroughput'
+import { chooseRecipe, formatRate, machineCapacityPerMinute, RECIPE_MACHINE_NAMES, type RecipeChoice } from './createThroughput'
 import { axisDirections, directionAxis } from './kineticBlocks'
 import { ITEM_INPUT_PORT_KIND, nextBeltSegment, weakerSource } from './kineticGraph'
 
@@ -75,6 +75,10 @@ export interface ItemPathRecord {
   readonly notes: string[]
   /** 機械が1分に処理できる数。機械でなければ null */
   capacityPerMinute: number | null
+  /** 処理する機械の種類（律速の機械の名前に使う）。機械でなければ null */
+  machine: ProcessingRecipeType | null
+  /** 処理できる数の出どころ（レシピの処理時間の出どころ）。機械でなければ null */
+  capacitySource: Provenance | null
   /** レシピで処理した数（個/秒）の合計。処理できる数で頭打ちにするのに使う */
   processedRate: number
 }
@@ -90,10 +94,37 @@ export interface ItemPathEnv {
   readonly bulkPressing: boolean
 }
 
+/** 律速の機械。docs/create-throughput.md「律速（#168）」 */
+export interface Bottleneck {
+  readonly pos: Vec3
+  /** 機械の名前（「石臼」など） */
+  readonly machine: string
+  /** 届く数（個/分） */
+  readonly arrivingPerMinute: number
+  /** 処理できる数（個/分） */
+  readonly capacityPerMinute: number
+  /** 届く数 ÷ 処理できる数 */
+  readonly utilization: number
+}
+
+/** 生産ラインの流れ。物の入口をたどらなかったら null */
+export interface LineFlow {
+  /** 入る数（個/分）。たどった物の入口の合計 */
+  readonly inputPerMinute: number
+  /** 出る数（個/分）。溜まる所に届く数の合計 */
+  readonly outputPerMinute: number
+  /** 処理する機械がなければ null */
+  readonly bottleneck: Bottleneck | null
+  /** Modpack のレシピがなく、機械でできる物が分からなかった（出る数に入らない） */
+  readonly outputsUnknown: boolean
+  readonly source: Provenance
+}
+
 export interface ItemPathResult {
   readonly records: readonly ItemPathRecord[]
   /** 「処理が追いつかない」 */
   readonly issues: readonly CalcIssue[]
+  readonly line: LineFlow | null
   /** その位置に届く物の ID（レシピを決めるのに使う。docs/create-throughput.md「どのレシピか」の 1） */
   itemsAt(pos: Vec3): string[]
 }
@@ -134,12 +165,77 @@ export function traceItemPaths(ports: readonly VirtualPort[], env: ItemPathEnv):
   return tracer.result()
 }
 
+/** 律速を決める。docs/create-throughput.md「律速（#168）」 */
+function lineFlow(records: readonly ItemPathRecord[], inputRate: number): LineFlow | null {
+  if (!(inputRate > 0)) return null
+  let bottleneck: Bottleneck | null = null
+  const sources: Provenance[] = []
+  let output = 0
+  let outputsUnknown = false
+  for (const r of records) {
+    if (r.recipesUnknown) outputsUnknown = true
+    for (const a of r.arrivals) sources.push(a.source)
+    for (const s of r.sinks) {
+      output += s.rate
+      sources.push(s.source)
+    }
+    if (r.capacitySource) sources.push(r.capacitySource)
+    if (r.capacityPerMinute === null || r.capacityPerMinute <= 0 || r.machine === null) continue
+    const arriving = r.arrivals.reduce((sum, a) => sum + a.rate, 0) * 60
+    const utilization = arriving / r.capacityPerMinute
+    // 同じなら先にたどった方（物の入口に近い方）
+    if (bottleneck && utilization <= bottleneck.utilization * (1 + 1e-9)) continue
+    bottleneck = {
+      pos: [r.pos[0], r.pos[1], r.pos[2]],
+      machine: RECIPE_MACHINE_NAMES[r.machine],
+      arrivingPerMinute: arriving,
+      capacityPerMinute: r.capacityPerMinute,
+      utilization,
+    }
+  }
+  return { inputPerMinute: inputRate * 60, outputPerMinute: output * 60, bottleneck, outputsUnknown, source: weakest(sources) }
+}
+
+/** 計算結果のまとめの「生産ライン」の行 */
+export function lineSummary(line: LineFlow): CalcSummaryItem {
+  const input = `入る ${formatRate(line.inputPerMinute)} 個/分`
+  const unknown = line.outputsUnknown ? '（Modpack がないので、機械でできる物は数えていない）' : ''
+  const output = `出る ${formatRate(line.outputPerMinute)} 個/分${unknown}`
+  const b = line.bottleneck
+  if (!b) return { label: '生産ライン', value: resolved(`${input} → ${output}。処理する機械がない`, line.source) }
+  const percent = `${formatRate(b.utilization * 100)}%`
+  const over = b.utilization > 1 + 1e-9
+  const middle = `律速 ${b.machine} ${formatRate(b.capacityPerMinute)} 個/分のうち ${formatRate(b.arrivingPerMinute)} 個/分（${percent}${over ? '、追いつかない' : ''}）`
+  const more = over || b.utilization <= 0 ? '' : `。入る数は ${formatRate(line.inputPerMinute / b.utilization)} 個/分まで増やせる`
+  return {
+    label: '生産ライン',
+    value: resolved(`${input} → ${middle} → ${output}${more}`, line.source),
+    pos: [b.pos[0], b.pos[1], b.pos[2]],
+  }
+}
+
+/** 律速の機械のプローブの値 */
+export function bottleneckValue(line: LineFlow): CalcSummaryItem | null {
+  const b = line.bottleneck
+  if (!b) return null
+  const over = b.utilization > 1 + 1e-9
+  return {
+    label: '律速',
+    value: resolved(
+      `生産ラインで一番忙しい機械。使用率 ${formatRate(b.utilization * 100)}%${over ? '（追いつかない）' : ''}`,
+      line.source,
+    ),
+  }
+}
+
 class ItemTracer {
   private readonly records = new Map<string, ItemPathRecord>()
   private readonly arms: ArmInfo[]
   /** いまたどっている道の上の「位置|物」。同じものにまた届いたら輪になっている */
   private readonly ancestors = new Set<string>()
   private steps = 0
+  /** たどった物の入口の数の合計（個/秒） */
+  private inputRate = 0
 
   constructor(private readonly env: ItemPathEnv) {
     this.arms = findArms(env.bp)
@@ -152,6 +248,7 @@ class ItemTracer {
       this.env.log.add('物の入口の先にブロックがないので、物の通り道をたどらない', pos)
       return
     }
+    this.inputRate += flow.rate
     this.deliver(pos, flow, null, face)
   }
 
@@ -172,6 +269,7 @@ class ItemTracer {
     return {
       records,
       issues,
+      line: lineFlow(records, this.inputRate),
       itemsAt(pos: Vec3): string[] {
         const r = byKey.get(posKey(pos))
         return r ? [...new Set(r.arrivals.map((a) => a.item))] : []
@@ -617,10 +715,17 @@ class ItemTracer {
       this.env.log.add('KubeJS のスクリプトがレシピを変えているが、スクリプトのレシピは読めないので、物の通り道に入れていない')
     }
     const recipe = choice.recipe
+    rec.machine = type
     if (!recipe) {
       if (!rec.noRecipe.includes(flow.item)) rec.noRecipe.push(flow.item)
-      if (!book) rec.recipesUnknown = true
-      if (!book) this.env.log.add('Modpack のレシピがないので、機械でできる物が分からず、物の通り道は機械で止まる')
+      if (!book) {
+        rec.recipesUnknown = true
+        this.env.log.add('Modpack のレシピがないので、機械でできる物が分からず、物の通り道は機械で止まる')
+        // 処理できる数は、プローブの「処理時間」と同じく Create の初期値で出す（律速に使う。#168）
+        rec.capacityPerMinute = machineCapacityPerMinute(machine, rpm, choice.duration.value, this.env.bulkPressing)
+        rec.capacitySource = choice.duration.source
+        if (choice.assumption) this.env.log.add(choice.assumption, pos)
+      }
       return null
     }
     if (choice.assumption) this.env.log.add(choice.assumption, pos)
@@ -628,6 +733,7 @@ class ItemTracer {
       this.env.log.add(`レシピ ${recipe.id} のほかの材料は、あるものとした`, pos)
     }
     rec.capacityPerMinute = machineCapacityPerMinute(machine, rpm, choice.duration.value, this.env.bulkPressing)
+    rec.capacitySource = choice.duration.source
     const source = weakerSource(flow.source, choice.duration.source)
     // 処理できる数を超えた分は処理されない（機械の前で詰まる）。できる物は処理できた数から計算する
     const capacityPerSecond = rec.capacityPerMinute === null ? Infinity : rec.capacityPerMinute / 60
@@ -657,7 +763,7 @@ class ItemTracer {
     const key = posKey(pos)
     let r = this.records.get(key)
     if (!r) {
-      r = { pos: [pos[0], pos[1], pos[2]], arrivals: [], recipes: [], sinks: [], noRecipe: [], recipesUnknown: false, notes: [], capacityPerMinute: null, processedRate: 0 }
+      r = { pos: [pos[0], pos[1], pos[2]], arrivals: [], recipes: [], sinks: [], noRecipe: [], recipesUnknown: false, notes: [], capacityPerMinute: null, machine: null, capacitySource: null, processedRate: 0 }
       this.records.set(key, r)
     }
     return r

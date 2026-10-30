@@ -9,6 +9,7 @@ import type { GridLayout2D } from '../tools/picker'
 import { blockColor, blockColorCss } from './blockColor'
 import { ROTATION_COLORS, rotationColorKey } from './rotationColors'
 import type { CellPainter2D, TextureCanvasLike } from './textureCellPainter2D'
+import { drawOrientation2D, ORIENTATION_MIN_CELL_SIZE, orientationMark2D } from './orientation2D'
 import { axisLabelStep, blockAbbreviation, LABEL_MIN_CELL_SIZE, layerCells, type LayerCell2D } from './layerGrid2D'
 
 /** 2D表示の色。画面のテーマ（明るい・暗い）に合わせる */
@@ -82,6 +83,8 @@ export interface LayerScene2D {
    * テクスチャで描く（#85）。描けないブロックと、null か省略のときは色で塗る
    */
   readonly cellPainter?: CellPainter2D | null
+  /** ブロックの向き（facing は矢印、axis は線。#166）を描く。省略で描く */
+  readonly showOrientation?: boolean
 }
 
 /** テクスチャで描くマスの下に敷く、ブロックの色の濃さ（0〜1）。シャフトのような細いブロックでも、マスにあることが分かるようにする */
@@ -229,6 +232,15 @@ export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, sc
   ctx.strokeStyle = theme.frame
   ctx.lineWidth = 1
   ctx.strokeRect(ox + 0.5, oy + 0.5, w * cs, d * cs)
+
+  // 向き（#166）：facing は矢印、axis は線。略称より先に描き、文字を上に重ねる
+  if (scene.showOrientation !== false && cs >= ORIENTATION_MIN_CELL_SIZE) {
+    for (const c of cells) {
+      if (dimmed(c)) continue
+      const mark = orientationMark2D(c.state)
+      if (mark) drawOrientation2D(ctx, mark, ox + c.x * cs, oy + c.z * cs, cs)
+    }
+  }
 
   // 略称
   if (scene.showLabels && cs >= LABEL_MIN_CELL_SIZE) {
