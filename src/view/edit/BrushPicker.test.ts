@@ -182,11 +182,11 @@ describe('BrushPicker（Modpack から探す）', () => {
     expect(wrapper.find('[data-key="create:creative_motor[facing=north]"] .fallback').text()).toBe('CM')
   })
 
-  it('Modpack がなければ「この設計図」のタブと ID の入力だけ', async () => {
+  it('Modpack がなければ「この設計図」と「基本の部品」のタブと ID の入力', async () => {
     const wrapper = mountPicker()
     expect(wrapper.find('label[for="brush-id"]').text()).toBe('ID を入力')
     await wrapper.find('[data-testid="shelf-mod"]').trigger('focus')
-    expect(wrapper.findAll('[data-testid="shelf-mods"] li').map((li) => li.text())).toEqual(['この設計図'])
+    expect(wrapper.findAll('[data-testid="shelf-mods"] li').map((li) => li.text())).toEqual(['この設計図', '基本の部品'])
     await wrapper.find('[data-key="minecraft:stone"]').trigger('click')
     expect(useBrushStore().state?.key).toBe('minecraft:stone')
     expect(wrapper.find('#brush-id-list').findAll('option').map((o) => o.attributes('value'))).toEqual([
@@ -212,5 +212,46 @@ describe('BrushPicker（Modpack から探す）', () => {
     await input.setValue('minecraft:glass')
     await wrapper.find('form').trigger('submit')
     expect(useBrushStore().state?.key).toBe('minecraft:glass')
+  })
+
+  it('Modpack がなくても、「基本の部品」からシャフトや歯車を既定の状態で選べる（#162）', async () => {
+    const wrapper = mountPicker()
+    await chooseMod(wrapper, '基本', 'basic')
+    const keys = wrapper.findAll('[data-testid="shelf"] button').map((c) => c.attributes('data-key'))
+    expect(keys.slice(0, 3)).toEqual(['create:shaft[axis=y]', 'create:cogwheel[axis=y]', 'create:large_cogwheel[axis=y]'])
+    expect(keys).toContain('create:creative_motor[facing=north]')
+    await wrapper.find('[data-key="create:cogwheel[axis=y]"]').trigger('click')
+    expect(useBrushStore().state?.key).toBe('create:cogwheel[axis=y]')
+
+    // 名前で絞り込み、1件なら Enter で使う
+    const input = wrapper.find('[data-testid="brush-input"]')
+    await input.setValue('シャフト')
+    expect(wrapper.findAll('[data-testid="shelf"] button')).toHaveLength(1)
+    await wrapper.find('form').trigger('submit')
+    expect(useBrushStore().state?.key).toBe('create:shaft[axis=y]')
+  })
+
+  it('設計図が空なら、最初から「基本の部品」を開く', async () => {
+    const session = createDocumentSession()
+    session.setBlueprint(blueprintFixture({ size: [2, 1, 1] }).toBlueprint())
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          provideDocumentSession(session)
+          return () => h(BrushPicker)
+        },
+      }),
+    )
+    expect((wrapper.find('[data-testid="shelf-mod"]').element as HTMLInputElement).value).toBe('基本の部品')
+  })
+
+  it('「回す（R）」「縦にする（Shift+R）」ボタンで置くブロックを回す（#162）', async () => {
+    const wrapper = mountPicker()
+    await chooseMod(wrapper, '基本', 'basic')
+    await wrapper.find('[data-key="create:creative_motor[facing=north]"]').trigger('click')
+    await wrapper.find('[data-action="brush-rotate"]').trigger('click')
+    expect(useBrushStore().state?.key).toBe('create:creative_motor[facing=east]')
+    await wrapper.find('[data-action="brush-rotate-vertical"]').trigger('click')
+    expect(useBrushStore().state?.key).toBe('create:creative_motor[facing=up]')
   })
 })

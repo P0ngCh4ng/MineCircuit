@@ -129,6 +129,8 @@ export interface CalcPlugin {
    * 補った状態（補う必要がなければ元のまま）と、補えなかったときの理由。知らないブロックなら null
    */
   completeState?(state: BlockState): { state: BlockState; problem: string | null } | null
+  /** Modpack がないときの棚に出す基本の部品（任意。#162）。既定の状態と、アプリで書いた短い名前 */
+  readonly basicBlocks?: readonly { readonly state: BlockState; readonly name: string }[]
   /**
    * ブロック状態の Mod 独自のプロパティを、範囲の回転・反転に合わせて変える（任意。#132）。
    * バニラの向きのプロパティ（edit/stateTransform.ts）も含めて、変換したあとの状態を返す。知らないブロックなら null

@@ -60,6 +60,11 @@ export class PluginRegistry {
     return { state, problem: null }
   }
 
+  /** Modpack がないときの棚に出す基本の部品。プラグインの順に並べる（#162） */
+  basicBlocks(): { state: BlockState; name: string }[] {
+    return [...this.plugins.values()].flatMap((p) => p.basicBlocks ?? [])
+  }
+
   /** 置き方の補助。最初に位置を返したプラグインのもの。どれも使わなければ null */
   placementHelper(
     bp: Blueprint,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { BlockState } from '../../domain/blockState'
 import { ResourceLocation } from '../../domain/resourceLocation'
 import type { JsonValue } from '../../io/modpack/jarScanner'
-import { BLUEPRINT_TAB, matchesFilter, shelfItems, shelfTabs, type ShelfModpack } from './blockShelf'
+import { BASIC_TAB, BLUEPRINT_TAB, matchesFilter, shelfItems, shelfTabs, type ShelfModpack } from './blockShelf'
 
 const NAMES: Record<string, [string | null, string | null]> = {
   'create:shaft': ['シャフト', 'Shaft'],
@@ -55,5 +55,27 @@ describe('shelfItems', () => {
     const item = shelfItems('ns:astral', pack, [])[0]!
     expect(matchesFilter(item, '  ')).toBe(true)
     expect(matchesFilter(item, 'dust astral')).toBe(true)
+  })
+})
+
+describe('基本の部品（#162）', () => {
+  const basic = [
+    { state: state('create:shaft', { axis: 'y' }), name: 'シャフト' },
+    { state: state('create:cogwheel', { axis: 'y' }), name: '歯車' },
+  ]
+
+  it('Modpack がなく基本の部品があれば、「基本の部品」の選択肢を出す。Modpack があれば出さない', () => {
+    expect(shelfTabs(null, new Set(), true).map((t) => t.id)).toEqual([BLUEPRINT_TAB, BASIC_TAB])
+    expect(shelfTabs(null, new Set(), false).map((t) => t.id)).toEqual([BLUEPRINT_TAB])
+    expect(shelfTabs(pack, new Set(), true).map((t) => t.id)).not.toContain(BASIC_TAB)
+  })
+
+  it('中身は並びのまま、名前と ID で絞り込める', () => {
+    expect(shelfItems(BASIC_TAB, null, [], '', basic).map((i) => i.state.key)).toEqual([
+      'create:shaft[axis=y]',
+      'create:cogwheel[axis=y]',
+    ])
+    expect(shelfItems(BASIC_TAB, null, [], '歯車', basic).map((i) => i.id)).toEqual(['create:cogwheel'])
+    expect(shelfItems(BASIC_TAB, null, [], 'shaft', basic).map((i) => i.ja)).toEqual(['シャフト'])
   })
 })
