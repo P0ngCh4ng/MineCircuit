@@ -36,6 +36,12 @@ export interface RelocationEvent {
   readonly forward: boolean
 }
 
+/** 編集の操作を書いた・元に戻した・やり直した合図。forward が false なら元に戻した */
+export interface CommandEvent {
+  readonly command: EditCommand
+  readonly forward: boolean
+}
+
 /** 開くファイル。ブラウザの File と同じ形（テストでは偽物を渡せる） */
 export interface FileLike {
   readonly name: string
@@ -91,6 +97,8 @@ export interface DocumentSession {
   clearError(): void
   /** 範囲を動かした操作の apply・undo・redo のあとに呼ぶ。選択範囲と仮の入出力を一緒に動かすのに使う */
   readonly onRelocate: Signal<RelocationEvent>
+  /** すべての操作の apply・undo・redo のあと（onRelocate のあと）に呼ぶ。消したブロックの仮の入出力を消すのに使う（#167） */
+  readonly onCommand: Signal<CommandEvent>
 }
 
 function openErrorMessage(fileName: string, e: unknown): string {
@@ -107,9 +115,11 @@ export function createDocumentSession(): DocumentSession {
   const error = ref<string | null>(null)
   let disconnect: (() => void) | null = null
   const onRelocate = new Signal<RelocationEvent>()
+  const onCommand = new Signal<CommandEvent>()
 
   function relocated(cmd: EditCommand | null, forward: boolean): EditCommand | null {
     if (cmd?.relocation) onRelocate.emit({ relocation: cmd.relocation, forward })
+    if (cmd) onCommand.emit({ command: cmd, forward })
     return cmd
   }
   // 読んでいる途中で次のファイルを開いたら、前の結果は捨てる
@@ -199,6 +209,7 @@ export function createDocumentSession(): DocumentSession {
       error.value = null
     },
     onRelocate,
+    onCommand,
   }
 }
 

@@ -20,6 +20,8 @@ export const usePortStore = defineStore('port', () => {
 
   /** 次に置く種類（portKindKey）。置ける種類がなければ null */
   const placeKey = ref<string | null>(options[0] ? portKindKey(options[0].pluginId, options[0].def.kind) : null)
+  /** 2D表示で置く面（#167）。'auto' ならブロックの軸と隣の空きから決める（defaultPortFace） */
+  const face2D = ref<Direction | 'auto'>('auto')
   /** 一覧で選んでいる仮の入出力の id */
   const selectedId = ref<string | null>(null)
   let nextNumber = 1
@@ -67,6 +69,12 @@ export const usePortStore = defineStore('port', () => {
     setPorts(calc.ports.map((p) => ({ ...p, ...map({ pos: p.pos, face: p.face }) })))
   }
 
+  /** 一覧を丸ごと差し替える（消したブロックの仮の入出力を消す・戻すとき。#167）。選んでいたものがなくなれば選択を外す */
+  function replaceAll(value: readonly VirtualPort[]): void {
+    setPorts(value)
+    if (selectedId.value !== null && !value.some((p) => p.id === selectedId.value)) selectedId.value = null
+  }
+
   /** すべて消す（別の設計図を開いたときも） */
   function clear(): void {
     if (calc.ports.length > 0) setPorts([])
@@ -81,5 +89,9 @@ export const usePortStore = defineStore('port', () => {
     placeKey.value = key
   }
 
-  return { options, placeKey, placeOption, selectedId, ports, place, update, relocate, remove, clear, select, setPlaceKey }
+  function setFace2D(face: Direction | 'auto'): void {
+    face2D.value = face
+  }
+
+  return { options, placeKey, placeOption, face2D, selectedId, ports, place, update, relocate, replaceAll, remove, clear, select, setPlaceKey, setFace2D }
 })
