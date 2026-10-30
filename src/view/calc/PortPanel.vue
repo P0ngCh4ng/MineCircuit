@@ -92,6 +92,11 @@ function onItemChange(port: VirtualPort, def: PortItemParamDef, e: Event): void 
   store.update(withPortItem(port, def.key, itemIdOf((e.target as HTMLInputElement).value)))
 }
 
+function onFace2DChange(e: Event): void {
+  const value = (e.target as HTMLSelectElement).value
+  store.setFace2D(isDirection(value) ? value : 'auto')
+}
+
 function onFaceChange(port: VirtualPort, e: Event): void {
   const value = (e.target as HTMLSelectElement).value
   if (isDirection(value)) store.update(withPortFace(port, value))
@@ -122,8 +127,15 @@ function selectPort(port: VirtualPort): void {
           </select>
         </label>
         <p v-if="store.placeOption?.def.description" class="hint">{{ store.placeOption.def.description }}</p>
+        <label class="kind">
+          2Dで置く面
+          <select :value="store.face2D" data-testid="port-face-2d" @change="onFace2DChange">
+            <option value="auto">自動（軸と隣の空きから）</option>
+            <option v-for="d in DIRECTIONS" :key="d" :value="d">{{ FACE_LABELS[d] }}</option>
+          </select>
+        </label>
         <p class="hint">
-          ブロックの面をクリックすると置きます。2D表示では、ブロックの軸と隣の空きから面を決めます（下の一覧で直せます）。
+          ブロックの面をクリックすると置きます。2D表示では、上で選んだ面に置きます（下の一覧で直せます）。ブロックを消すと、そのブロックの仮の入出力も消えます。
         </p>
       </template>
     </template>
