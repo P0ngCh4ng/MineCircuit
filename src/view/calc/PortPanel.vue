@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 右パネルの仮の入出力（#70）。置く種類の選択と、置いた仮の入出力の一覧（値の変更と削除）。
-// 仮の入出力のツールを使っている間と、1つ以上置いている間だけ出す。
+// 右パネルの計算の「入出力」タブ（#157）に出す。置く種類の選択は、仮の入出力のツールを使っている間だけ出す。
 import { computed, ref } from 'vue'
 import type { PortItemParamDef, PortParamDef, VirtualPort } from '../../calc/virtualPort'
 import { DIRECTIONS, isDirection } from '../../domain/direction'
@@ -29,7 +29,6 @@ const content = useModpackContentStore()
 const jumpTo = useJumpTo()
 
 const active = computed(() => tools.activeToolId === 'port')
-const visible = computed(() => active.value || store.ports.length > 0)
 
 function kindLabel(port: VirtualPort): string {
   return findPortKind(store.options, port)?.def.label ?? port.kind
@@ -113,8 +112,7 @@ function selectPort(port: VirtualPort): void {
 </script>
 
 <template>
-  <section v-if="visible" class="port-panel" aria-label="仮の入出力" data-testid="port-panel">
-    <h2>仮の入出力</h2>
+  <section class="port-panel" aria-label="仮の入出力" data-testid="port-panel">
     <template v-if="active">
       <p v-if="store.options.length === 0" class="empty">仮の入出力を受け付ける計算プラグインがありません。</p>
       <template v-else>
@@ -210,12 +208,7 @@ function selectPort(port: VirtualPort): void {
 <style scoped>
 .port-panel {
   font-size: 13px;
-  margin-bottom: 16px;
-}
-
-h2 {
-  font-size: 14px;
-  margin: 0 0 8px;
+  margin-top: 4px;
 }
 
 .kind {
