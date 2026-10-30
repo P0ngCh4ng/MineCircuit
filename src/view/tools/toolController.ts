@@ -9,6 +9,8 @@ export class ToolController {
   private activeId: ToolId | null = null
   private lastHover: PickTarget | null = null
   private override: ToolOverride | null = null
+  /** ドラッグを受け取っているツール（#161） */
+  private dragging: Tool | null = null
 
   /** 今のツールが変わったときに呼ばれる */
   onActiveChange: ((id: ToolId | null) => void) | null = null
@@ -41,6 +43,7 @@ export class ToolController {
     if (!next) return false
     if (this.activeId === id) return true
     const prev = this.activeTool
+    this.cancelDrag()
     if (prev) {
       prev.onHover(null)
       prev.deactivate?.()
@@ -59,6 +62,7 @@ export class ToolController {
    */
   setOverride(next: ToolOverride | null): void {
     if (this.override === next) return
+    if (next) this.cancelDrag()
     if (next) this.activeTool?.onHover(null)
     else this.override?.onHover(null)
     this.override = next
@@ -78,6 +82,42 @@ export class ToolController {
   hover(target: PickTarget | null): void {
     this.lastHover = target
     ;(this.override ?? this.activeTool)?.onHover(target)
+  }
+
+  /**
+   * 表示からドラッグの始まりを受け取る（#161）。今のツールがドラッグを受け取れば true。
+   * 貼り付けの見本を出している間は受け取らない
+   */
+  beginDrag(target: PickTarget, mods: PickModifiers = { shift: false }): boolean {
+    this.cancelDrag()
+    const tool = this.override ? null : this.activeTool
+    if (!tool?.dragStart?.(target, mods)) return false
+    this.dragging = tool
+    return true
+  }
+
+  get isDragging(): boolean {
+    return this.dragging !== null
+  }
+
+  /** ドラッグ中のマウスの移動 */
+  dragTo(target: PickTarget | null): void {
+    this.lastHover = target
+    this.dragging?.dragMove?.(target)
+  }
+
+  /** ドラッグを終える（ボタンを離した） */
+  endDrag(target: PickTarget | null, mods: PickModifiers = { shift: false }): void {
+    const tool = this.dragging
+    this.dragging = null
+    tool?.dragEnd?.(target, mods)
+  }
+
+  /** ドラッグをやめる。ドラッグしていなければ何もしない */
+  cancelDrag(): void {
+    const tool = this.dragging
+    this.dragging = null
+    tool?.dragCancel?.()
   }
 
   /** 表示からクリックを受け取る */

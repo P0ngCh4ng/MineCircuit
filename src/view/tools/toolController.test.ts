@@ -165,3 +165,61 @@ describe('SelectTool', () => {
     expect(c.overriding).toBe(false)
   })
 })
+
+/** ドラッグを受け取る偽物のツール（置くツールの一直線。#161） */
+class DragTool extends FakeTool {
+  accept = true
+  dragStart(target: PickTarget): boolean {
+    this.log.push(`dragStart:${target.pos.join(',')}`)
+    return this.accept
+  }
+  dragMove(target: PickTarget | null): void {
+    this.log.push(`dragMove:${target ? target.pos.join(',') : 'null'}`)
+  }
+  dragEnd(target: PickTarget | null): void {
+    this.log.push(`dragEnd:${target ? target.pos.join(',') : 'null'}`)
+  }
+  dragCancel(): void {
+    this.log.push('dragCancel')
+  }
+}
+
+describe('ToolController のドラッグ（#161）', () => {
+  it('今のツールにドラッグを渡す。受け取らないツールなら false', () => {
+    const c = new ToolController()
+    const t = new DragTool('place')
+    c.register(t)
+    c.register(new FakeTool('select'))
+    t.log.length = 0
+    expect(c.beginDrag(empty([0, 0, 0]))).toBe(true)
+    expect(c.isDragging).toBe(true)
+    c.dragTo(empty([1, 0, 0]))
+    c.endDrag(empty([2, 0, 0]))
+    expect(c.isDragging).toBe(false)
+    expect(t.log).toEqual(['dragStart:0,0,0', 'dragMove:1,0,0', 'dragEnd:2,0,0'])
+
+    t.accept = false
+    expect(c.beginDrag(empty([0, 0, 0]))).toBe(false)
+    c.setActive('select')
+    expect(c.beginDrag(empty([0, 0, 0]))).toBe(false)
+  })
+
+  it('ツールを替える・貼り付けの見本を差し込むと、ドラッグをやめる', () => {
+    const c = new ToolController()
+    const t = new DragTool('place')
+    c.register(t)
+    c.register(new FakeTool('select'))
+    c.beginDrag(empty([0, 0, 0]))
+    t.log.length = 0
+    c.setActive('select')
+    expect(t.log[0]).toBe('dragCancel')
+
+    c.setActive('place')
+    c.beginDrag(empty([0, 0, 0]))
+    t.log.length = 0
+    c.setOverride({ onHover: () => {}, onClick: () => {} })
+    expect(t.log[0]).toBe('dragCancel')
+    // 見本を出している間はドラッグを受け取らない
+    expect(c.beginDrag(empty([0, 0, 0]))).toBe(false)
+  })
+})

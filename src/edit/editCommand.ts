@@ -91,6 +91,25 @@ export function placeBlock(bp: Blueprint, pos: Vec3, state: BlockState, replace:
   }
 }
 
+/**
+ * cells の空きマスに state を置く操作を作る（ドラッグで一直線に置く。#161）。1回の「元に戻す」で全部戻る。
+ * 埋まっているマスと範囲の外は飛ばす。置くマスが1つもなければ null
+ */
+export function placeBlocks(bp: Blueprint, cells: readonly Vec3[], state: BlockState): EditCommand | null {
+  const changes: CellChange[] = []
+  const seen = new Set<string>()
+  for (const pos of cells) {
+    const key = pos.join(',')
+    if (seen.has(key)) continue
+    seen.add(key)
+    const before = currentCell(bp, pos)
+    if (!before || before.state !== null) continue
+    changes.push({ pos, before, after: { state, blockEntity: null } })
+  }
+  if (changes.length === 0) return null
+  return { label: `${blockName(state)} を一直線に置く（${changes.length} 個）`, changes }
+}
+
 /** pos のブロックを消す操作を作る。空きか範囲の外なら null */
 export function eraseBlock(bp: Blueprint, pos: Vec3): EditCommand | null {
   const before = currentCell(bp, pos)

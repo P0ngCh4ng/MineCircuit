@@ -11,6 +11,7 @@ import { useLayerStore } from '../stores/layerStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
 import type { PickRay } from '../tools/picker'
+import type { PickTarget } from '../tools/tool'
 import type { BlueprintScene } from './blueprintScene'
 import type { CameraView } from './cameraViews'
 import type { SelectionOverlay3D } from './selectionOverlay3D'
@@ -111,6 +112,54 @@ describe('Viewport3D', () => {
     canvas.dispatchEvent(pointer('pointerup', 30, 40))
     expect(tools.selectedPos).toBeNull()
     expect(view.cameraView).toBeNull()
+  })
+
+  it('置くツールでブロックか床からドラッグすると、カメラを回さずに一直線のドラッグを渡す（#161）', () => {
+    /** 画面の 10px が 1 マス。カメラを回すのを止めたかを記録する */
+    class ScaledRenderer extends FakeRenderer {
+      orbit: boolean[] = []
+      override rayAt(clientX: number, clientY: number): PickRay {
+        return { origin: [clientX / 10 + 0.05, 50, clientY / 10 + 0.05], direction: [0, -1, 0] }
+      }
+      setOrbitEnabled(enabled: boolean): void {
+        this.orbit.push(enabled)
+      }
+    }
+    const fake = new ScaledRenderer()
+    const { wrapper, tools } = setup(() => fake)
+    const log: string[] = []
+    const pos = (t: PickTarget | null) => (t ? t.pos.join(',') : 'null')
+    tools.register({
+      id: 'place',
+      onHover: () => {},
+      onClick: (t) => log.push(`click:${pos(t)}`),
+      dragStart: (t) => (log.push(`start:${pos(t)}`), true),
+      dragMove: (t) => log.push(`move:${pos(t)}`),
+      dragEnd: (t) => log.push(`end:${pos(t)}`),
+    })
+    tools.setTool('place')
+    const canvas = wrapper.get('canvas').element
+
+    // 石の列 (0..2, 0, 0) の上の面から、床の (0, *, 2) へ
+    canvas.dispatchEvent(pointer('pointerdown', 0, 0, { buttons: 1 }))
+    expect(fake.orbit).toEqual([false])
+    canvas.dispatchEvent(pointer('pointermove', 2, 0, { buttons: 1 }))
+    expect(log).toEqual([])
+    canvas.dispatchEvent(pointer('pointermove', 0, 20, { buttons: 1 }))
+    canvas.dispatchEvent(pointer('pointerup', 0, 25))
+    expect(log).toEqual(['start:0,0,0', 'move:0,0,2', 'end:0,0,2'])
+    expect(fake.orbit).toEqual([false, true])
+
+    // 動かさずに離したときは、ふつうのクリック
+    log.length = 0
+    canvas.dispatchEvent(pointer('pointerdown', 15, 15, { buttons: 1 }))
+    canvas.dispatchEvent(pointer('pointerup', 15, 15))
+    expect(log).toEqual(['click:1,0,1'])
+
+    // 設計図の外（何も指さない所）からは、今までどおりカメラを回す
+    fake.orbit.length = 0
+    canvas.dispatchEvent(pointer('pointerdown', 200, 200, { buttons: 1 }))
+    expect(fake.orbit).toEqual([])
   })
 
   it('選択と強調の枠は、ストアの選択に合わせる', async () => {
