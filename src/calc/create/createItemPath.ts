@@ -75,6 +75,10 @@ export interface ItemPathRecord {
   readonly notes: string[]
   /** 機械が1分に処理できる数。機械でなければ null */
   capacityPerMinute: number | null
+  /** 処理する機械の種類（律速の機械の名前に使う）。機械でなければ null */
+  machine: ProcessingRecipeType | null
+  /** 処理できる数の出どころ（レシピの処理時間の出どころ）。機械でなければ null */
+  capacitySource: Provenance | null
   /** レシピで処理した数（個/秒）の合計。処理できる数で頭打ちにするのに使う */
   processedRate: number
 }
@@ -111,6 +115,8 @@ export interface LineFlow {
   readonly outputPerMinute: number
   /** 処理する機械がなければ null */
   readonly bottleneck: Bottleneck | null
+  /** Modpack のレシピがなく、機械でできる物が分からなかった（出る数に入らない） */
+  readonly outputsUnknown: boolean
   readonly source: Provenance
 }
 
@@ -165,34 +171,36 @@ function lineFlow(records: readonly ItemPathRecord[], inputRate: number): LineFl
   let bottleneck: Bottleneck | null = null
   const sources: Provenance[] = []
   let output = 0
+  let outputsUnknown = false
   for (const r of records) {
+    if (r.recipesUnknown) outputsUnknown = true
     for (const a of r.arrivals) sources.push(a.source)
     for (const s of r.sinks) {
       output += s.rate
       sources.push(s.source)
     }
-    for (const applied of r.recipes) sources.push(applied.choice.duration.source)
-    const recipe = r.recipes[0]
-    if (r.capacityPerMinute === null || r.capacityPerMinute <= 0 || !recipe) continue
+    if (r.capacitySource) sources.push(r.capacitySource)
+    if (r.capacityPerMinute === null || r.capacityPerMinute <= 0 || r.machine === null) continue
     const arriving = r.arrivals.reduce((sum, a) => sum + a.rate, 0) * 60
     const utilization = arriving / r.capacityPerMinute
     // 同じなら先にたどった方（物の入口に近い方）
     if (bottleneck && utilization <= bottleneck.utilization * (1 + 1e-9)) continue
     bottleneck = {
       pos: [r.pos[0], r.pos[1], r.pos[2]],
-      machine: RECIPE_MACHINE_NAMES[recipe.type],
+      machine: RECIPE_MACHINE_NAMES[r.machine],
       arrivingPerMinute: arriving,
       capacityPerMinute: r.capacityPerMinute,
       utilization,
     }
   }
-  return { inputPerMinute: inputRate * 60, outputPerMinute: output * 60, bottleneck, source: weakest(sources) }
+  return { inputPerMinute: inputRate * 60, outputPerMinute: output * 60, bottleneck, outputsUnknown, source: weakest(sources) }
 }
 
 /** 計算結果のまとめの「生産ライン」の行 */
 export function lineSummary(line: LineFlow): CalcSummaryItem {
   const input = `入る ${formatRate(line.inputPerMinute)} 個/分`
-  const output = `出る ${formatRate(line.outputPerMinute)} 個/分`
+  const unknown = line.outputsUnknown ? '（Modpack がないので、機械でできる物は数えていない）' : ''
+  const output = `出る ${formatRate(line.outputPerMinute)} 個/分${unknown}`
   const b = line.bottleneck
   if (!b) return { label: '生産ライン', value: resolved(`${input} → ${output}。処理する機械がない`, line.source) }
   const percent = `${formatRate(b.utilization * 100)}%`
@@ -707,10 +715,17 @@ class ItemTracer {
       this.env.log.add('KubeJS のスクリプトがレシピを変えているが、スクリプトのレシピは読めないので、物の通り道に入れていない')
     }
     const recipe = choice.recipe
+    rec.machine = type
     if (!recipe) {
       if (!rec.noRecipe.includes(flow.item)) rec.noRecipe.push(flow.item)
-      if (!book) rec.recipesUnknown = true
-      if (!book) this.env.log.add('Modpack のレシピがないので、機械でできる物が分からず、物の通り道は機械で止まる')
+      if (!book) {
+        rec.recipesUnknown = true
+        this.env.log.add('Modpack のレシピがないので、機械でできる物が分からず、物の通り道は機械で止まる')
+        // 処理できる数は、プローブの「処理時間」と同じく Create の初期値で出す（律速に使う。#168）
+        rec.capacityPerMinute = machineCapacityPerMinute(machine, rpm, choice.duration.value, this.env.bulkPressing)
+        rec.capacitySource = choice.duration.source
+        if (choice.assumption) this.env.log.add(choice.assumption, pos)
+      }
       return null
     }
     if (choice.assumption) this.env.log.add(choice.assumption, pos)
@@ -718,6 +733,7 @@ class ItemTracer {
       this.env.log.add(`レシピ ${recipe.id} のほかの材料は、あるものとした`, pos)
     }
     rec.capacityPerMinute = machineCapacityPerMinute(machine, rpm, choice.duration.value, this.env.bulkPressing)
+    rec.capacitySource = choice.duration.source
     const source = weakerSource(flow.source, choice.duration.source)
     // 処理できる数を超えた分は処理されない（機械の前で詰まる）。できる物は処理できた数から計算する
     const capacityPerSecond = rec.capacityPerMinute === null ? Infinity : rec.capacityPerMinute / 60
@@ -747,7 +763,7 @@ class ItemTracer {
     const key = posKey(pos)
     let r = this.records.get(key)
     if (!r) {
-      r = { pos: [pos[0], pos[1], pos[2]], arrivals: [], recipes: [], sinks: [], noRecipe: [], recipesUnknown: false, notes: [], capacityPerMinute: null, processedRate: 0 }
+      r = { pos: [pos[0], pos[1], pos[2]], arrivals: [], recipes: [], sinks: [], noRecipe: [], recipesUnknown: false, notes: [], capacityPerMinute: null, machine: null, capacitySource: null, processedRate: 0 }
       this.records.set(key, r)
     }
     return r

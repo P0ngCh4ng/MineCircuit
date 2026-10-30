@@ -420,6 +420,7 @@ describe('律速（docs/create-throughput.md「律速（#168）」の例）', ()
       inputPerMinute: 60,
       outputPerMinute: 105,
       bottleneck: { pos: [1, 3, 0], machine: '石臼', arrivingPerMinute: 60, capacityPerMinute: 120, utilization: 0.5 },
+      outputsUnknown: false,
       source: 'virtual',
     })
     expect(lineSummary(result.line!)).toEqual({
@@ -464,6 +465,20 @@ describe('律速（docs/create-throughput.md「律速（#168）」の例）', ()
     expect(lineSummary(result.line!).value.value).toBe('入る 60 個/分 → 出る 60 個/分。処理する機械がない')
     expect(lineSummary(result.line!).pos).toBeUndefined()
     expect(trace(fx, []).result.line).toBeNull()
+  })
+
+  it('Modpack がなければ、処理時間は Create の初期値（石臼 100）で律速を出し、出どころは仮定', () => {
+    // 256 RPM：⌈100 / 16⌉ = 7 tick で1個、171 個/分
+    const fx = blueprintFixture().place([0, 0, 0], 'create:millstone')
+    const { result, log } = trace(fx, [port([0, 0, 0], 'up', 'minecraft:wheat', 1)], { '0,0,0': 256 }, null)
+    expect(result.line?.bottleneck).toMatchObject({ machine: '石臼', arrivingPerMinute: 60 })
+    expect(result.line?.bottleneck?.capacityPerMinute).toBeCloseTo(1200 / 7)
+    expect(result.line?.source).toBe('assumed')
+    expect(result.line?.outputPerMinute).toBe(0)
+    expect(lineSummary(result.line!).value.value).toBe(
+      '入る 60 個/分 → 律速 石臼 171 個/分のうち 60 個/分（35%） → 出る 0 個/分（Modpack がないので、機械でできる物は数えていない）。入る数は 171 個/分まで増やせる',
+    )
+    expect(messages(log)).toContain('石臼のレシピが分からないので、処理時間を Create の初期値の 100 tick とした')
   })
 })
 
