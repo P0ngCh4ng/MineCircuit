@@ -181,6 +181,19 @@ describe('LayerView2D', () => {
     wrapper.unmount()
   })
 
+  it('2つ以上のマスの範囲を選ぶと、範囲の近くに範囲のツールバーを出す（#160）', async () => {
+    const { wrapper } = mountView()
+    const tools = useToolStore()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="selection-toolbar"]').exists()).toBe(false)
+    tools.setSelectionBox({ min: [0, 0, 0], max: [2, 0, 1] })
+    await wrapper.vm.$nextTick()
+    const bar = wrapper.get('[data-testid="selection-toolbar"]')
+    expect(bar.attributes('style')).toContain('left:')
+    expect(bar.find('[data-action="mirror-x"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('今の段と北の向きを出す。段は設計図の高さに収める', async () => {
     const { wrapper } = mountView()
     expect(wrapper.text()).toContain('北（−Z）')

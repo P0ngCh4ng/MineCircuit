@@ -17,7 +17,7 @@ const showRange = computed(() => tools.selectionBox !== null && !isSingleCell(to
 
 <template>
   <aside class="panel right-panel" aria-label="右パネル">
-    <!-- 選択範囲：座標と大きさ、中のブロックの数、消す・塗る・置き換え（#130） -->
+    <!-- 選択範囲：座標と大きさ（#130）。範囲の操作は表示部分に浮かぶツールバー（#160） -->
     <SelectionPanel v-if="showRange" />
     <!-- 選択中のブロック：ID、位置、ブロック状態、生データのツリー（#12） -->
     <BlockDetail v-else />

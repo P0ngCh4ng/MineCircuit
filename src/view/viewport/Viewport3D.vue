@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 3D表示。開いている設計図を描き、マウスの位置をブロック座標に直してツールに渡す。
 // 左ドラッグで回す、右ドラッグで動かす、ホイールで拡大・縮小。動かさずに離したらクリック。
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { Blueprint } from '../../domain/blueprint'
 import { isSingleCell } from '../../domain/box'
 import { useSearchHighlight } from '../analysis/useSearchHighlight'
@@ -16,6 +16,8 @@ import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
 import type { PickModifiers, PickTarget } from '../tools/tool'
+import SelectionToolbar from '../selection/SelectionToolbar.vue'
+import { boundingRect, sameRect, type ScreenRect } from '../selection/toolbarPosition'
 import { blockColor } from './blockColor'
 import { BlueprintScene } from './blueprintScene'
 import { CalcOverlay3D } from './calcOverlay3D'
@@ -92,6 +94,30 @@ let downAt: { x: number; y: number } | null = null
 
 function render(): void {
   renderer?.requestRender()
+}
+
+/** 範囲のツールバー（#160）を置くための、選択範囲の箱が画面で占める長方形。カメラが動くたびに求め直す */
+const selectionRect = shallowRef<ScreenRect | null>(null)
+const viewWidth = ref(0)
+const viewHeight = ref(0)
+
+function updateSelectionRect(): void {
+  const box = tools.selectionBox
+  const project = renderer?.projectToScreen?.bind(renderer)
+  let next: ScreenRect | null = null
+  if (box && project && !isSingleCell(box)) {
+    const points: [number, number][] = []
+    for (const x of [box.min[0], box.max[0] + 1])
+      for (const y of [box.min[1], box.max[1] + 1])
+        for (const z of [box.min[2], box.max[2] + 1]) {
+          const p = project([x, y, z])
+          if (p) points.push(p)
+        }
+    next = boundingRect(points)
+  }
+  if (!sameRect(next, selectionRect.value)) selectionRect.value = next
+  viewWidth.value = host.value?.clientWidth ?? 0
+  viewHeight.value = host.value?.clientHeight ?? 0
 }
 
 function pickAt(e: PointerEvent | MouseEvent) {
@@ -208,6 +234,7 @@ onMounted(() => {
   }
   renderer.onUserMove = () => view.cameraMoved()
   renderer.onHeadingChange = (x, z) => view.setCameraHeading(x, z)
+  renderer.onRender = updateSelectionRect
 
   const el = host.value!
   renderer.resize(el.clientWidth, el.clientHeight)
@@ -390,6 +417,8 @@ defineExpose({ scene, calcOverlay, rotationOverlay, portOverlay, selectionOverla
       @pointercancel="onPointerCancel"
       @contextmenu.prevent
     ></canvas>
+    <!-- 範囲のツールバー（#160） -->
+    <SelectionToolbar :rect="selectionRect" :view-width="viewWidth" :view-height="viewHeight" />
     <p v-if="failure" class="failure" role="alert">{{ failure }}</p>
   </div>
 </template>

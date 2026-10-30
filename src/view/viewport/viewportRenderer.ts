@@ -26,6 +26,13 @@ export interface SceneRenderer {
   rayAt(clientX: number, clientY: number): PickRay
   /** 左ドラッグでカメラを回すのを止める・戻す（置くツールで一直線に引く間。#161）。任意 */
   setOrbitEnabled?(enabled: boolean): void
+  /**
+   * ブロック座標の点を、表示部分の中の位置（CSS ピクセル。左上が 0）に直す。カメラの後ろなら null。
+   * 範囲のツールバーを置くのに使う（#160）。任意
+   */
+  projectToScreen?(point: Vec3): [number, number] | null
+  /** 描いたあとに呼ばれる（カメラが動いたときも）。任意 */
+  onRender?: (() => void) | null
   dispose(): void
 }
 
@@ -82,6 +89,17 @@ export class ViewportRenderer implements SceneRenderer {
     this.controls.enabled = enabled
   }
 
+  /** 描いたあとに呼ばれる */
+  onRender: (() => void) | null = null
+
+  private readonly projected = new THREE.Vector3()
+
+  projectToScreen(point: Vec3): [number, number] | null {
+    const v = this.projected.set(point[0], point[1], point[2]).project(this.camera)
+    if (v.z < -1 || v.z > 1) return null
+    return [((v.x + 1) / 2) * this.canvas.clientWidth, ((1 - v.y) / 2) * this.canvas.clientHeight]
+  }
+
   /** 描画の大きさを表示部分に合わせる（CSS ピクセル） */
   resize(width: number, height: number): void {
     const w = Math.max(1, Math.floor(width))
@@ -101,7 +119,9 @@ export class ViewportRenderer implements SceneRenderer {
     if (this.frame || this.disposed) return
     this.frame = requestAnimationFrame(() => {
       this.frame = 0
-      if (!this.disposed) this.renderer.render(this.content.scene, this.camera)
+      if (this.disposed) return
+      this.renderer.render(this.content.scene, this.camera)
+      this.onRender?.()
     })
   }
 

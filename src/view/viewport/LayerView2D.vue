@@ -16,6 +16,8 @@ import { usePasteStore } from '../stores/pasteStore'
 import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
+import SelectionToolbar from '../selection/SelectionToolbar.vue'
+import type { ScreenRect } from '../selection/toolbarPosition'
 import { pick2D, type GridLayout2D, type PickScene2D } from '../tools/picker'
 import type { PickTarget } from '../tools/tool'
 import { ANALYSIS_COLORS_2D, drawAnalysisOverlay2D } from './analysisOverlay2D'
@@ -93,6 +95,15 @@ watch(
 const layer = computed(() => {
   const s = size.value
   return s ? clampLayer(layers.current, s[1]) : 0
+})
+
+/** 範囲のツールバー（#160）を置くための、選択範囲の長方形（x・z。段によらない） */
+const selectionRect = computed<ScreenRect | null>(() => {
+  const box = tools.selectionBox
+  const grid = layout.value
+  if (!box || !grid) return null
+  const { originX: ox, originY: oy, cellSize: cs } = grid
+  return { left: ox + box.min[0] * cs, top: oy + box.min[2] * cs, right: ox + (box.max[0] + 1) * cs, bottom: oy + (box.max[2] + 1) * cs }
 })
 
 const layerLabel = computed(() => {
@@ -523,6 +534,8 @@ onBeforeUnmount(() => {
       <span class="arrow" aria-hidden="true">↑</span> 北（−Z）
     </div>
     <div class="layer-label" data-testid="layer-view-2d-layer">{{ layerLabel }}</div>
+    <!-- 範囲のツールバー（#160） -->
+    <SelectionToolbar :rect="selectionRect" :view-width="width" :view-height="height" />
   </div>
 </template>
 
