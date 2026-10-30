@@ -11,7 +11,16 @@ import { EditHistory } from '../../edit/editHistory'
 import type { EditToolContext } from './editToolContext'
 import { EraseTool } from './eraseTool'
 import { PickTool } from './pickTool'
-import { NO_BRUSH_MESSAGE, OCCUPIED_MESSAGE, placeCell, PlaceTool } from './placeTool'
+import {
+  alignAxis,
+  LINE_NOTHING_MESSAGE,
+  lineCells,
+  lineSkippedMessage,
+  NO_BRUSH_MESSAGE,
+  OCCUPIED_MESSAGE,
+  placeCell,
+  PlaceTool,
+} from './placeTool'
 import type { PickTarget } from './tool'
 
 /** 本物の EditHistory に書き込み、ほかは記録するだけの偽物 */
@@ -50,6 +59,10 @@ class FakeContext implements EditToolContext {
   setGhost(pos: Vec3 | null, blocked = false): void {
     this.ghost = pos
     this.ghostBlocked = blocked
+  }
+  linePreview: { cells: readonly { pos: Vec3; state: BlockState }[] } | null = null
+  setLinePreview(preview: { cells: readonly { pos: Vec3; state: BlockState }[] } | null): void {
+    this.linePreview = preview
   }
   revealLayer(y: number): void {
     this.revealed.push(y)
@@ -303,5 +316,91 @@ describe('PlaceTool：置き方の補助（#123）', () => {
     // Alt：補助を使わず面の隣（上）に、欄の向きのまま
     tool.onClick(target, { shift: false, alt: true })
     expect(bp.get([1, 1, 1])).toBeNull()
+  })
+})
+
+describe('一直線に置く（#161）', () => {
+  it('lineCells：差が一番大きい軸に沿って、始点から終点の位置まで', () => {
+    expect(lineCells([1, 0, 1], [4, 0, 2])).toEqual({ cells: [[1, 0, 1], [2, 0, 1], [3, 0, 1], [4, 0, 1]], axis: 'x' })
+    expect(lineCells([2, 0, 3], [2, 0, 1])).toEqual({ cells: [[2, 0, 3], [2, 0, 2], [2, 0, 1]], axis: 'z' })
+    expect(lineCells([0, 0, 0], [0, 2, 1])).toEqual({ cells: [[0, 0, 0], [0, 1, 0], [0, 2, 0]], axis: 'y' })
+    expect(lineCells([1, 1, 1], [1, 1, 1])).toEqual({ cells: [[1, 1, 1]], axis: null })
+  })
+
+  it('alignAxis：axis を持つブロックだけ、線の向きにそろえる', () => {
+    expect(alignAxis(state('create:shaft', { axis: 'y' }), 'z').properties).toEqual({ axis: 'z' })
+    expect(alignAxis(state('minecraft:stone'), 'z').properties).toEqual({})
+    const fan = state('create:encased_fan', { facing: 'north' })
+    expect(alignAxis(fan, 'x')).toBe(fan)
+  })
+
+  it('10マスのシャフトを1回のドラッグで置き、軸を引いた向きにする。元に戻すと全部消える', () => {
+    const bp = blueprintFixture({ size: [12, 2, 3] }).toBlueprint()
+    const before = blueprintContents(bp)
+    const ctx = new FakeContext(bp)
+    ctx.brushState = state('create:shaft', { axis: 'y' })
+    const tool = new PlaceTool(ctx)
+    expect(tool.dragStart({ pos: [1, 0, 1], empty: true })).toBe(true)
+    tool.dragMove({ pos: [6, 0, 1], empty: true })
+    // ドラッグ中は見本だけで、設計図は変えない
+    expect(ctx.linePreview?.cells.length).toBe(6)
+    expect(ctx.history.count).toBe(0)
+    tool.dragEnd({ pos: [10, 0, 2], empty: true })
+    expect(ctx.linePreview).toBeNull()
+    expect(ctx.history.count).toBe(1)
+    for (let x = 1; x <= 10; x++) expect(bp.get([x, 0, 1])?.key).toBe('create:shaft[axis=x]')
+    expect(bp.get([0, 0, 1])).toBeNull()
+    expect(bp.get([10, 0, 2])).toBeNull()
+
+    ctx.history.undo()
+    expect(blueprintContents(bp)).toEqual(before)
+    ctx.history.redo()
+    expect(bp.get([5, 0, 1])?.key).toBe('create:shaft[axis=x]')
+  })
+
+  it('3D：面を押して引くと、面の隣から線を引く。z の向きならシャフトの軸は z', () => {
+    const bp = sample()
+    const ctx = new FakeContext(bp)
+    ctx.brushState = state('create:shaft', { axis: 'x' })
+    const tool = new PlaceTool(ctx)
+    // [1,0,1] のシャフトの南の面を押して、[1,0,2] の南の面まで。始点は [1,0,2]、終点 [1,0,3] は範囲の外なので飛ばす
+    expect(tool.dragStart(hit([1, 0, 1], 'south'))).toBe(true)
+    tool.dragEnd(hit([1, 0, 2], 'south'))
+    expect(bp.get([1, 0, 2])?.key).toBe('create:shaft[axis=z]')
+    expect(ctx.message).toBe(lineSkippedMessage(1))
+  })
+
+  it('埋まったマスは飛ばして知らせる。置けるマスがなければ置かない。置くブロックがなければ受け取らない', () => {
+    const bp = sample()
+    const ctx = new FakeContext(bp)
+    const tool = new PlaceTool(ctx)
+    expect(tool.dragStart({ pos: [0, 0, 1], empty: true })).toBe(false)
+    expect(ctx.message).toBe(NO_BRUSH_MESSAGE)
+
+    ctx.brushState = state('minecraft:glass')
+    expect(tool.dragStart({ pos: [0, 0, 1], empty: true })).toBe(true)
+    tool.dragEnd({ pos: [2, 0, 1], empty: true })
+    expect(bp.get([0, 0, 1])?.key).toBe('minecraft:glass')
+    expect(bp.get([1, 0, 1])?.key).toBe('create:shaft[axis=y]')
+    expect(bp.get([2, 0, 1])?.key).toBe('minecraft:glass')
+    expect(ctx.message).toBe(lineSkippedMessage(1))
+
+    expect(tool.dragStart({ pos: [0, 0, 1], empty: false })).toBe(true)
+    tool.dragEnd({ pos: [2, 0, 1], empty: false })
+    expect(ctx.message).toBe(LINE_NOTHING_MESSAGE)
+    expect(ctx.history.count).toBe(1)
+  })
+
+  it('ドラッグをやめると見本を消し、何も置かない', () => {
+    const bp = sample()
+    const ctx = new FakeContext(bp)
+    ctx.brushState = state('minecraft:glass')
+    const tool = new PlaceTool(ctx)
+    tool.dragStart({ pos: [0, 0, 1], empty: true })
+    tool.dragMove({ pos: [0, 0, 2], empty: true })
+    expect(ctx.linePreview).not.toBeNull()
+    tool.dragCancel()
+    expect(ctx.linePreview).toBeNull()
+    expect(ctx.history.count).toBe(0)
   })
 })
