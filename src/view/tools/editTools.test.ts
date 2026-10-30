@@ -83,14 +83,32 @@ function sample(): Blueprint {
 const hit = (pos: Vec3, face: PickTarget['face']): PickTarget => ({ pos, face, empty: false })
 
 describe('placeCell', () => {
-  it('空きマスはそのマス、面のあるブロックは面の隣、Shift と面なしは置き換え', () => {
+  it('空きマスはそのマス、面のあるブロックは面の隣、Shift なら置き換え', () => {
     expect(placeCell({ pos: [1, 0, 2], empty: true }, NO_SHIFT)).toEqual({ pos: [1, 0, 2], replace: false })
     expect(placeCell(hit([1, 0, 1], 'up'), NO_SHIFT)).toEqual({ pos: [1, 1, 1], replace: false })
     expect(placeCell(hit([1, 0, 1], 'north'), NO_SHIFT)).toEqual({ pos: [1, 0, 0], replace: false })
     expect(placeCell(hit([1, 0, 1], 'east'), NO_SHIFT)).toEqual({ pos: [2, 0, 1], replace: false })
     expect(placeCell(hit([1, 0, 1], 'up'), SHIFT)).toEqual({ pos: [1, 0, 1], replace: true })
-    // 2D の埋まったマス
-    expect(placeCell({ pos: [1, 0, 1], empty: false }, NO_SHIFT)).toEqual({ pos: [1, 0, 1], replace: true })
+    // 2D の埋まったマス：Shift のときだけ置き換え（3D とそろえる。#164）
+    expect(placeCell({ pos: [1, 0, 1], empty: false }, NO_SHIFT)).toEqual({ pos: [1, 0, 1], replace: false })
+    expect(placeCell({ pos: [1, 0, 1], empty: false }, SHIFT)).toEqual({ pos: [1, 0, 1], replace: true })
+  })
+})
+
+describe('PlaceTool（2D）', () => {
+  it('埋まったマスはクリックでは置き換えず、Shift+クリックで置き換える（#164）', () => {
+    const bp = sample()
+    const ctx = new FakeContext(bp)
+    ctx.brushState = state('minecraft:glass')
+    const tool = new PlaceTool(ctx)
+    tool.onClick({ pos: [0, 0, 0], empty: false }, NO_SHIFT)
+    expect(ctx.message).toBe(OCCUPIED_MESSAGE)
+    expect(bp.get([0, 0, 0])?.key).toBe('minecraft:stone')
+    expect(ctx.history.count).toBe(0)
+
+    tool.onClick({ pos: [0, 0, 0], empty: false }, SHIFT)
+    expect(bp.get([0, 0, 0])?.key).toBe('minecraft:glass')
+    expect(ctx.history.count).toBe(1)
   })
 })
 
@@ -122,15 +140,13 @@ describe('PlaceTool', () => {
     expect(bp.get([2, 0, 2])?.key).toBe('minecraft:glass')
   })
 
-  it('Shift+クリックと2Dの埋まったマスは置き換える', () => {
+  it('Shift+クリックは置き換える', () => {
     const bp = sample()
     const ctx = new FakeContext(bp)
     ctx.brushState = state('minecraft:glass')
     const tool = new PlaceTool(ctx)
     tool.onClick(hit([1, 0, 1], 'up'), SHIFT)
     expect(bp.get([1, 0, 1])?.key).toBe('minecraft:glass')
-    tool.onClick({ pos: [0, 0, 0], empty: false }, NO_SHIFT)
-    expect(bp.get([0, 0, 0])?.key).toBe('minecraft:glass')
     expect(bp.get([1, 1, 1])).toBeNull()
   })
 
