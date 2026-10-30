@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, h, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import { blueprintFixture } from '../../../tests/fixtures/blueprintFixture'
+import { eraseBlock } from '../../edit/editCommand'
 import { MOVE_MESSAGES } from '../../edit/regionTransform'
 import { createDocumentSession, provideDocumentSession } from '../document/documentSession'
 import { useBrushStore } from '../stores/brushStore'
@@ -87,5 +88,46 @@ describe('範囲を動かす（画面）', () => {
     expect(actions.move([2, 0, 1], false)).toBe(false)
     expect(brush.message).toBe(MOVE_MESSAGES.blocked(1))
     expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [0, 0, 0] })
+  })
+})
+
+describe('ブロックを消すと仮の入出力も消す（#167）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('消したブロックの仮の入出力を消し、元に戻すと戻し、やり直すとまた消す', () => {
+    const { session, ports } = setup()
+    const shaft = ports.place([0, 0, 0], 'west')!
+    ports.place([2, 0, 1], 'east')
+    ports.select(shaft.id)
+    const bp = session.current.value!.blueprint
+
+    expect(session.apply(eraseBlock(bp, [0, 0, 0]))).toBe(true)
+    expect(ports.ports.map((p) => p.pos)).toEqual([[2, 0, 1]])
+    // 選んでいた仮の入出力が消えたら、選択も外す
+    expect(ports.selectedId).toBeNull()
+
+    session.undo()
+    expect(ports.ports.map((p) => p.pos)).toEqual([[2, 0, 1], [0, 0, 0]])
+    expect(ports.ports.find((p) => p.id === shaft.id)).toEqual(shaft)
+
+    session.redo()
+    expect(ports.ports.map((p) => p.pos)).toEqual([[2, 0, 1]])
+  })
+
+  it('範囲を消す（Delete）と、範囲の中の仮の入出力を消す。動かしたブロックの仮の入出力は残す', () => {
+    const { session, actions, tools, ports } = setup()
+    ports.place([0, 0, 0], 'west')
+    ports.place([2, 0, 1], 'east')
+    tools.setSelected([0, 0, 0])
+    expect(actions.move([0, 0, 1], false)).toBe(true)
+    expect(ports.ports).toHaveLength(2)
+
+    tools.setSelectionBox({ min: [0, 0, 0], max: [2, 0, 1] })
+    expect(actions.erase()).toBe(true)
+    expect(ports.ports).toEqual([])
+    session.undo()
+    expect(ports.ports.map((p) => p.pos).sort()).toEqual([[0, 0, 1], [2, 0, 1]])
   })
 })

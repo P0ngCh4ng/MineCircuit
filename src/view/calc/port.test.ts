@@ -206,6 +206,16 @@ describe('仮の入出力と計算（#70 の完了の条件）', () => {
     expect(ports.ports).toEqual([])
     expect(ports.selectedId).toBeNull()
   })
+
+  it('2D（面なし）では「2Dで置く面」の面に置く。「自動」なら軸と隣の空きから決める（#167）', async () => {
+    const { ports, tools } = await setup()
+    tools.setTool('port')
+    tools.click({ pos: [0, 0, 0], empty: false })
+    expect(ports.ports[0].face).toBe('west')
+    ports.setFace2D('up')
+    tools.click({ pos: [1, 0, 0], empty: false })
+    expect(ports.ports[1].face).toBe('up')
+  })
 })
 
 describe('PortPanel', () => {
@@ -288,6 +298,10 @@ describe('PortPanel', () => {
     await flushPromises()
     await wrapper.find('select[data-testid="port-kind"]').setValue('create-stress/rotation-load')
     expect(ports.placeOption?.def.kind).toBe('rotation-load')
+    await wrapper.find('select[data-testid="port-face-2d"]').setValue('north')
+    expect(ports.face2D).toBe('north')
+    await wrapper.find('select[data-testid="port-face-2d"]').setValue('auto')
+    expect(ports.face2D).toBe('auto')
   })
 })
 

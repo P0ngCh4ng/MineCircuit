@@ -1,8 +1,11 @@
 // 範囲を動かす・回す・反転する・貼る操作に合わせて、選択範囲と仮の入出力を動かす（docs/design.md「範囲の編集」、#131〜#133）。
-// どちらも画面の状態なので、履歴には入れず、操作を書いた・元に戻したときの合図（session.onRelocate）で直す。
+// ブロックを消す操作では、そのブロックに付けた仮の入出力を消し、元に戻すと戻す（#167）。
+// どちらも画面の状態なので、履歴には入れず、操作を書いた・元に戻したときの合図（session.onRelocate・onCommand）で直す。
 
 import { onBeforeUnmount } from 'vue'
+import { AttachmentLedger } from '../../edit/attachmentLedger'
 import { relocatePlace, relocatePos } from '../../edit/regionTransform'
+import type { VirtualPort } from '../../calc/virtualPort'
 import { useDocumentSession } from '../document/documentSession'
 import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
@@ -22,5 +25,20 @@ export function useRelocationSync(): void {
     )
     ports.relocate((place) => relocatePlace(relocation, place, forward))
   })
-  onBeforeUnmount(disconnect)
+
+  // 消したブロックの仮の入出力。動かした操作では、位置を動かしたあと（onRelocate のあと）に調べる
+  const ledger = new AttachmentLedger<VirtualPort>((p) => p.pos)
+  const disconnectCommand = session.onCommand.connect(({ command, forward }) => {
+    const relocation = command.relocation
+    const next = forward
+      ? ledger.applied(command, ports.ports)
+      : ledger.undone(command, ports.ports, (p) =>
+          relocation ? { ...p, ...relocatePlace(relocation, { pos: p.pos, face: p.face }, false) } : p,
+        )
+    if (next !== ports.ports) ports.replaceAll(next)
+  })
+  onBeforeUnmount(() => {
+    disconnect()
+    disconnectCommand()
+  })
 }

@@ -16,7 +16,9 @@ export function usePortTool(): void {
   tools.register(
     new PortTool({
       setHovered: (pos) => tools.setHovered(pos),
+      // 2D表示では、右パネルの「2Dで置く面」で選んだ面に置く。「自動」なら軸と隣の空きから決める（#167）
       defaultFace(pos) {
+        if (ports.face2D !== 'auto') return ports.face2D
         const bp = session.current.value?.blueprint
         return bp ? defaultPortFace(bp, pos) : 'up'
       },
