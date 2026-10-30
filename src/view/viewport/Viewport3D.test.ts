@@ -162,6 +162,31 @@ describe('Viewport3D', () => {
     expect(fake.orbit).toEqual([])
   })
 
+  it('2つ以上のマスの範囲を選ぶと、箱を画面に写した所の近くに範囲のツールバーを出す（#160）', async () => {
+    /** 真上から見た写し方：x・z をそのまま 10 倍する。描いたあとに onRender を呼ぶ */
+    class ProjectingRenderer extends FakeRenderer {
+      onRender: (() => void) | null = null
+      projectToScreen(p: Vec3): [number, number] {
+        return [p[0] * 10, p[2] * 10]
+      }
+      override requestRender(): void {
+        super.requestRender()
+        this.onRender?.()
+      }
+    }
+    const fake = new ProjectingRenderer()
+    const { wrapper, tools } = setup(() => fake)
+    expect(wrapper.find('[data-testid="selection-toolbar"]').exists()).toBe(false)
+    tools.setSelectionBox({ min: [0, 0, 0], max: [2, 1, 0] })
+    await nextTick()
+    await nextTick()
+    expect(wrapper.get('[data-testid="selection-toolbar"]').find('[data-action="select-all"]').exists()).toBe(true)
+    // 1つのブロックなら出さない
+    tools.setSelected([0, 0, 0])
+    await nextTick()
+    expect(wrapper.find('[data-testid="selection-toolbar"]').exists()).toBe(false)
+  })
+
   it('選択と強調の枠は、ストアの選択に合わせる', async () => {
     const { tools, scene, fake } = setup()
     const before = fake.renders
