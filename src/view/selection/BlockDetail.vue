@@ -1,9 +1,13 @@
 <script setup lang="ts">
 // 右パネルの「選択中のブロック」（#12）。docs/ui.md「全体の配置」。
 // 選択ツールで選んだブロックの名前・ID・位置・ブロック状態と、生データ（nbt）のツリーを出す。
+// 計算の値（回転数・応力・ネットワーク・問題）も出す。何も選んでいなければ設計図全体のまとめ（#158）。
 // 名前は Modpack を読み込んでいれば表示名、なければ ID。
 import { computed } from 'vue'
+import BlockCalcValues from '../calc/BlockCalcValues.vue'
+import BlueprintCalcSummary from '../calc/BlueprintCalcSummary.vue'
 import { useDocumentSession } from '../document/documentSession'
+import { useCalcStore } from '../stores/calcStore'
 import { useModpackContentStore } from '../stores/modpackContent'
 import { useToolStore } from '../stores/toolStore'
 import { nbtTreeNode } from './nbtTree'
@@ -13,6 +17,7 @@ import BlockSettingsEditor from './BlockSettingsEditor.vue'
 const session = useDocumentSession()
 const tools = useToolStore()
 const content = useModpackContentStore()
+const calc = useCalcStore()
 
 const detail = computed(() => {
   void session.version.value
@@ -49,9 +54,12 @@ const posText = computed(() => {
       </button>
     </div>
 
-    <p v-if="!detail" class="note">
-      選択ツール（V）でブロックをクリックすると、ここに ID・位置・ブロック状態・生データ（nbt）が出ます。
-    </p>
+    <template v-if="!detail">
+      <p class="note">
+        選択ツール（V）でブロックをクリックすると、ここに ID・位置・ブロック状態・回転数や応力・生データ（nbt）が出ます。
+      </p>
+      <BlueprintCalcSummary v-if="calc.hasBlueprint" />
+    </template>
 
     <template v-else>
       <div v-if="detail.id" class="title">
@@ -75,6 +83,8 @@ const posText = computed(() => {
       <p v-if="detail.state && detail.properties.length === 0" class="note">ブロック状態の項目はありません。</p>
 
       <BlockSettingsEditor v-if="detail.state" :pos="detail.pos" />
+
+      <BlockCalcValues v-if="detail.state" :pos="detail.pos" />
 
       <div v-if="detail.tree" class="nbt">
         <div class="nbt-head">
