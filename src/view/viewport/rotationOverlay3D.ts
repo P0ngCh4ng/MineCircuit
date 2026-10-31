@@ -1,12 +1,15 @@
 // 3D表示の「回転」（docs/ui.md「回転の表示」）。
 // - 箱：計算で回るとしたブロックを、速さの段階の色の半透明の箱で包む
-// - 輪：回っているブロックに、回る向きを示す輪の矢印を軸に垂直に付ける。輪はブロックより少し大きく、
-//   軸の正の向きから見て、正の回転数なら反時計回りに見える（Create と同じ向き）。裏から見れば逆回りに見える
+// - 輪：力の流れ（#207）を出したブロックのうち回っているものに、回る向きを示す輪の矢印を軸に垂直に付ける。
+//   輪はブロックより少し大きく、軸の正の向きから見て、正の回転数なら反時計回りに見える（Create と同じ向き）。裏から見れば逆回りに見える
+// - 流れ：選んだブロックからの力の流れの矢印（#207）。ブロックの中心どうしを結ぶ棒と、真ん中の矢じり。ブロックに隠れないよう手前に描く
 // BlueprintScene とは別の THREE.Group にして、Viewport3D がシーンに足す。
 
 import * as THREE from 'three'
 import type { CalcRotation } from '../../calc/calcPlugin'
+import type { FlowTrace } from '../../calc/flowTrace'
 import { layerVisibility, SHOW_ALL_LAYERS, type LayerDisplay } from '../layers/layerDisplay'
+import { FLOW_COLORS } from './layerRenderer2D'
 import { ROTATION_COLORS, rotationColorKey, showsDirection } from './rotationColors'
 
 /** 輪の矢印の絵（白。色は1つずつ掛ける）。canvas が使えない環境（テスト）では null */
@@ -75,8 +78,13 @@ export class RotationOverlay3D {
   private readonly ringGeometry = new THREE.PlaneGeometry(1.7, 1.7)
   private readonly ringTexture = ringTexture()
   private readonly ringMaterial: THREE.MeshBasicMaterial | null
+  private readonly shaftGeometry = new THREE.CylinderGeometry(0.06, 0.06, 1, 8)
+  private readonly headGeometry = new THREE.ConeGeometry(0.2, 0.42, 12)
+  private readonly flowMaterial = new THREE.MeshBasicMaterial({ depthTest: false, depthWrite: false })
   private boxes: THREE.InstancedMesh | null = null
   private rings: THREE.InstancedMesh | null = null
+  private shafts: THREE.InstancedMesh | null = null
+  private heads: THREE.InstancedMesh | null = null
 
   constructor() {
     this.group.name = 'rotation-overlay'
@@ -91,11 +99,12 @@ export class RotationOverlay3D {
       : null
   }
 
-  /** 出す回転。空なら何も出さない（「回転」を切ったとき） */
-  update(rotations: readonly CalcRotation[], display: LayerDisplay = SHOW_ALL_LAYERS): void {
+  /** 出す回転。空なら何も出さない（「回転」を切ったとき）。flow は選んだブロックからの力の流れ（#207） */
+  update(rotations: readonly CalcRotation[], display: LayerDisplay = SHOW_ALL_LAYERS, flow: FlowTrace | null = null): void {
     this.clear()
     const shown = rotations.filter((r) => layerVisibility(display, r.pos[1]) !== 'hidden')
     if (shown.length === 0) return
+    if (flow) this.addFlow(flow, display)
 
     const m = new THREE.Matrix4()
     const color = new THREE.Color()
@@ -113,7 +122,8 @@ export class RotationOverlay3D {
     this.group.add(boxes)
     this.boxes = boxes
 
-    const turning = shown.filter(showsDirection)
+    const traced = new Set(flow?.blocks.map((p) => p.join(',')) ?? [])
+    const turning = shown.filter((r) => showsDirection(r) && traced.has(r.pos.join(',')))
     if (!this.ringMaterial || turning.length === 0) return
     const rings = new THREE.InstancedMesh(this.ringGeometry, this.ringMaterial, turning.length)
     rings.name = 'rotation-rings'
@@ -129,9 +139,51 @@ export class RotationOverlay3D {
     this.rings = rings
   }
 
-  /** 出している箱と輪の数（テストと状態の確認用） */
-  count(): { boxes: number; rings: number } {
-    return { boxes: this.boxes?.count ?? 0, rings: this.rings?.count ?? 0 }
+  /** 出している箱・輪・流れの矢印の数（テストと状態の確認用） */
+  count(): { boxes: number; rings: number; arrows: number } {
+    return { boxes: this.boxes?.count ?? 0, rings: this.rings?.count ?? 0, arrows: this.heads?.count ?? 0 }
+  }
+
+  /** 力の流れの矢印。どちらかの端が見えている段にあれば描く */
+  private addFlow(flow: FlowTrace, display: LayerDisplay): void {
+    const arrows = flow.arrows.filter(
+      (a) => layerVisibility(display, a.from[1]) !== 'hidden' || layerVisibility(display, a.to[1]) !== 'hidden',
+    )
+    if (arrows.length === 0) return
+    const shafts = new THREE.InstancedMesh(this.shaftGeometry, this.flowMaterial, arrows.length)
+    const heads = new THREE.InstancedMesh(this.headGeometry, this.flowMaterial, arrows.length)
+    shafts.name = 'flow-shafts'
+    heads.name = 'flow-heads'
+    const up = new THREE.Vector3(0, 1, 0)
+    const from = new THREE.Vector3()
+    const to = new THREE.Vector3()
+    const dir = new THREE.Vector3()
+    const q = new THREE.Quaternion()
+    const m = new THREE.Matrix4()
+    const color = new THREE.Color()
+    arrows.forEach((a, i) => {
+      from.set(a.from[0] + 0.5, a.from[1] + 0.5, a.from[2] + 0.5)
+      to.set(a.to[0] + 0.5, a.to[1] + 0.5, a.to[2] + 0.5)
+      dir.subVectors(to, from)
+      const length = dir.length()
+      dir.normalize()
+      q.setFromUnitVectors(up, dir)
+      const mid = from.clone().add(to).multiplyScalar(0.5)
+      shafts.setMatrixAt(i, m.compose(mid, q, new THREE.Vector3(1, length, 1)))
+      heads.setMatrixAt(i, m.compose(mid.addScaledVector(dir, 0.1), q, new THREE.Vector3(1, 1, 1)))
+      color.set(FLOW_COLORS[a.kind])
+      shafts.setColorAt(i, color)
+      heads.setColorAt(i, color)
+    })
+    for (const mesh of [shafts, heads]) {
+      mesh.renderOrder = 7
+      mesh.raycast = () => {}
+      mesh.instanceMatrix.needsUpdate = true
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+      this.group.add(mesh)
+    }
+    this.shafts = shafts
+    this.heads = heads
   }
 
   dispose(): void {
@@ -141,15 +193,20 @@ export class RotationOverlay3D {
     this.ringGeometry.dispose()
     this.ringMaterial?.dispose()
     this.ringTexture?.dispose()
+    this.shaftGeometry.dispose()
+    this.headGeometry.dispose()
+    this.flowMaterial.dispose()
     this.group.removeFromParent()
   }
 
   private clear(): void {
-    for (const mesh of [this.boxes, this.rings]) {
+    for (const mesh of [this.boxes, this.rings, this.shafts, this.heads]) {
       mesh?.removeFromParent()
       mesh?.dispose()
     }
     this.boxes = null
     this.rings = null
+    this.shafts = null
+    this.heads = null
   }
 }
