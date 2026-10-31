@@ -387,7 +387,7 @@ function setBlockEntityTag(bp: Blueprint, pos: Vec3, key: string, tag: NbtTag, i
 - 回転では生データ（nbt）をそのまま引き継ぐ。ブロック状態の項目を直す操作（`setBlockProperty`）も同じ
 - 右パネルでブロック状態の値を選ぶときの候補（`edit/propertyChoices.ts`）。Modpack があれば、ブロック状態の定義から読んだ取りうる値（`propertyValueOptionsFor`）。なければ、よく使う項目だけ一般の値（`axis`：x・y・z、`facing`：6方向、`horizontal_facing`：水平の4方向、`true`・`false` の項目：その2つ）。どちらでも分からない項目は、文字を打って直す。今の値は候補になくても必ず入れる
 - 生データの項目を変える操作は、元の生データを書き換えず、写しを作って項目だけを差し替える。元に戻すと元の生データ（同じもの）を書き戻す。どのブロックのどの項目を変えられるか、生データがないときに何を入れるかは、Mod ごとの知識なので calc に置く（`calc/blockSettings.ts` の `blockSettingsFor`）。画面はそれを表示するだけ
-- 置くツールで範囲の外へ置くことは受け付けない。設計図を広げるのは範囲の操作（動かす・回す・貼り付け）だけ
+- 置くツールで枠のすぐ外へ置くときは、そのマスが入るように広げる（`placeGrowing`、下の「設計図の大きさを変える（#191）」）。それより外は受け付けない
 
 ### 範囲の編集（#129）
 
@@ -441,6 +441,7 @@ function copyRegion(bp: Blueprint, box: Box): BlueprintClip
 interface EditCommand {
   readonly label: string
   readonly changes: CellChange[]
+  readonly cleared?: CellChange[]                     // 大きさを変える前に書くマス（縮めて消えるブロック）。pos は変える前の座標
   readonly resize?: RegionResize[]                    // 先に大きさを変えてから changes を書く。元に戻すときは逆
   readonly entities?: EntityChange[]
 }
@@ -459,6 +460,14 @@ interface EntityChange { region: number; before: RawEntity[]; after: RawEntity[]
 - `changes` の位置は、大きさを変えたあとの座標。
 - 負の向きにはみ出すときは、全リージョンの `offset` をずらして最小を 0 にする（位置か大きさが変わるリージョンの分だけ `RegionResize` を持つ）。
 - 大きさの上限は各辺 512。
+
+**設計図の大きさを変える（#191）。** `edit/blueprintResize.ts`。画面の操作は [ui.md](ui.md)「設計図の大きさ」。
+
+- `resizeRegion(bp, region, grow)`：`grow` は6方向（`min`・`max` の `Vec3`）に足すマス数。マイナスで縮める。広げるのは `planGrowth` と同じ形の `RegionResize` を作る。各辺 1〜512、ほかのリージョンに重なるなら断る理由を返す。
+- 縮めて外に出るマスのブロックは `cleared`（変える前の座標で、ブロック → 空き）に入れる。外に出るエンティティは除き、残るものは中身のずれの分だけ動かす（`entities`）。
+- `trimRegions(bp)`：各リージョンを、ブロックとエンティティが入る一番小さい箱に縮める（何もなければ 1×1×1）。消えるブロックはない。
+- `placeGrowing(bp, region, pos, cells)`：置くツールで枠の外へ置くとき。`cells` が入るように `planGrowth` で広げ、広げたあとの座標で置く。
+- 3つとも、最小の角が 0 からずれたら全体の座標をずらし（`shift`。縮めたときは負の値もある）、`relocation`（`source: null`、`keepSelection: true`）を持つ。画面は選択範囲と仮の入出力を `shift` だけずらす（貼り付けと違い、選択範囲は置き換えない）。縮めて消えたブロックに付けた仮の入出力は、消したブロックと同じく除く（`vacatedPositions` は `cleared` も見る。#167）。
 
 **範囲を動かす・回す・反転する（#131・#132）。** `transformRegion(bp, box, t, opts)`（`edit/regionTransform.ts`）。動かすのは `moveRegion`（平行移動だけの `transformRegion`）。
 
@@ -566,7 +575,7 @@ class EditHistory {
 }
 ```
 
-- 範囲の操作（`resize`・`entities` を持つ操作）は、やり直すときは 大きさ → エンティティ → マス の順に書き、元に戻すときは マス（逆の順）→ エンティティ → 大きさ の順に書き戻す。
+- 範囲の操作（`resize`・`entities` を持つ操作）は、やり直すときは 消えるマス（`cleared`）→ 大きさ → エンティティ → マス の順に書き、元に戻すときは マス（逆の順）→ エンティティ → 大きさ → 消えるマス（逆の順）の順に書き戻す。
 
 変更のたびに、集計（ブロック数）、3D表示、計算を更新する。計算は変更が続く間は待ち、止まってから Web Worker で走らせる。
 

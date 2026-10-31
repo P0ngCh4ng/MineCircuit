@@ -50,7 +50,7 @@ export interface EditToolContext {
 /** 範囲の外を指したときの知らせ */
 export function outOfRangeMessage(bp: Blueprint): string {
   const [w, h, d] = bp.size
-  return `範囲の外には置けません。設計図の大きさ（${w}×${h}×${d}）の中に置いてください。`
+  return `枠から離れた所には置けません。設計図の枠（${w}×${h}×${d}）の中か、すぐ外に置いてください。すぐ外に置くと枠を広げます。`
 }
 
 /** pos が設計図のどれかのリージョンの中なら true */

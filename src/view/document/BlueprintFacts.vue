@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import { useBlueprintStats } from '../analysis/useBlueprintStats'
 import { minecraftVersionLabel, summarizeBlueprint } from './blueprintSummary'
 import { useDocumentSession } from './documentSession'
+import ResizeBlueprintButton from './ResizeBlueprintButton.vue'
 
 const session = useDocumentSession()
 const stats = useBlueprintStats()
@@ -56,6 +57,7 @@ const facts = computed(() => {
       <div v-for="f in facts" :key="f.key" :data-fact="f.key">
         <dt>{{ f.label }}</dt>
         <dd :title="f.title">{{ f.value }}</dd>
+        <ResizeBlueprintButton v-if="f.key === 'size'" />
       </div>
     </dl>
   </div>

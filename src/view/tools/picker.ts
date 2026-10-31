@@ -151,6 +151,8 @@ export interface PickScene2D {
   readonly layer: number
   /** ブロックがあれば true */
   isFilled(pos: Vec3): boolean
+  /** マス目の外側の余白（マス数）。置くツールで枠のすぐ外を指せるようにする（#191）。省略なら 0 */
+  readonly margin?: number
 }
 
 /**
@@ -161,6 +163,8 @@ export function pick2D(px: number, py: number, grid: GridLayout2D, scene: PickSc
   const x = Math.floor((px - grid.originX) / grid.cellSize)
   const z = Math.floor((py - grid.originY) / grid.cellSize)
   const pos: Vec3 = [x, scene.layer, z]
-  if (!inBounds(pos, scene.size)) return null
+  const m = scene.margin ?? 0
+  if (x < -m || z < -m || x >= scene.size[0] + m || z >= scene.size[2] + m) return null
+  if (!inBounds(pos, scene.size)) return { pos, empty: true }
   return { pos, empty: !scene.isFilled(pos) }
 }

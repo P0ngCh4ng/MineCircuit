@@ -24,7 +24,15 @@ import { ANALYSIS_COLORS_2D, drawAnalysisOverlay2D } from './analysisOverlay2D'
 import { clampedCell2D, dragSelectionBox, insideGrid2D, isDrag2D, type Cell2D } from './dragSelect2D'
 import { layoutGrid2D } from './layerGrid2D'
 import { drawPortOverlay2D } from './portOverlay2D'
-import { DARK_THEME_2D, drawLayer2D, drawPastePreview2D, drawSelectionBox2D, LIGHT_THEME_2D } from './layerRenderer2D'
+import {
+  DARK_THEME_2D,
+  drawGrowMargin2D,
+  drawLayer2D,
+  drawPastePreview2D,
+  drawSelectionBox2D,
+  GROW_MARGIN_2D,
+  LIGHT_THEME_2D,
+} from './layerRenderer2D'
 import { createTextureCellPainter } from './textureCellPainter2D'
 import { clampToView, panBy, wheelZoomFactor, zoomAt } from './view2D'
 
@@ -141,6 +149,8 @@ function draw(): void {
     rotations: viewMode.showRotation ? calc.rotations : null,
     cellPainter: cellPainter.value,
   })
+  // 置くツールのとき、枠のすぐ外に置ける余白（#191）
+  if (tools.activeToolId === 'place') drawGrowMargin2D(ctx, grid, bp.size, GROW_MARGIN_2D, theme)
   // 選択範囲の長方形。範囲の外の段では点線（#130）
   drawSelectionBox2D(ctx, grid, layer.value, box, theme)
   // 計測と同じブロック（#16）
@@ -229,6 +239,8 @@ function pickAt(e: MouseEvent): PickTarget | null {
     size: bp.size,
     layer: layer.value,
     isFilled: (pos) => bp.get(pos) !== null,
+    // 置くツールでは、枠のすぐ外（1マス）にも置ける（#191）
+    margin: tools.activeToolId === 'place' ? GROW_MARGIN_2D : 0,
   }
   return pick2D(e.clientX - rect.left, e.clientY - rect.top, grid, scene)
 }
@@ -388,7 +400,9 @@ function onPointerDown(e: PointerEvent): void {
   const bp = blueprint.value
   const grid = layout.value
   const p = canvasPoint(e)
-  if (!bp || !grid || !p || !insideGrid2D(p.x, p.y, grid, bp.size)) return
+  if (!bp || !grid || !p) return
+  // 置くツールは枠のすぐ外からも引ける（#191）。どこを押したかは pickAt で決める
+  if (kind === 'select' && !insideGrid2D(p.x, p.y, grid, bp.size)) return
   const start = clampedCell2D(p.x, p.y, grid, bp.size)
   if (kind === 'select') {
     drag = { kind, pointerId: e.pointerId, start, anchorLayer: tools.selectedPos ? tools.selectedPos[1] : null, moved: false }
