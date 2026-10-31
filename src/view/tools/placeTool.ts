@@ -3,6 +3,7 @@ import type { Blueprint } from '../../domain/blueprint'
 import { directionVector, oppositeDirection, type Direction } from '../../domain/direction'
 import { boxFromCorners } from '../../domain/box'
 import type { Vec3 } from '../../domain/vec3'
+import { placeGrowing, regionToGrow } from '../../edit/blueprintResize'
 import { placeBlock, placeBlocks } from '../../edit/editCommand'
 import { isInside, outOfRangeMessage, type EditToolContext } from './editToolContext'
 import type { PickModifiers, PickTarget, Tool } from './tool'
@@ -72,7 +73,18 @@ function fromOf(target: PickTarget, cell: PlaceCell): Direction | null {
   return !cell.replace && target.face !== undefined ? oppositeDirection(target.face) : null
 }
 
-/** 置くツール（B）。クリックした所に置くブロックを置く。範囲の外には置かせず、理由を出す */
+/** 知らせをつなぐ。なければ null */
+function joinMessages(messages: readonly (string | null)[]): string | null {
+  const list = messages.filter((m): m is string => !!m)
+  return list.length > 0 ? list.join('。') : null
+}
+
+/** pos に置けるか。枠の中か、枠のすぐ外（置くと広げる。#191） */
+function placeable(bp: Blueprint, pos: Vec3): boolean {
+  return isInside(bp, pos) || regionToGrow(bp, pos) >= 0
+}
+
+/** 置くツール（B）。クリックした所に置くブロックを置く。枠のすぐ外なら枠を広げて置き（#191）、それより外は理由を出す */
 export class PlaceTool implements Tool {
   readonly id = 'place' as const
   /** ドラッグで一直線に置くときの始点と、最後に指していた終点（#161） */
@@ -85,7 +97,7 @@ export class PlaceTool implements Tool {
     const brush = this.ctx.brush()
     const plan = target && bp && brush ? this.plan(bp, target, brush, { shift: false }) : null
     // 見本は、空いているマスにだけ出す。設置の規則で置けないなら赤くする（#121）
-    if (!bp || !plan || !isInside(bp, plan.pos) || (!plan.replace && bp.get(plan.pos) !== null)) {
+    if (!bp || !plan || !placeable(bp, plan.pos) || (!plan.replace && bp.get(plan.pos) !== null)) {
       this.ctx.setGhost(null)
       return
     }
@@ -115,7 +127,7 @@ export class PlaceTool implements Tool {
       return
     }
     const { pos, replace, state: placed } = this.plan(bp, target, state, mods)
-    if (!isInside(bp, pos)) {
+    if (!placeable(bp, pos)) {
       this.ctx.notify(outOfRangeMessage(bp))
       return
     }
@@ -128,6 +140,12 @@ export class PlaceTool implements Tool {
     const problem = this.ctx.placementProblem(bp, pos, placed)
     if (problem) {
       this.ctx.notify(problem)
+      return
+    }
+    // 枠のすぐ外なら、枠を広げて置く（#191）
+    if (!isInside(bp, pos)) {
+      const warnings = this.placeOutside(bp, [pos], placed)
+      if (warnings) this.ctx.notify(joinMessages([...warnings, this.ctx.stateProblem(placed)]))
       return
     }
     // 同じブロックがすでにあるときは変化なし（null）なので、何もしない
@@ -149,7 +167,7 @@ export class PlaceTool implements Tool {
       return false
     }
     const start = placeCell(target, { shift: false }).pos
-    if (!isInside(bp, start)) return false
+    if (!placeable(bp, start)) return false
     this.line = { start, end: start }
     this.ctx.setGhost(null)
     this.showLine()
@@ -173,11 +191,18 @@ export class PlaceTool implements Tool {
       this.ctx.notify(LINE_NOTHING_MESSAGE)
       return
     }
-    // 1回の編集の操作として置く。元に戻すと全部消える
-    if (!this.ctx.apply(placeBlocks(bp, plan.place, plan.state))) return
-    const first = plan.place[0]
-    if (first) this.ctx.revealLayer(first[1])
-    this.ctx.notify(plan.skipped > 0 ? lineSkippedMessage(plan.skipped) : this.ctx.stateProblem(plan.state))
+    // 1回の編集の操作として置く。元に戻すと全部消える。枠の外へ出るなら、線が入るように枠を広げる（#191）
+    let warnings: readonly string[] = []
+    if (plan.place.some((pos) => !isInside(bp, pos))) {
+      const placed = this.placeOutside(bp, plan.place, plan.state)
+      if (!placed) return
+      warnings = placed
+    } else {
+      if (!this.ctx.apply(placeBlocks(bp, plan.place, plan.state))) return
+      const first = plan.place[0]
+      if (first) this.ctx.revealLayer(first[1])
+    }
+    this.ctx.notify(joinMessages([...warnings, plan.skipped > 0 ? lineSkippedMessage(plan.skipped) : this.ctx.stateProblem(plan.state)]))
   }
 
   dragCancel(): void {
@@ -185,14 +210,30 @@ export class PlaceTool implements Tool {
     this.ctx.setLinePreview(null)
   }
 
-  /** 今の線で置くマス（空いていて、範囲の中で、置ける所）と状態、飛ばすマスの数 */
+  /**
+   * 枠の外を含むマスに置く（#191）。始めのマスのリージョンを広げる。広げられなければ理由を出して false。
+   * 置いたら、置いた段を見えるようにし、知らせ（座標がずれたなど）を返す。置けなければ null
+   */
+  private placeOutside(bp: Blueprint, cells: readonly Vec3[], state: BlockState): readonly string[] | null {
+    const region = regionToGrow(bp, cells[0]!)
+    const plan = region < 0 ? null : placeGrowing(bp, region, cells.map((pos) => ({ pos, state })))
+    if (plan === null || typeof plan === 'string') {
+      this.ctx.notify(plan ?? outOfRangeMessage(bp))
+      return null
+    }
+    if (!this.ctx.apply(plan.command)) return null
+    this.ctx.revealLayer(cells[0]![1] + plan.shift[1])
+    return plan.warnings
+  }
+
+  /** 今の線で置くマス（空いていて、枠の中かすぐ外へつながる所で、置ける所）と状態、飛ばすマスの数 */
   private planLine(): { place: Vec3[]; state: BlockState; skipped: number; cells: Vec3[] } | null {
     const bp = this.ctx.blueprint()
     const brush = this.ctx.brush()
     if (!this.line || !bp || !brush) return null
     const { cells, axis } = lineCells(this.line.start, this.line.end)
     const state = alignAxis(brush, axis)
-    const place = cells.filter((pos) => isInside(bp, pos) && bp.get(pos) === null && this.ctx.placementProblem(bp, pos, state) === null)
+    const place = cells.filter((pos) => bp.get(pos) === null && this.ctx.placementProblem(bp, pos, state) === null)
     return { place, state, skipped: cells.length - place.length, cells }
   }
 

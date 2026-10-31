@@ -22,8 +22,9 @@ function contentShift(r: RegionResize): Vec3 {
   ]
 }
 
-// 大きさ → エンティティ → マス の順に書く
+// 消えるマス → 大きさ → エンティティ → マス の順に書く
 function writeForward(bp: Blueprint, cmd: EditCommand): void {
+  for (const change of cmd.cleared ?? []) writeCell(bp, change.pos, change.after)
   for (const r of cmd.resize ?? []) {
     regionAt(bp, r.region).resize(r.after.offset, r.after.size, contentShift(r))
   }
@@ -31,7 +32,7 @@ function writeForward(bp: Blueprint, cmd: EditCommand): void {
   for (const change of cmd.changes) writeCell(bp, change.pos, change.after)
 }
 
-// マス（逆の順）→ エンティティ → 大きさ の順に書き戻す
+// マス（逆の順）→ エンティティ → 大きさ → 消えるマス（逆の順）の順に書き戻す
 function writeBackward(bp: Blueprint, cmd: EditCommand): void {
   // 同じマスを2回変える操作でも元に戻るよう、逆の順に書き戻す
   for (let i = cmd.changes.length - 1; i >= 0; i--) {
@@ -45,6 +46,8 @@ function writeBackward(bp: Blueprint, cmd: EditCommand): void {
     const s = contentShift(r)
     regionAt(bp, r.region).resize(r.before.offset, r.before.size, [-s[0], -s[1], -s[2]])
   }
+  const cleared = cmd.cleared ?? []
+  for (let i = cleared.length - 1; i >= 0; i--) writeCell(bp, cleared[i]!.pos, cleared[i]!.before)
 }
 
 function regionAt(bp: Blueprint, index: number): BlockVolume {

@@ -11,6 +11,7 @@ import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import { useRegionActions, type RegionActions } from './regionActions'
 import { useRelocationSync } from './relocationSync'
+import { resizeRegion } from '../../edit/blueprintResize'
 
 function setup() {
   const session = createDocumentSession()
@@ -129,5 +130,43 @@ describe('ブロックを消すと仮の入出力も消す（#167）', () => {
     expect(ports.ports).toEqual([])
     session.undo()
     expect(ports.ports.map((p) => p.pos).sort()).toEqual([[0, 0, 1], [2, 0, 1]])
+  })
+})
+
+describe('設計図の大きさを変える（画面。#191）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('負の向きに広げると、選択範囲は置き換えずにずれ、仮の入出力もずれる。元に戻すと戻る', () => {
+    const { session, tools, ports } = setup()
+    ports.place([2, 0, 1], 'east')
+    tools.setSelectionBox({ min: [0, 0, 0], max: [1, 0, 1] }, [1, 0, 1])
+    const bp = session.current.value!.blueprint
+    const plan = resizeRegion(bp, 0, { min: [2, 0, 0], max: [0, 0, 0] })
+    if (!plan || typeof plan === 'string') throw new Error('操作を作れません')
+    expect(session.apply(plan.command)).toBe(true)
+    expect(tools.selectionBox).toEqual({ min: [2, 0, 0], max: [3, 0, 1] })
+    expect(tools.selectedPos).toEqual([3, 0, 1])
+    expect(ports.ports.map((p) => p.pos)).toEqual([[4, 0, 1]])
+    session.undo()
+    expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [1, 0, 1] })
+    expect(ports.ports.map((p) => p.pos)).toEqual([[2, 0, 1]])
+  })
+
+  it('縮めて消えたブロックの仮の入出力は除き、元に戻すと戻る', () => {
+    const { session, ports } = setup()
+    ports.place([0, 0, 0], 'west')
+    ports.place([2, 0, 1], 'east')
+    const bp = session.current.value!.blueprint
+    const plan = resizeRegion(bp, 0, { min: [-1, 0, 0], max: [0, 0, 0] })
+    if (!plan || typeof plan === 'string') throw new Error('操作を作れません')
+    session.apply(plan.command)
+    expect(ports.ports.map((p) => p.pos)).toEqual([[1, 0, 1]])
+    session.undo()
+    expect(ports.ports.map((p) => p.pos).sort()).toEqual([
+      [0, 0, 0],
+      [2, 0, 1],
+    ])
   })
 })

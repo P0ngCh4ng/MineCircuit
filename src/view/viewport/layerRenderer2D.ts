@@ -352,6 +352,24 @@ export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, sc
   mark(scene.selected, theme.selection, 2.5)
 }
 
+/** 置くツールで、枠のすぐ外に置ける余白のマス数（#191） */
+export const GROW_MARGIN_2D = 1
+
+/**
+ * 置くツールのとき、マス目の外側の余白を点線の枠で描く（#191）。ここに置くと設計図を広げる
+ */
+export function drawGrowMargin2D(ctx: SelectionCanvas2D, layout: GridLayout2D, size: Vec3, margin: number, theme: LayerTheme2D): void {
+  const { originX: ox, originY: oy, cellSize: cs } = layout
+  ctx.save()
+  ctx.setLineDash([...SELECTION_DASH_2D])
+  ctx.strokeStyle = theme.frame
+  ctx.globalAlpha = 0.5
+  ctx.lineWidth = 1
+  ctx.strokeRect(ox - margin * cs + 0.5, oy - margin * cs + 0.5, (size[0] + margin * 2) * cs, (size[2] + margin * 2) * cs)
+  ctx.setLineDash([])
+  ctx.restore()
+}
+
 /** 選択範囲の長方形を描く canvas。点線を引くので setLineDash も使う */
 export type SelectionCanvas2D = Canvas2DLike & Pick<CanvasRenderingContext2D, 'setLineDash'>
 

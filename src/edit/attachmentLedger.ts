@@ -9,9 +9,18 @@ function vec3Key(p: Vec3): string {
   return p.join(',')
 }
 
-/** 操作でブロックがなくなったマス（前はブロックがあり、後は空き）。pos は操作の後の座標 */
+/**
+ * 操作でブロックがなくなったマス（前はブロックがあり、後は空き）。pos は操作の後の座標。
+ * 縮めて消えたマス（cleared、#191）は設計図の外になるが、付けたものも同じだけずれているので、shift を足して数える
+ */
 export function vacatedPositions(cmd: EditCommand): Vec3[] {
   const out = new Map<string, Vec3>()
+  const shift = cmd.relocation?.shift ?? [0, 0, 0]
+  for (const c of cmd.cleared ?? []) {
+    if (c.before.state === null) continue
+    const pos: Vec3 = [c.pos[0] + shift[0], c.pos[1] + shift[1], c.pos[2] + shift[2]]
+    out.set(vec3Key(pos), pos)
+  }
   for (const c of cmd.changes) {
     const key = vec3Key(c.pos)
     // 同じマスを何度か変える操作では、最後の変更で決まる

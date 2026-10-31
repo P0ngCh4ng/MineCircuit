@@ -163,14 +163,28 @@ describe('PlaceTool', () => {
     expect(bp.get([1, 1, 1])).toBeNull()
   })
 
-  it('範囲の外には置かず、理由を知らせる', () => {
+  it('枠から離れた所には置かず、理由を知らせる', () => {
     const bp = sample()
     const ctx = new FakeContext(bp)
     ctx.brushState = state('minecraft:glass')
-    new PlaceTool(ctx).onClick(hit([0, 0, 0], 'west'), NO_SHIFT)
+    new PlaceTool(ctx).onClick({ pos: [-2, 0, 0], empty: true }, NO_SHIFT)
     expect(ctx.history.count).toBe(0)
-    expect(ctx.message).toContain('範囲の外には置けません')
+    expect(ctx.message).toContain('枠から離れた所には置けません')
     expect(ctx.message).toContain('3×3×3')
+  })
+
+  it('枠のすぐ外に置くと、枠を広げて置く。負の向きなら座標がずれたと知らせる。1回で元に戻る（#191）', () => {
+    const bp = sample()
+    const before = blueprintContents(bp)
+    const ctx = new FakeContext(bp)
+    ctx.brushState = state('minecraft:glass')
+    new PlaceTool(ctx).onClick(hit([0, 0, 0], 'west'), NO_SHIFT)
+    expect(bp.size).toEqual([4, 3, 3])
+    expect(bp.get([0, 0, 0])?.key).toBe('minecraft:glass')
+    expect(bp.get([1, 0, 0])?.key).toBe(before.regions[0]!.blocks.find((b) => b.pos.join() === '0,0,0')?.state)
+    expect(ctx.message).toBe('設計図を負の向きに広げたので、座標が x +1 ずれました')
+    ctx.history.undo()
+    expect(blueprintContents(bp)).toEqual(before)
   })
 
   it('置くブロックがなければ知らせる。隣が埋まっていれば置かずに知らせる', () => {
@@ -206,7 +220,9 @@ describe('PlaceTool', () => {
     tool.onHover(hit([1, 0, 1], 'up'))
     expect(ctx.ghost).toEqual([1, 1, 1])
     tool.onHover(hit([0, 0, 0], 'west'))
-    expect(ctx.ghost).toBeNull() // 範囲の外
+    expect(ctx.ghost).toEqual([-1, 0, 0]) // 枠のすぐ外（置くと広げる。#191）
+    tool.onHover({ pos: [-2, 0, 0], empty: true })
+    expect(ctx.ghost).toBeNull() // 枠から離れた所
     tool.onHover({ pos: [2, 0, 2], empty: true })
     expect(ctx.ghost).toEqual([2, 0, 2])
     tool.deactivate()
@@ -313,9 +329,10 @@ describe('PlaceTool：置き方の補助（#123）', () => {
     expect(ctx.ghostBlocked).toBe(false)
     tool.onClick(target, NO_SHIFT)
     expect(bp.get([2, 0, 2])?.key).toBe('create:cogwheel[axis=y]')
-    // Alt：補助を使わず面の隣（上）に、欄の向きのまま
+    // Alt：補助を使わず面の隣（上）に、欄の向きのまま。枠の上へ出るので、枠を広げて置く（#191）
     tool.onClick(target, { shift: false, alt: true })
-    expect(bp.get([1, 1, 1])).toBeNull()
+    expect(bp.get([1, 1, 1])?.key).toBe('create:cogwheel[axis=x]')
+    expect(bp.size).toEqual([4, 2, 4])
   })
 })
 
@@ -363,11 +380,14 @@ describe('一直線に置く（#161）', () => {
     const ctx = new FakeContext(bp)
     ctx.brushState = state('create:shaft', { axis: 'x' })
     const tool = new PlaceTool(ctx)
-    // [1,0,1] のシャフトの南の面を押して、[1,0,2] の南の面まで。始点は [1,0,2]、終点 [1,0,3] は範囲の外なので飛ばす
+    // [1,0,1] のシャフトの南の面を押して、[1,0,2] の南の面まで。始点は [1,0,2]、終点 [1,0,3] は枠の外なので、枠を広げて置く（#191）
     expect(tool.dragStart(hit([1, 0, 1], 'south'))).toBe(true)
     tool.dragEnd(hit([1, 0, 2], 'south'))
     expect(bp.get([1, 0, 2])?.key).toBe('create:shaft[axis=z]')
-    expect(ctx.message).toBe(lineSkippedMessage(1))
+    expect(bp.get([1, 0, 3])?.key).toBe('create:shaft[axis=z]')
+    expect(bp.size).toEqual([3, 3, 4])
+    expect(ctx.history.count).toBe(1)
+    expect(ctx.message).toBeNull()
   })
 
   it('埋まったマスは飛ばして知らせる。置けるマスがなければ置かない。置くブロックがなければ受け取らない', () => {

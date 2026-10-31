@@ -5,6 +5,7 @@ import { blockColorCss } from './blockColor'
 import { layoutGrid2D } from './layerGrid2D'
 import type { BlockState } from '../../domain/blockState'
 import {
+  drawGrowMargin2D,
   drawLayer2D,
   drawSelectionBox2D,
   ISSUE_MARK_CSS,
@@ -236,5 +237,27 @@ describe('drawSelectionBox2D', () => {
     expect(drawSelectionBox2D(fake.ctx, layout, 0, singleCellBox([0, 0, 0]), LIGHT_THEME_2D)).toBeNull()
     expect(drawSelectionBox2D(fake.ctx, layout, 0, null, LIGHT_THEME_2D)).toBeNull()
     expect(fake.rects).toHaveLength(0)
+  })
+})
+
+describe('drawGrowMargin2D（#191）', () => {
+  it('マス目の外側に、余白のマス数だけ広げた点線の枠を引く', () => {
+    const rects: { x: number; y: number; w: number; h: number; dash: number[] }[] = []
+    let dash: number[] = []
+    const ctx = {
+      strokeStyle: '',
+      lineWidth: 1,
+      globalAlpha: 1,
+      save() {},
+      restore() {},
+      setLineDash(d: number[]) {
+        dash = [...d]
+      },
+      strokeRect(x: number, y: number, w: number, h: number) {
+        rects.push({ x, y, w, h, dash })
+      },
+    }
+    drawGrowMargin2D(ctx as unknown as SelectionCanvas2D, { originX: 10, originY: 20, cellSize: 8 }, [3, 2, 4], 1, LIGHT_THEME_2D)
+    expect(rects).toEqual([{ x: 2.5, y: 12.5, w: 40, h: 48, dash: [...SELECTION_DASH_2D] }])
   })
 })

@@ -47,6 +47,11 @@ export interface Relocation {
   readonly transform: BlockTransform
   /** 設計図全体の座標のずれ（負の向きに広げたとき） */
   readonly shift: Vec3
+  /**
+   * 選択範囲を target に置き換えず、shift だけずらす（設計図の大きさを変える操作。#191）。
+   * 省略なら、範囲を動かした操作として選択範囲を target にする
+   */
+  readonly keepSelection?: boolean
 }
 
 /** 編集の操作。元に戻せる変更1つ */
@@ -55,6 +60,8 @@ export interface EditCommand {
   readonly label: string
   /** マスの変更。pos は resize のあとの座標 */
   readonly changes: readonly CellChange[]
+  /** 大きさを変える前に書くマス（縮めて消えるブロック。#191）。pos は変える前の座標 */
+  readonly cleared?: readonly CellChange[]
   /** 先に大きさを変えてから changes を書く。元に戻すときは逆 */
   readonly resize?: readonly RegionResize[]
   readonly entities?: readonly EntityChange[]

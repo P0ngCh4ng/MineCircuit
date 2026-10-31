@@ -122,6 +122,13 @@ describe('pick2D', () => {
     expect(pick2D(9, 30, grid, s)).toBeNull()
     expect(pick2D(10 + 16 * 4, 30, grid, s)).toBeNull()
   })
+
+  it('余白（margin）があれば、マス目のすぐ外を空きマスとして返す（置くツール。#191）', () => {
+    const m = { ...s, margin: 1 }
+    expect(pick2D(9, 30, grid, m)).toEqual({ pos: [-1, 3, 0], empty: true })
+    expect(pick2D(10 + 16 * 4, 20 + 16 * 4, grid, m)).toEqual({ pos: [4, 3, 4], empty: true })
+    expect(pick2D(10 - 17, 30, grid, m)).toBeNull()
+  })
 })
 
 describe('pick3D の当たった点（#123）', () => {

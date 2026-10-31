@@ -6,6 +6,7 @@ import { onBeforeUnmount } from 'vue'
 import { AttachmentLedger } from '../../edit/attachmentLedger'
 import { relocatePlace, relocatePos } from '../../edit/regionTransform'
 import type { VirtualPort } from '../../calc/virtualPort'
+import type { Vec3 } from '../../domain/vec3'
 import { useDocumentSession } from '../document/documentSession'
 import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
@@ -17,6 +18,17 @@ export function useRelocationSync(): void {
   const ports = usePortStore()
 
   const disconnect = session.onRelocate.connect(({ relocation, forward }) => {
+    // 設計図の大きさを変えた操作（#191）は、選択範囲を置き換えずにずらすだけ
+    if (relocation.keepSelection) {
+      const box = tools.selectionBox
+      const anchor = tools.selectedPos
+      if (box) {
+        const move = (p: Vec3) => relocatePos(relocation, p, forward)
+        tools.setSelectionBox({ min: move(box.min), max: move(box.max) }, anchor ? move(anchor) : undefined)
+      }
+      ports.relocate((place) => relocatePlace(relocation, place, forward))
+      return
+    }
     // 貼り付け（source が null）は、貼った所を選び、元に戻したら選択を解除する（#133）
     const anchor = relocation.source ? tools.selectedPos : null
     tools.setSelectionBox(
