@@ -412,6 +412,34 @@ export function drawSelectionBox2D(
   return inside ? 'solid' : 'dashed'
 }
 
+/** 2D の取っ手の一辺（画素） */
+export const RANGE_HANDLE_SIZE_2D = 8
+
+/**
+ * 選択範囲の取っ手（#200、docs/ui.md「範囲を選ぶ」）。points はマスの境目の位置（マス単位の x・z）。
+ * 白い四角に範囲の色の縁を付ける
+ */
+export function drawRangeHandles2D(
+  ctx: Canvas2DLike,
+  layout: GridLayout2D,
+  points: readonly { readonly x: number; readonly z: number }[],
+  theme: LayerTheme2D,
+): void {
+  const { originX: ox, originY: oy, cellSize: cs } = layout
+  const s = RANGE_HANDLE_SIZE_2D
+  ctx.save()
+  ctx.lineWidth = 1.5
+  for (const p of points) {
+    const x = ox + p.x * cs - s / 2
+    const y = oy + p.z * cs - s / 2
+    ctx.fillStyle = theme.markInner
+    ctx.fillRect(x, y, s, s)
+    ctx.strokeStyle = theme.selection
+    ctx.strokeRect(x, y, s, s)
+  }
+  ctx.restore()
+}
+
 /** 貼り付けの見本の1マス（drawPastePreview2D に渡す） */
 export interface PastePreviewCell2D {
   readonly pos: Vec3

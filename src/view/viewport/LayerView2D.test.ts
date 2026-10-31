@@ -145,6 +145,33 @@ describe('LayerView2D', () => {
     wrapper.unmount()
   })
 
+  it('範囲の取っ手を引くと範囲を広げる・縮める。角は2つの辺を動かし、設計図の外へは出さない。履歴には入れない（#200）', async () => {
+    const { wrapper, session, layout } = mountView()
+    const tools = useToolStore()
+    const canvas = wrapper.get('canvas')
+    // マスの境目 (x, z) の画素
+    const edge = (x: number, z: number) => ({ clientX: layout.originX + x * layout.cellSize, clientY: layout.originY + z * layout.cellSize })
+    tools.setSelectionBox({ min: [0, 0, 1], max: [1, 0, 2] })
+
+    // 右の辺の真ん中（x = 2、z = 2）を x = 3 へ
+    await canvas.trigger('pointerdown', { button: 0, ...edge(2, 2) })
+    await canvas.trigger('pointermove', { buttons: 1, ...edge(3.2, 2) })
+    expect(tools.selectionBox).toEqual({ min: [0, 0, 1], max: [2, 0, 2] })
+    await canvas.trigger('pointerup', { button: 0, ...edge(3.2, 2) })
+    await canvas.trigger('click', edge(3.2, 2))
+    expect(tools.selectionBox).toEqual({ min: [0, 0, 1], max: [2, 0, 2] })
+
+    // 左上の角（0, 1）を外へ引いても設計図の中まで。奥へ押すと 1 マスは残す
+    await canvas.trigger('pointerdown', { button: 0, ...edge(0, 1) })
+    await canvas.trigger('pointermove', { buttons: 1, ...edge(-2, -2) })
+    expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [2, 0, 2] })
+    await canvas.trigger('pointermove', { buttons: 1, ...edge(9, 9) })
+    expect(tools.selectionBox).toEqual({ min: [2, 0, 2], max: [2, 0, 2] })
+    await canvas.trigger('pointerup', { button: 0, ...edge(9, 9) })
+    expect(session.canUndo.value).toBe(false)
+    wrapper.unmount()
+  })
+
   it('Shift+ドラッグで、起点の段から今の段までの高さにする（#130）', async () => {
     const { wrapper, at } = mountView()
     const tools = useToolStore()
