@@ -78,6 +78,8 @@ export class BlueprintScene {
   private highlightPositions: readonly Vec3[] | null = null
   private theme: ViewportTheme = LIGHT_THEME
   private stats = { solid: 0, ghost: 0, meshes: 0 }
+  /** グリッドなどを作ったときの大きさ。同じ設計図でも大きさを変えると変わる（#191）ので、写しを持つ */
+  private drawnSize: Vec3 | null = null
   /** 計測と同じブロックの重ね描き（#16） */
   readonly analysisOverlay = new AnalysisOverlay3D()
   private connectGroup: readonly Vec3[] | null = null
@@ -115,7 +117,8 @@ export class BlueprintScene {
    * null なら何も描かない。
    */
   setBlueprint(blueprint: Blueprint | null): void {
-    const sizeChanged = !sameVec3(this.blueprint?.size ?? null, blueprint?.size ?? null)
+    // 同じ設計図のまま大きさが変わることがあるので、設計図ではなく前に描いた大きさと比べる
+    const sizeChanged = !sameVec3(this.drawnSize, blueprint?.size ?? null)
     this.blueprint = blueprint
     if (sizeChanged) this.highlight = this.highlightKeys()
     this.rebuildBlocks()
@@ -334,6 +337,7 @@ export class BlueprintScene {
     this.axes = null
     this.layerFrame = null
     const size = this.size
+    this.drawnSize = size ? [size[0], size[1], size[2]] : null
     if (!size) return
     const [w, , d] = size
 
