@@ -5,6 +5,7 @@ import MeasureReadout from '../analysis/MeasureReadout.vue'
 import { useDocumentSession } from '../document/documentSession'
 import { useFileDrop } from '../document/useFileDrop'
 import { confirmDiscard } from '../document/unsavedChanges'
+import QuickBar from '../edit/QuickBar.vue'
 import { useViewStore } from '../stores/viewStore'
 import ToolBar from '../tools/ToolBar.vue'
 import LayerView2D from './LayerView2D.vue'
@@ -50,6 +51,11 @@ const drop = useFileDrop((file) => {
         <span>{{ error }}</span>
         <button type="button" @click="session.clearError()">閉じる</button>
       </div>
+    </div>
+
+    <!-- 下の中央のクイックバー（#197） -->
+    <div class="quick-bar-dock">
+      <QuickBar />
     </div>
 
     <!-- 回転の表示の凡例（#117） -->
@@ -107,7 +113,8 @@ const drop = useFileDrop((file) => {
 .readouts {
   position: absolute;
   left: 56px;
-  bottom: 8px;
+  /* 下の中央のクイックバーと重ならないよう、その上に出す */
+  bottom: 64px;
   right: 8px;
   z-index: 2;
   display: flex;
@@ -118,6 +125,21 @@ const drop = useFileDrop((file) => {
 }
 
 .readouts > * {
+  pointer-events: auto;
+}
+
+.quick-bar-dock {
+  position: absolute;
+  left: 52px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.quick-bar-dock > * {
   pointer-events: auto;
 }
 
