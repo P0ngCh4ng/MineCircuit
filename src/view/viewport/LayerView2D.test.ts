@@ -3,6 +3,8 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { blueprintFixture } from '../../../tests/fixtures/blueprintFixture'
 import { createDocumentSession, DOCUMENT_SESSION_KEY } from '../document/documentSession'
+import { useBlueprintResizeStore } from '../stores/blueprintResizeStore'
+import { useBrushStore } from '../stores/brushStore'
 import { useLayerStore } from '../stores/layerStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
@@ -169,6 +171,38 @@ describe('LayerView2D', () => {
     expect(tools.selectionBox).toEqual({ min: [2, 0, 2], max: [2, 0, 2] })
     await canvas.trigger('pointerup', { button: 0, ...edge(9, 9) })
     expect(session.canUndo.value).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('枠の取っ手を引くと設計図の大きさを変え、1回で元に戻る。消えるブロックがあるときは値を入れた画面を開く（#201）', async () => {
+    const { wrapper, session, layout } = mountView()
+    const canvas = wrapper.get('canvas')
+    const resize = useBlueprintResizeStore()
+    const bp = session.current.value!.blueprint
+    const cs = layout.cellSize
+    // x の大きい側の取っ手：マス目の右の辺（x = 4）の真ん中の、16 画素外
+    const right = { clientX: layout.originX + 4 * cs + 16, clientY: layout.originY + 1.5 * cs }
+    await canvas.trigger('pointerdown', { button: 0, ...right })
+    await canvas.trigger('pointermove', { buttons: 1, clientX: layout.originX + 6.2 * cs, clientY: right.clientY })
+    expect(resize.preview?.box).toEqual({ min: [0, 0, 0], max: [5, 2, 2] })
+    expect(useBrushStore().message).toBe('4 × 3 × 3 → 6 × 3 × 3')
+    await canvas.trigger('pointerup', { button: 0, clientX: layout.originX + 6.2 * cs, clientY: right.clientY })
+    expect(bp.size).toEqual([6, 3, 3])
+    expect(resize.preview).toBeNull()
+    session.undo()
+    expect(bp.size).toEqual([4, 3, 3])
+    await wrapper.vm.$nextTick()
+
+    // z の大きい側を 1 つ縮めると石 (1,0,2) が消えるので、変えずに画面を開く
+    const bottom = { clientX: layout.originX + 2 * cs, clientY: layout.originY + 3 * cs + 16 }
+    await canvas.trigger('pointerdown', { button: 0, ...bottom })
+    await canvas.trigger('pointermove', { buttons: 1, clientX: bottom.clientX, clientY: layout.originY + 2.1 * cs })
+    expect(resize.preview?.removes).toBe(true)
+    expect(useBrushStore().message).toBe('4 × 3 × 3 → 4 × 3 × 2。ブロック 1 個が消えます')
+    await canvas.trigger('pointerup', { button: 0, clientX: bottom.clientX, clientY: layout.originY + 2.1 * cs })
+    expect(bp.size).toEqual([4, 3, 3])
+    expect(resize.dialogOpen).toBe(true)
+    expect(resize.maxGrow).toEqual([0, 0, -1])
     wrapper.unmount()
   })
 

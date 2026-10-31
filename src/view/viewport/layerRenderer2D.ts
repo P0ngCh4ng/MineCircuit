@@ -440,6 +440,43 @@ export function drawRangeHandles2D(
   ctx.restore()
 }
 
+/** 2D の枠の取っ手の半径（画素） */
+export const FRAME_HANDLE_RADIUS_2D = 5
+
+/** 設計図の枠の取っ手（#201、docs/ui.md「設計図の大きさ」）。points は canvas の画素。白い丸に枠の色の縁 */
+export function drawFrameHandles2D(
+  ctx: Canvas2DLike & Pick<CanvasRenderingContext2D, 'arc' | 'fill'>,
+  points: readonly (readonly [number, number])[],
+  theme: LayerTheme2D,
+): void {
+  ctx.save()
+  ctx.lineWidth = 1.5
+  for (const [x, y] of points) {
+    ctx.beginPath()
+    ctx.arc(x, y, FRAME_HANDLE_RADIUS_2D, 0, Math.PI * 2)
+    ctx.fillStyle = theme.markInner
+    ctx.fill()
+    ctx.strokeStyle = theme.hover
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+/**
+ * 枠の取っ手を引いている間の、変えたあとの枠（#201）。box はマスの座標（負でもよい）。
+ * 縮めて消えるものがあれば赤（貼り付けの重なりと同じ色）
+ */
+export function drawFramePreview2D(ctx: SelectionCanvas2D, layout: GridLayout2D, box: Box, removes: boolean, theme: LayerTheme2D): void {
+  const { originX: ox, originY: oy, cellSize: cs } = layout
+  ctx.save()
+  ctx.setLineDash([...SELECTION_DASH_2D])
+  ctx.strokeStyle = removes ? PASTE_BLOCKED_CSS : theme.hover
+  ctx.lineWidth = 2
+  ctx.strokeRect(ox + box.min[0] * cs, oy + box.min[2] * cs, (box.max[0] - box.min[0] + 1) * cs, (box.max[2] - box.min[2] + 1) * cs)
+  ctx.setLineDash([])
+  ctx.restore()
+}
+
 /** 貼り付けの見本の1マス（drawPastePreview2D に渡す） */
 export interface PastePreviewCell2D {
   readonly pos: Vec3
