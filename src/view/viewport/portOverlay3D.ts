@@ -1,10 +1,10 @@
 // 3D表示に重ねる仮の入出力の印（#70）。
-// つないだブロックの面の外側に、薄い板を置く。動力源は緑、負荷は橙、物の入口は青、選んでいるものは大きく濃くする。
+// 付けたブロックを、少し大きい半透明の箱で包む（#195）。動力源は緑、負荷は橙、物の入口は青、選んでいるものは濃くする。
+// 同じブロックに2つ以上あれば、2つ目から少しずつ大きくして重ねる。
 // BlueprintScene とは別の THREE.Group にして、Viewport3D がシーンに足す。WebGL を使わないので、テストでも作れる。
 
 import * as THREE from 'three'
 import type { VirtualPort } from '../../calc/virtualPort'
-import { directionVector } from '../../domain/direction'
 import { layerVisibility, SHOW_ALL_LAYERS, type LayerDisplay } from '../layers/layerDisplay'
 
 /** 動力源の印の色 */
@@ -35,18 +35,18 @@ export class PortOverlay3D {
   /** 印を作り直す。隠した段の印は出さない */
   update(ports: readonly VirtualPort[], selectedId: string | null, display: LayerDisplay = SHOW_ALL_LAYERS): void {
     this.clear()
+    const slots = new Map<string, number>()
     for (const port of ports) {
       if (layerVisibility(display, port.pos[1]) === 'hidden') continue
       const selected = port.id === selectedId
       const mesh = new THREE.Mesh(this.geometry, this.material(portColor(port.kind), selected))
       mesh.name = `port-${port.id}`
-      const d = directionVector(port.face)
       const [x, y, z] = port.pos
-      const offset = selected ? 0.62 : 0.6
-      mesh.position.set(x + 0.5 + d[0] * offset, y + 0.5 + d[1] * offset, z + 0.5 + d[2] * offset)
-      const side = selected ? 0.9 : 0.7
-      const thin = 0.16
-      mesh.scale.set(d[0] !== 0 ? thin : side, d[1] !== 0 ? thin : side, d[2] !== 0 ? thin : side)
+      const key = `${x},${y},${z}`
+      const slot = slots.get(key) ?? 0
+      slots.set(key, slot + 1)
+      mesh.position.set(x + 0.5, y + 0.5, z + 0.5)
+      mesh.scale.setScalar(1.08 + slot * 0.06)
       mesh.renderOrder = 6
       // 印には当たらないようにする（picker はブロック座標で別に当たりを調べる）
       mesh.raycast = () => {}
@@ -77,7 +77,7 @@ export class PortOverlay3D {
     const key = `${color}|${selected}`
     let m = this.materials.get(key)
     if (!m) {
-      m = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: selected ? 0.95 : 0.75, depthWrite: false })
+      m = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: selected ? 0.5 : 0.3, depthWrite: false })
       this.materials.set(key, m)
     }
     return m

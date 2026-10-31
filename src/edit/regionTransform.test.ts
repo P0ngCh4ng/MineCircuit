@@ -15,7 +15,6 @@ import {
   MOVE_MESSAGES,
   moveEntity,
   moveRegion,
-  relocatePlace,
   relocatePos,
   transformRegion,
   type TransformOptions,
@@ -295,13 +294,13 @@ describe('relocatePos', () => {
   })
 })
 
-describe('relocatePlace', () => {
-  it('範囲の中の仮の入出力は、位置と面を回し、元に戻すと戻る', () => {
+describe('relocatePos（回す）', () => {
+  it('範囲の中の仮の入出力の位置を回し、元に戻すと戻る', () => {
     const box = boxFromCorners([0, 0, 0], [2, 0, 2])
     const r = { source: box, target: box, transform: rotationAbout(box, 1), shift: [0, 0, 0] as Vec3 }
-    const moved = relocatePlace(r, { pos: [2, 0, 1], face: 'east' }, true)
-    expect(moved).toEqual({ pos: [1, 0, 2], face: 'south' })
-    expect(relocatePlace(r, moved, false)).toEqual({ pos: [2, 0, 1], face: 'east' })
-    expect(relocatePlace(r, { pos: [5, 0, 0], face: 'east' }, true)).toEqual({ pos: [5, 0, 0], face: 'east' })
+    const moved = relocatePos(r, [2, 0, 1], true)
+    expect(moved).toEqual([1, 0, 2])
+    expect(relocatePos(r, moved, false)).toEqual([2, 0, 1])
+    expect(relocatePos(r, [5, 0, 0], true)).toEqual([5, 0, 0])
   })
 })

@@ -1,8 +1,6 @@
 // 2D表示の、仮の入出力の印（#70）。drawLayer2D のあとに呼ぶ。
-// 今の段にある仮の入出力だけを描く。
-// - 東西南北の面：マスの外側の辺に沿った帯
-// - 上の面：マスの中央の塗った四角。下の面：マスの中央の枠だけの四角
-// 選んでいるものは紫の枠で囲む。
+// 今の段にある仮の入出力だけを描く。付けたブロックのマスの角に、塗った四角を出す（#195）。
+// 同じブロックに2つ以上あれば、左上・右上・左下・右下の順に角を変える。選んでいるものは紫の枠で囲む。
 
 import type { VirtualPort } from '../../calc/virtualPort'
 import type { GridLayout2D } from '../tools/picker'
@@ -16,26 +14,19 @@ function css(color: number): string {
   return `#${color.toString(16).padStart(6, '0')}`
 }
 
-/** 印を描く四角（x, y, 幅, 高さ。CSS ピクセル） */
-export function portMarkRect(port: VirtualPort, layout: GridLayout2D): [number, number, number, number] {
+/**
+ * 印を描く四角（x, y, 幅, 高さ。CSS ピクセル）。
+ * slot は同じブロックの中の何番目か（0 左上・1 右上・2 左下・3 右下。4 番目からはまた左上）
+ */
+export function portMarkRect(port: VirtualPort, layout: GridLayout2D, slot = 0): [number, number, number, number] {
   const { originX: ox, originY: oy, cellSize: cs } = layout
-  const x = ox + port.pos[0] * cs
-  const y = oy + port.pos[2] * cs
-  const t = Math.max(3, cs * 0.28)
-  switch (port.face) {
-    case 'north':
-      return [x, y - t, cs, t]
-    case 'south':
-      return [x, y + cs, cs, t]
-    case 'west':
-      return [x - t, y, t, cs]
-    case 'east':
-      return [x + cs, y, t, cs]
-    default: {
-      const s = Math.max(4, cs * 0.4)
-      return [x + (cs - s) / 2, y + (cs - s) / 2, s, s]
-    }
-  }
+  const s = Math.max(4, cs * 0.34)
+  const pad = Math.max(1, cs * 0.08)
+  const right = slot % 2 === 1
+  const bottom = slot % 4 >= 2
+  const x = ox + port.pos[0] * cs + (right ? cs - pad - s : pad)
+  const y = oy + port.pos[2] * cs + (bottom ? cs - pad - s : pad)
+  return [x, y, s, s]
 }
 
 /** 今の段（layer）にある仮の入出力の印を描く */
@@ -47,15 +38,15 @@ export function drawPortOverlay2D(
   selectedId: string | null,
 ): void {
   ctx.save()
+  const slots = new Map<string, number>()
   for (const port of ports) {
     if (port.pos[1] !== layer) continue
-    const [x, y, w, h] = portMarkRect(port, layout)
-    const color = css(portColor(port.kind))
-    ctx.fillStyle = color
-    ctx.strokeStyle = color
-    ctx.lineWidth = 2
-    if (port.face === 'down') ctx.strokeRect(x, y, w, h)
-    else ctx.fillRect(x, y, w, h)
+    const key = `${port.pos[0]},${port.pos[2]}`
+    const slot = slots.get(key) ?? 0
+    slots.set(key, slot + 1)
+    const [x, y, w, h] = portMarkRect(port, layout, slot)
+    ctx.fillStyle = css(portColor(port.kind))
+    ctx.fillRect(x, y, w, h)
     if (port.id === selectedId) {
       ctx.strokeStyle = PORT_SELECTED_CSS
       ctx.lineWidth = 2

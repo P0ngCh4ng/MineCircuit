@@ -7,7 +7,6 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { BUILTIN_PLUGINS } from '../../calc/builtinPlugins'
 import type { VirtualPort } from '../../calc/virtualPort'
-import type { Direction } from '../../domain/direction'
 import type { Vec3 } from '../../domain/vec3'
 import { createPort, portAt, portKindKey, portKindOptions, type PortKindOption } from '../calc/portModel'
 import { useCalcStore } from './calcStore'
@@ -20,8 +19,6 @@ export const usePortStore = defineStore('port', () => {
 
   /** 次に置く種類（portKindKey）。置ける種類がなければ null */
   const placeKey = ref<string | null>(options[0] ? portKindKey(options[0].pluginId, options[0].def.kind) : null)
-  /** 2D表示で置く面（#167）。'auto' ならブロックの軸と隣の空きから決める（defaultPortFace） */
-  const face2D = ref<Direction | 'auto'>('auto')
   /** 一覧で選んでいる仮の入出力の id */
   const selectedId = ref<string | null>(null)
   let nextNumber = 1
@@ -36,18 +33,18 @@ export const usePortStore = defineStore('port', () => {
   }
 
   /**
-   * pos の face に、今の種類の仮の入出力を置いて選ぶ。同じ面にすでにあれば、新しく置かずにそれを選ぶ。
+   * pos のブロックに、今の種類の仮の入出力を付けて選ぶ（#195）。同じブロックに同じ種類があれば、新しく置かずにそれを選ぶ。
    * 置ける種類がなければ null
    */
-  function place(pos: Vec3, face: Direction): VirtualPort | null {
-    const existing = portAt(calc.ports, pos, face)
+  function place(pos: Vec3): VirtualPort | null {
+    const option = placeOption.value
+    if (!option) return null
+    const existing = portAt(calc.ports, pos, option)
     if (existing) {
       selectedId.value = existing.id
       return existing
     }
-    const option = placeOption.value
-    if (!option) return null
-    const port = createPort(`port-${nextNumber++}`, option, pos, face)
+    const port = createPort(`port-${nextNumber++}`, option, pos)
     setPorts([...calc.ports, port])
     selectedId.value = port.id
     return port
@@ -63,10 +60,10 @@ export const usePortStore = defineStore('port', () => {
     if (selectedId.value === id) selectedId.value = null
   }
 
-  /** 範囲を動かす・回す・反転したとき、すべての仮の入出力の位置と面を map で直す */
-  function relocate(map: (place: { pos: Vec3; face: Direction }) => { pos: Vec3; face: Direction }): void {
+  /** 範囲を動かす・回す・反転したとき、すべての仮の入出力の位置を map で直す */
+  function relocate(map: (pos: Vec3) => Vec3): void {
     if (calc.ports.length === 0) return
-    setPorts(calc.ports.map((p) => ({ ...p, ...map({ pos: p.pos, face: p.face }) })))
+    setPorts(calc.ports.map((p) => ({ ...p, pos: map(p.pos) })))
   }
 
   /** 一覧を丸ごと差し替える（消したブロックの仮の入出力を消す・戻すとき。#167）。選んでいたものがなくなれば選択を外す */
@@ -89,9 +86,5 @@ export const usePortStore = defineStore('port', () => {
     placeKey.value = key
   }
 
-  function setFace2D(face: Direction | 'auto'): void {
-    face2D.value = face
-  }
-
-  return { options, placeKey, placeOption, face2D, selectedId, ports, place, update, relocate, replaceAll, remove, clear, select, setPlaceKey, setFace2D }
+  return { options, placeKey, placeOption, selectedId, ports, place, update, relocate, replaceAll, remove, clear, select, setPlaceKey }
 })

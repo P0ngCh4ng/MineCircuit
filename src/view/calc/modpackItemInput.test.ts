@@ -101,11 +101,11 @@ async function selectModpack(folder: MemoryFileSource | null) {
   await vi.waitFor(() => expect(content.phase).toBe(folder ? 'loaded' : 'idle'))
 }
 
-/** 石臼の上の面に、物の入口（item、rate 個/秒）を置く */
+/** 石臼に、物の入口（item、rate 個/秒）を置く */
 function feedWheat(rate = 1, item = 'minecraft:wheat') {
   const ports = usePortStore()
   ports.setPlaceKey('create-stress/item-input')
-  const port = ports.place(MILL, 'up')!
+  const port = ports.place(MILL)!
   ports.update(withPortParam(withPortItem(port, 'item', item), 'rate', rate))
 }
 

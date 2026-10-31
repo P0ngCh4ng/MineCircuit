@@ -4,7 +4,7 @@
 
 import { onBeforeUnmount } from 'vue'
 import { AttachmentLedger } from '../../edit/attachmentLedger'
-import { relocatePlace, relocatePos } from '../../edit/regionTransform'
+import { relocatePos } from '../../edit/regionTransform'
 import type { VirtualPort } from '../../calc/virtualPort'
 import type { Vec3 } from '../../domain/vec3'
 import { useDocumentSession } from '../document/documentSession'
@@ -26,7 +26,7 @@ export function useRelocationSync(): void {
         const move = (p: Vec3) => relocatePos(relocation, p, forward)
         tools.setSelectionBox({ min: move(box.min), max: move(box.max) }, anchor ? move(anchor) : undefined)
       }
-      ports.relocate((place) => relocatePlace(relocation, place, forward))
+      ports.relocate((pos) => relocatePos(relocation, pos, forward))
       return
     }
     // 貼り付け（source が null）は、貼った所を選び、元に戻したら選択を解除する（#133）
@@ -35,7 +35,7 @@ export function useRelocationSync(): void {
       forward ? relocation.target : relocation.source,
       anchor ? relocatePos(relocation, anchor, forward) : undefined,
     )
-    ports.relocate((place) => relocatePlace(relocation, place, forward))
+    ports.relocate((pos) => relocatePos(relocation, pos, forward))
   })
 
   // 消したブロックの仮の入出力。動かした操作では、位置を動かしたあと（onRelocate のあと）に調べる
@@ -45,7 +45,7 @@ export function useRelocationSync(): void {
     const next = forward
       ? ledger.applied(command, ports.ports)
       : ledger.undone(command, ports.ports, (p) =>
-          relocation ? { ...p, ...relocatePlace(relocation, { pos: p.pos, face: p.face }, false) } : p,
+          relocation ? { ...p, pos: relocatePos(relocation, p.pos, false) } : p,
         )
     if (next !== ports.ports) ports.replaceAll(next)
   })

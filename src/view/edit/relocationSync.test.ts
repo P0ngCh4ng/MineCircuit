@@ -49,8 +49,8 @@ describe('範囲を動かす（画面）', () => {
 
   it('選択範囲と、範囲の中の仮の入出力が一緒に動き、元に戻す・やり直すでも付いてくる', () => {
     const { session, actions, tools, ports } = setup()
-    ports.place([0, 0, 0], 'west')
-    ports.place([2, 0, 1], 'east')
+    ports.place([0, 0, 0])
+    ports.place([2, 0, 1])
     tools.setSelected([0, 0, 0])
 
     expect(actions.move([0, 0, 1], false)).toBe(true)
@@ -73,7 +73,7 @@ describe('範囲を動かす（画面）', () => {
 
   it('負の向きに広げると、範囲の外の仮の入出力も全体と一緒にずれ、座標のずれを知らせる', async () => {
     const { session, actions, tools, ports, brush } = setup()
-    ports.place([2, 0, 1], 'east')
+    ports.place([2, 0, 1])
     tools.setSelected([0, 0, 0])
     expect(actions.move([-1, 0, 0], false)).toBe(true)
     expect(session.current.value!.blueprint.size).toEqual([4, 1, 2])
@@ -99,8 +99,8 @@ describe('ブロックを消すと仮の入出力も消す（#167）', () => {
 
   it('消したブロックの仮の入出力を消し、元に戻すと戻し、やり直すとまた消す', () => {
     const { session, ports } = setup()
-    const shaft = ports.place([0, 0, 0], 'west')!
-    ports.place([2, 0, 1], 'east')
+    const shaft = ports.place([0, 0, 0])!
+    ports.place([2, 0, 1])
     ports.select(shaft.id)
     const bp = session.current.value!.blueprint
 
@@ -119,8 +119,8 @@ describe('ブロックを消すと仮の入出力も消す（#167）', () => {
 
   it('範囲を消す（Delete）と、範囲の中の仮の入出力を消す。動かしたブロックの仮の入出力は残す', () => {
     const { session, actions, tools, ports } = setup()
-    ports.place([0, 0, 0], 'west')
-    ports.place([2, 0, 1], 'east')
+    ports.place([0, 0, 0])
+    ports.place([2, 0, 1])
     tools.setSelected([0, 0, 0])
     expect(actions.move([0, 0, 1], false)).toBe(true)
     expect(ports.ports).toHaveLength(2)
@@ -140,7 +140,7 @@ describe('設計図の大きさを変える（画面。#191）', () => {
 
   it('負の向きに広げると、選択範囲は置き換えずにずれ、仮の入出力もずれる。元に戻すと戻る', () => {
     const { session, tools, ports } = setup()
-    ports.place([2, 0, 1], 'east')
+    ports.place([2, 0, 1])
     tools.setSelectionBox({ min: [0, 0, 0], max: [1, 0, 1] }, [1, 0, 1])
     const bp = session.current.value!.blueprint
     const plan = resizeRegion(bp, 0, { min: [2, 0, 0], max: [0, 0, 0] })
@@ -156,8 +156,8 @@ describe('設計図の大きさを変える（画面。#191）', () => {
 
   it('縮めて消えたブロックの仮の入出力は除き、元に戻すと戻る', () => {
     const { session, ports } = setup()
-    ports.place([0, 0, 0], 'west')
-    ports.place([2, 0, 1], 'east')
+    ports.place([0, 0, 0])
+    ports.place([2, 0, 1])
     const bp = session.current.value!.blueprint
     const plan = resizeRegion(bp, 0, { min: [-1, 0, 0], max: [0, 0, 0] })
     if (!plan || typeof plan === 'string') throw new Error('操作を作れません')
