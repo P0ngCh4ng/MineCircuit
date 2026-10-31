@@ -1,122 +1,48 @@
-// 選択範囲の取っ手で広げる・縮めるときの計算（#200、docs/ui.md「範囲を選ぶ」）。
-// Vue にも Three.js にも依存しないので、そのままテストできる。3D・2D表示が使う。
+// 選択範囲を広げる・縮めるときの計算（#200・#205、docs/ui.md「範囲を選ぶ」）。
+// Vue にも Three.js にも依存しないので、そのままテストできる。2D表示（辺を引く）とキー操作（Shift+矢印）が使う。
 
-import { boxSize, type Box } from '../../domain/box'
+import type { Blueprint } from '../../domain/blueprint'
+import { boxEquals, boxSize, forEachInBox, type Box } from '../../domain/box'
 import type { Vec3 } from '../../domain/vec3'
-import type { GridLayout2D, PickRay } from '../tools/picker'
+import type { GridLayout2D } from '../tools/picker'
 
-/** 取っ手が動かす面。axis の向きの、小さい側（min）か大きい側（max）の面 */
+/** 動かす面。axis の向きの、小さい側（min）か大きい側（max）の面 */
 export interface FaceHandle {
   readonly axis: 0 | 1 | 2
   readonly side: 'min' | 'max'
 }
 
-/** 3D の6つの取っ手 */
-export const FACE_HANDLES: readonly FaceHandle[] = [
-  { axis: 0, side: 'min' },
-  { axis: 0, side: 'max' },
-  { axis: 1, side: 'min' },
-  { axis: 1, side: 'max' },
-  { axis: 2, side: 'min' },
-  { axis: 2, side: 'max' },
-]
+/** 2D で辺に当たるとみなす、辺からの距離（画素） */
+export const EDGE_HIT_2D = 5
 
-/** 3D の取っ手（立方体）の一辺（マス） */
-export const HANDLE_SIZE_3D = 0.4
-/** 3D の取っ手を面から外へ離す量（マス）。範囲の中のブロックと重ならないようにする */
-export const HANDLE_OFFSET_3D = 0.4
-/** 3D の取っ手の当たりを見た目より広げる量（マス） */
-const HANDLE_PAD_3D = 0.1
-/** 2D の取っ手の当たりの半径（画素） */
-export const HANDLE_HIT_2D = 8
-
-/** 面の真ん中の点（面の上）。ブロック座標で、マスの境目が整数 */
-export function faceCenter(box: Box, h: FaceHandle): Vec3 {
-  const c: [number, number, number] = [0, 1, 2].map((a) => (box.min[a]! + box.max[a]! + 1) / 2) as [number, number, number]
-  c[h.axis] = h.side === 'min' ? box.min[h.axis] : box.max[h.axis] + 1
-  return c
+/**
+ * canvas の位置 (px, py) の近くにある、2D の範囲の長方形の辺。角なら2つ。
+ * 辺の外側・内側どちらから近づいてもよい。なければ null
+ */
+export function hitEdge2D(px: number, py: number, layout: GridLayout2D, box: Box): readonly FaceHandle[] | null {
+  const { originX: ox, originY: oy, cellSize: cs } = layout
+  const left = ox + box.min[0] * cs
+  const right = ox + (box.max[0] + 1) * cs
+  const top = oy + box.min[2] * cs
+  const bottom = oy + (box.max[2] + 1) * cs
+  const t = EDGE_HIT_2D
+  // 長方形を少し広げた中にいなければ当たらない
+  if (px < left - t || px > right + t || py < top - t || py > bottom + t) return null
+  const faces: FaceHandle[] = []
+  // 範囲が細いときは近い方の辺だけにする
+  const dl = Math.abs(px - left)
+  const dr = Math.abs(px - right)
+  if (Math.min(dl, dr) <= t) faces.push({ axis: 0, side: dl <= dr ? 'min' : 'max' })
+  const dt = Math.abs(py - top)
+  const db = Math.abs(py - bottom)
+  if (Math.min(dt, db) <= t) faces.push({ axis: 2, side: dt <= db ? 'min' : 'max' })
+  return faces.length > 0 ? faces : null
 }
 
-/** 3D の取っ手の真ん中。面の真ん中から外へ離す */
-export function handleCenter3D(box: Box, h: FaceHandle): Vec3 {
-  const c = [...faceCenter(box, h)] as [number, number, number]
-  c[h.axis] += h.side === 'min' ? -HANDLE_OFFSET_3D : HANDLE_OFFSET_3D
-  return c
-}
-
-/** レイが当たる3Dの取っ手（いちばん手前）。当たらなければ null */
-export function hitHandle3D(ray: PickRay, box: Box): FaceHandle | null {
-  const half = HANDLE_SIZE_3D / 2 + HANDLE_PAD_3D
-  let best: { h: FaceHandle; t: number } | null = null
-  for (const h of FACE_HANDLES) {
-    const c = handleCenter3D(box, h)
-    const t = rayCubeHit(ray, c, half)
-    if (t !== null && (!best || t < best.t)) best = { h, t }
-  }
-  return best?.h ?? null
-}
-
-/** レイと、真ん中 c・半分の幅 half の立方体が交わる所までの長さ。交わらなければ null */
-export function rayCubeHit(ray: PickRay, c: Vec3, half: number): number | null {
-  let near = -Infinity
-  let far = Infinity
-  for (let a = 0; a < 3; a++) {
-    const o = ray.origin[a]!
-    const d = ray.direction[a]!
-    const lo = c[a]! - half
-    const hi = c[a]! + half
-    if (Math.abs(d) < 1e-12) {
-      if (o < lo || o > hi) return null
-      continue
-    }
-    const t1 = (lo - o) / d
-    const t2 = (hi - o) / d
-    near = Math.max(near, Math.min(t1, t2))
-    far = Math.min(far, Math.max(t1, t2))
-  }
-  if (near > far || far < 0) return null
-  return Math.max(near, 0)
-}
-
-/** 2D の取っ手。4つの辺の真ん中と4つの角。x・z はマスの境目の位置（マス単位） */
-export interface Handle2D {
-  readonly faces: readonly FaceHandle[]
-  readonly x: number
-  readonly z: number
-}
-
-/** 2D の8つの取っ手 */
-export function handles2D(box: Box): Handle2D[] {
-  const xs = { min: box.min[0], max: box.max[0] + 1 }
-  const zs = { min: box.min[2], max: box.max[2] + 1 }
-  const midX = (xs.min + xs.max) / 2
-  const midZ = (zs.min + zs.max) / 2
-  const fx = (side: 'min' | 'max'): FaceHandle => ({ axis: 0, side })
-  const fz = (side: 'min' | 'max'): FaceHandle => ({ axis: 2, side })
-  const out: Handle2D[] = []
-  for (const sx of ['min', 'max'] as const)
-    for (const sz of ['min', 'max'] as const) out.push({ faces: [fx(sx), fz(sz)], x: xs[sx], z: zs[sz] })
-  for (const s of ['min', 'max'] as const) {
-    out.push({ faces: [fx(s)], x: xs[s], z: midZ })
-    out.push({ faces: [fz(s)], x: midX, z: zs[s] })
-  }
-  return out
-}
-
-/** canvas の位置 (px, py) にある2Dの取っ手（いちばん近いもの）。なければ null */
-export function hitHandle2D(px: number, py: number, layout: GridLayout2D, box: Box): Handle2D | null {
-  let best: { h: Handle2D; d: number } | null = null
-  for (const h of handles2D(box)) {
-    const d = Math.hypot(px - (layout.originX + h.x * layout.cellSize), py - (layout.originY + h.z * layout.cellSize))
-    if (d <= HANDLE_HIT_2D && (!best || d < best.d)) best = { h, d }
-  }
-  return best?.h ?? null
-}
-
-/** 2D の取っ手にマウスを重ねたときのカーソル */
-export function handleCursor2D(h: Handle2D): string {
-  if (h.faces.length === 2) return h.faces[0]!.side === h.faces[1]!.side ? 'nwse-resize' : 'nesw-resize'
-  return h.faces[0]!.axis === 0 ? 'ew-resize' : 'ns-resize'
+/** 2D の辺にマウスを重ねたときのカーソル */
+export function edgeCursor2D(faces: readonly FaceHandle[]): string {
+  if (faces.length === 2) return faces[0]!.side === faces[1]!.side ? 'nwse-resize' : 'nesw-resize'
+  return faces[0]!.axis === 0 ? 'ew-resize' : 'ns-resize'
 }
 
 /**
@@ -132,6 +58,48 @@ export function moveFaces(box: Box, faces: readonly FaceHandle[], boundary: (axi
     else min[a] = clamp(b, 0, max[a])
   }
   return { min, max }
+}
+
+/**
+ * 向き d（軸に沿った1マス。矢印キーの向き）の面を、外へ1マス広げた（shrink なら内へ1マス縮めた）範囲。
+ * 設計図の中に収め、1 マスは残す
+ */
+export function growToward(box: Box, d: Vec3, shrink: boolean, size: Vec3): Box {
+  const axis = d.findIndex((v) => v !== 0) as 0 | 1 | 2 | -1
+  if (axis === -1) return box
+  const side = d[axis]! > 0 ? 'max' : 'min'
+  const face = side === 'max' ? box.max[axis] + 1 : box.min[axis]
+  const step = (side === 'max') !== shrink ? 1 : -1
+  return moveFaces(box, [{ axis, side }], () => face + step, size)
+}
+
+/** 範囲を、中のブロックが入る一番小さい箱に縮めたもの（「中身に合わせる」。#205）。中にブロックがなければ null */
+export function fitToContent(bp: Blueprint, box: Box): Box | null {
+  let min: [number, number, number] | null = null
+  let max: [number, number, number] = [0, 0, 0]
+  forEachInBox(box, (p) => {
+    if (bp.get(p) === null) return
+    if (!min) {
+      min = [p[0], p[1], p[2]]
+      max = [p[0], p[1], p[2]]
+      return
+    }
+    for (let a = 0; a < 3; a++) {
+      min[a] = Math.min(min[a]!, p[a]!)
+      max[a] = Math.max(max[a]!, p[a]!)
+    }
+  })
+  return min ? { min, max } : null
+}
+
+/** 範囲の高さを、設計図の一番下の段から一番上の段までにしたもの（「上下すべての段」。#205） */
+export function fullHeight(box: Box, size: Vec3): Box {
+  return { min: [box.min[0], 0, box.min[2]], max: [box.max[0], size[1] - 1, box.max[2]] }
+}
+
+/** 変えた範囲が今と違うときだけ返す（ツールバーのボタンを押せるか） */
+export function changedBox(next: Box | null, box: Box): Box | null {
+  return next && !boxEquals(next, box) ? next : null
 }
 
 /** 状態表示に出す範囲の大きさ */

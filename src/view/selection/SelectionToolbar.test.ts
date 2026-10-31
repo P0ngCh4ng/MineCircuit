@@ -87,6 +87,8 @@ describe('SelectionToolbar', () => {
       'cut',
       'duplicate',
       'paste',
+      'fit-content',
+      'full-height',
       'select-all',
     ])
     expect(wrapper.get('[data-action="mirror-x"]').text()).toBe('x 軸で反転')
@@ -206,4 +208,18 @@ describe('SelectionToolbar', () => {
     expect(bp.get([3, 2, 0])?.key).toBe('minecraft:stone')
   })
 
+  it('「中身に合わせる」は中のブロックが入る箱に、「上下すべての段」は一番下から一番上の段までに選び直す。同じなら押せない（#205）', async () => {
+    const { wrapper, tools, session } = await setup()
+    // 今の範囲はもう中身に合っている
+    expect(wrapper.get('[data-action="fit-content"]').attributes('disabled')).toBeDefined()
+    tools.setSelectionBox({ min: [0, 0, 0], max: [3, 1, 0] })
+    await nextTick()
+    await wrapper.get('[data-action="fit-content"]').trigger('click')
+    expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [2, 1, 0] })
+    await wrapper.get('[data-action="full-height"]').trigger('click')
+    expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [2, 2, 0] })
+    expect(wrapper.get('[data-action="full-height"]').attributes('disabled')).toBeDefined()
+    expect(useBrushStore().message).toBe('範囲 3 × 3 × 1')
+    expect(session.canUndo.value).toBe(false)
+  })
 })

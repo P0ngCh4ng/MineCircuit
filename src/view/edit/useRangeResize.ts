@@ -1,4 +1,4 @@
-// 選択範囲の取っ手を引いて広げる・縮める口（#200、docs/ui.md「範囲を選ぶ」）。3D・2D表示が呼ぶ。
+// 選択範囲の辺を引いて広げる・縮める口（#200・#205、docs/ui.md「範囲を選ぶ」）。2D表示が呼ぶ。
 // 範囲の選び直しは編集ではないので、履歴には入れずに選択範囲だけを変える。
 
 import { boxContains, type Box } from '../../domain/box'
@@ -8,7 +8,7 @@ import { useToolStore } from '../stores/toolStore'
 import { moveFaces, rangeSizeLabel, type FaceHandle } from './rangeHandles'
 
 export interface RangeResize {
-  /** 取っ手をつかむ。範囲がなければ false */
+  /** 辺をつかむ。範囲がなければ false */
   begin(faces: readonly FaceHandle[]): boolean
   /** 引いている間。boundary はつかんだ面を動かす先のマスの境目（小数でよい） */
   update(boundary: (axis: 0 | 1 | 2) => number): void

@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import type { Vec3 } from '../domain/vec3'
 import { blueprintFixture } from '../../tests/fixtures/blueprintFixture'
-import { countLayers, floodSameState } from './floodSameState'
+import { boundingBoxOf, countLayers, floodConnected, floodSameState } from './floodSameState'
 
 function sorted(list: readonly Vec3[]): string[] {
   return list.map((p) => p.join(',')).sort()
 }
+
+describe('floodConnected（#205）', () => {
+  it('種類を問わず面で隣り合うブロックを集め、囲む箱を出す。角だけで接するものはたどらない', () => {
+    const bp = blueprintFixture({ size: [5, 2, 3] })
+      .fill([0, 0, 0], [2, 0, 0], 'create:shaft', { axis: 'x' })
+      .place([2, 1, 0], 'minecraft:stone')
+      .place([3, 1, 1], 'minecraft:glass')
+      .toBlueprint()
+    const group = floodConnected(bp, [0, 0, 0])
+    expect(sorted(group)).toEqual(['0,0,0', '1,0,0', '2,0,0', '2,1,0'])
+    expect(boundingBoxOf(group)).toEqual({ min: [0, 0, 0], max: [2, 1, 0] })
+    expect(floodConnected(bp, [4, 0, 2])).toEqual([])
+    expect(boundingBoxOf([])).toBeNull()
+  })
+})
 
 describe('floodSameState', () => {
   it('面で隣り合う同じブロック状態のブロックを集める。先頭は始めのブロック', () => {
