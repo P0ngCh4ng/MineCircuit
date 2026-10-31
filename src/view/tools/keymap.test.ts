@@ -66,6 +66,15 @@ describe('resolveKeyAction', () => {
     expect(resolveKeyAction(k('s'))).toEqual({ type: 'tool', id: 'sameBlock' })
   })
 
+  it('1〜9 でクイックバーのマスを選ぶ。0 と Shift・Ctrl・Alt つきは選ばない（#197）', () => {
+    expect(resolveKeyAction(k('1'))).toEqual({ type: 'quickSlot', index: 0 })
+    expect(resolveKeyAction(k('9'))).toEqual({ type: 'quickSlot', index: 8 })
+    expect(resolveKeyAction(k('0'))).toBeNull()
+    expect(resolveKeyAction(k('1', { ctrlKey: true }))).toBeNull()
+    expect(resolveKeyAction(k('1', { altKey: true }))).toBeNull()
+    expect(resolveKeyAction(k('!', { shiftKey: true }))).toBeNull()
+  })
+
   it('Ctrl+A（Mac は Cmd+A）で全体を選び、F で範囲を塗る', () => {
     expect(resolveKeyAction(k('a', { ctrlKey: true }))).toEqual({ type: 'selectAll' })
     expect(resolveKeyAction(k('A', { metaKey: true }))).toEqual({ type: 'selectAll' })

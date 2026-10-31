@@ -29,6 +29,8 @@ export type KeyAction =
   | { readonly type: 'duplicateSelection' }
   /** 書き出し（.nbt）を始める（Ctrl+S。#151） */
   | { readonly type: 'export' }
+  /** クイックバーのマスを選ぶ（1〜9。#197）。index は 0 始まり */
+  | { readonly type: 'quickSlot'; readonly index: number }
 
 /** 範囲を動かす向き。up〜right は画面の上下左右、raise / lower は1段上・下 */
 export type MoveDirection = 'up' | 'down' | 'left' | 'right' | 'raise' | 'lower'
@@ -99,6 +101,7 @@ export function resolveKeyAction(e: KeyInput): KeyAction | null {
   if (e.shiftKey) return null
   if (key === 'g') return { type: 'toggleGrid' }
   if (key === 'f') return { type: 'fillSelection' }
+  if (/^[1-9]$/.test(key)) return { type: 'quickSlot', index: Number(key) - 1 }
   const tool = TOOL_KEYS.get(key)
   return tool ? { type: 'tool', id: tool } : null
 }

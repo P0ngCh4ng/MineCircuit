@@ -980,6 +980,7 @@ flowchart LR
 - `LayerView2D`：選んだ段を canvas にマス目で描く。1つ下の段を薄く出す
 - `Picker`：マウス位置から対象を求める。3D は当たったブロックと面の向き、何もなければ今の段の床。2D はマス目
 - ツール：ツールごとにクラスを分け、同じ形でクリックと移動を受け取る
+- クイックバー（#197）：`QuickBarStore`（Pinia）が最近のブロックと固定、操作の並びを持つ。並びの計算は画面に依存しない関数（`view/edit/quickBarModel.ts`）にする。置くブロック（`BrushStore.state`）の変化を見て最近のブロックを足す。保存は localStorage（キー `minecircuit.quickBar`）で、ブロック状態は `create:shaft[axis=y]` の形の文字で持つ。設計図には書かない
 
 ```ts
 interface Tool {

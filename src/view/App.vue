@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 画面全体の配置。docs/ui.md「全体の配置」。
 // 各場所の中身はそれぞれの部品のファイルで作る（App.vue は並べるだけ）。
-import { watch } from 'vue'
+import { provide, watch } from 'vue'
 import { useProbeTool } from './calc/useProbeTool'
 import { usePortTool } from './calc/usePortTool'
 import { useDocumentSession } from './document/documentSession'
@@ -10,6 +10,8 @@ import { usePasteModeSync, useClipboardActions } from './edit/clipboardActions'
 import { useRelocationSync } from './edit/relocationSync'
 import { useRotateAction } from './edit/rotateAction'
 import { useEditTools } from './edit/useEditTools'
+import { QUICK_ACTION_RUNNER } from './edit/quickActions'
+import type { QuickActionId } from './edit/quickBarModel'
 import LayerPanel from './layers/LayerPanel.vue'
 import LeftPanel from './panels/LeftPanel.vue'
 import RightPanel from './panels/RightPanel.vue'
@@ -19,6 +21,7 @@ import { useAppearanceSync } from './stores/appearanceSync'
 import { useCalcStore } from './stores/calcStore'
 import { useHighlightStore } from './stores/highlightStore'
 import { useModpackContentStore } from './stores/modpackContent'
+import { useQuickBarStore } from './stores/quickBarStore'
 import { useToolStore } from './stores/toolStore'
 import { useViewStore } from './stores/viewStore'
 import { useKeyboardShortcuts } from './tools/useKeyboardShortcuts'
@@ -34,6 +37,8 @@ const highlight = useHighlightStore()
 const rotate = useRotateAction()
 const edit = useEditTools()
 const clipboard = useClipboardActions()
+// 最近のブロックを覚え始める（#197）
+const quickBar = useQuickBarStore()
 // 貼り付けの見本は、ツールを切り替えたらやめる（#133）
 usePasteModeSync(clipboard)
 useProbeTool()
@@ -59,6 +64,23 @@ watch(
   { immediate: true },
 )
 
+// R / Shift+R と同じ。貼り付けの見本を出していれば、見本を回す
+function rotateBrush(vertical: boolean, overwrite: boolean): void {
+  if (!clipboard.rotatePreview(vertical ? 3 : 1)) rotate(vertical, overwrite)
+}
+
+// クイックバーの操作は、キー操作と同じ処理で行う（#197）
+const quickActions: Record<QuickActionId, () => void> = {
+  undo: () => session.undo(),
+  redo: () => session.redo(),
+  rotate: () => rotateBrush(false, false),
+  rotateVertical: () => rotateBrush(true, false),
+}
+provide(QUICK_ACTION_RUNNER, {
+  run: (id) => quickActions[id](),
+  enabled: (id) => (id === 'undo' ? session.canUndo.value : id === 'redo' ? session.canRedo.value : true),
+})
+
 useKeyboardShortcuts({
   tool: (a) => tools.setTool(a.id),
   // 貼り付けの途中なら、貼り付けをやめる。そうでなければ選択とすべての強調を消す（#163）
@@ -69,8 +91,7 @@ useKeyboardShortcuts({
   },
   undo: () => session.undo(),
   redo: () => session.redo(),
-  // 貼り付けの見本を出していれば、見本を回す
-  rotateBrush: (a) => clipboard.rotatePreview(a.vertical ? 3 : 1) || rotate(a.vertical, a.overwrite),
+  rotateBrush: (a) => rotateBrush(a.vertical, a.overwrite),
   deleteSelection: () => edit.deleteSelected(),
   fillSelection: () => edit.fillSelection(),
   selectAll: () => edit.selectAll(),
@@ -80,6 +101,7 @@ useKeyboardShortcuts({
   cutSelection: () => clipboard.cut(),
   paste: () => clipboard.paste(),
   duplicateSelection: () => clipboard.duplicate(),
+  quickSlot: (a) => void quickBar.choose(a.index),
 })
 </script>
 
