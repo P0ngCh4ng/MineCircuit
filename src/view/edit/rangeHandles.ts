@@ -57,7 +57,7 @@ export function hitHandle3D(ray: PickRay, box: Box): FaceHandle | null {
 }
 
 /** レイと、真ん中 c・半分の幅 half の立方体が交わる所までの長さ。交わらなければ null */
-function rayCubeHit(ray: PickRay, c: Vec3, half: number): number | null {
+export function rayCubeHit(ray: PickRay, c: Vec3, half: number): number | null {
   let near = -Infinity
   let far = Infinity
   for (let a = 0; a < 3; a++) {

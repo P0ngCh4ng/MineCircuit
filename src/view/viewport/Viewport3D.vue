@@ -11,6 +11,9 @@ import { axisParam, planeHit } from '../edit/dragMove'
 import { useDragMove } from '../edit/useDragMove'
 import { faceCenter, hitHandle3D, type FaceHandle } from '../edit/rangeHandles'
 import { useRangeResize } from '../edit/useRangeResize'
+import { frameBox, hitFrameHandle3D } from '../edit/frameHandles'
+import { frameHandlesAllowed, useFrameResize } from '../edit/useFrameResize'
+import { useBlueprintResizeStore } from '../stores/blueprintResizeStore'
 import { useDragMoveStore } from '../stores/dragMoveStore'
 import { useAppearanceStore } from '../stores/appearanceStore'
 import { useBrushStore } from '../stores/brushStore'
@@ -31,6 +34,7 @@ import { RotationOverlay3D } from './rotationOverlay3D'
 import { PortOverlay3D } from './portOverlay3D'
 import { PasteOverlay3D } from './pasteOverlay3D'
 import { SelectionOverlay3D } from './selectionOverlay3D'
+import { FrameOverlay3D } from './frameOverlay3D'
 import { createViewportRenderer, type SceneRenderer, type SceneRendererFactory } from './viewportRenderer'
 import { currentThemeName, viewportTheme, watchThemeName } from './viewportTheme'
 
@@ -60,6 +64,8 @@ const paste = usePasteStore()
 const appearance = useAppearanceStore()
 const dragMove = useDragMove()
 const rangeResize = useRangeResize()
+const frameResize = useFrameResize()
+const resizeStore = useBlueprintResizeStore()
 const dragMoveStore = useDragMoveStore()
 
 const host = ref<HTMLDivElement | null>(null)
@@ -87,6 +93,9 @@ scene.scene.add(portOverlay.group)
 // 選択範囲の箱の線（#130）
 const selectionOverlay = new SelectionOverlay3D()
 scene.scene.add(selectionOverlay.group)
+// 設計図の枠の取っ手と、変えたあとの枠（#201）
+const frameOverlay = new FrameOverlay3D()
+scene.scene.add(frameOverlay.group)
 // 貼り付けの見本（#133）
 const pasteOverlay = new PasteOverlay3D()
 scene.scene.add(pasteOverlay.group)
@@ -216,6 +225,55 @@ function updateResize(e: PointerEvent, drag: ResizeDrag): void {
   rangeResize.update(() => drag.center[drag.face.axis] + s)
 }
 
+/**
+ * 設計図の枠の取っ手を引くドラッグ（#201）。範囲の取っ手と同じく、面の向きの直線に沿って動かす。
+ * 離したら大きさを変える（消えるものがあれば画面を開く）
+ */
+interface FrameDrag {
+  readonly pointerId: number
+  readonly face: FaceHandle
+  readonly center: Vec3
+}
+let frameDrag: FrameDrag | null = null
+
+/** 枠の取っ手を出すか（#201）。選択ツールで、リージョンが1つの設計図を開き、貼り付けの見本がないとき */
+function frameHandlesShown(): boolean {
+  const bp = session.current.value?.blueprint
+  return tools.activeToolId === 'select' && !!bp && frameHandlesAllowed(bp.regions.length) && !paste.active
+}
+
+function grabFrameHandle(e: PointerEvent): boolean {
+  const bp = session.current.value?.blueprint
+  if (!renderer || !bp || !frameHandlesShown()) return false
+  const face = hitFrameHandle3D(renderer.rayAt(e.clientX, e.clientY), bp.size)
+  if (!face || !frameResize.begin(face)) return false
+  frameDrag = { pointerId: e.pointerId, face, center: faceCenter(frameBox(bp.size), face) }
+  renderer.setOrbitEnabled?.(false)
+  try {
+    canvas.value?.setPointerCapture?.(e.pointerId)
+  } catch {
+    // 捕まえられなくても、ドラッグはできる
+  }
+  return true
+}
+
+function updateFrameDrag(e: PointerEvent, drag: FrameDrag): void {
+  if (!renderer) return
+  const s = axisParam(renderer.rayAt(e.clientX, e.clientY), drag.center, drag.face.axis)
+  if (s === null) return
+  frameResize.update(drag.center[drag.face.axis] + s)
+}
+
+function releaseFrameDrag(e: PointerEvent): void {
+  frameDrag = null
+  renderer?.setOrbitEnabled?.(true)
+  try {
+    if (canvas.value?.hasPointerCapture?.(e.pointerId)) canvas.value.releasePointerCapture(e.pointerId)
+  } catch {
+    // 放せなくても困らない
+  }
+}
+
 function finishResizeDrag(e: PointerEvent): void {
   resizeDrag = null
   rangeResize.end()
@@ -234,6 +292,10 @@ function modsOf(e: PointerEvent | MouseEvent): PickModifiers {
 function onPointerMove(e: PointerEvent): void {
   if (resizeDrag && resizeDrag.pointerId === e.pointerId) {
     updateResize(e, resizeDrag)
+    return
+  }
+  if (frameDrag && frameDrag.pointerId === e.pointerId) {
+    updateFrameDrag(e, frameDrag)
     return
   }
   if (moveDrag && moveDrag.pointerId === e.pointerId) {
@@ -259,12 +321,16 @@ function onPointerMove(e: PointerEvent): void {
   // ボタンを押している間はカメラの操作なので、マウスの下は調べない
   if (e.buttons !== 0) return
   tools.hover(pickAt(e))
-  const onHandle = renderer !== null && handlesShown() && hitHandle3D(renderer.rayAt(e.clientX, e.clientY), tools.selectionBox!) !== null
+  const ray = renderer?.rayAt(e.clientX, e.clientY) ?? null
+  const size = session.current.value?.blueprint.size ?? null
+  const onHandle =
+    ray !== null &&
+    ((handlesShown() && hitHandle3D(ray, tools.selectionBox!) !== null) || (frameHandlesShown() && size !== null && hitFrameHandle3D(ray, size) !== null))
   if (canvas.value) canvas.value.style.cursor = onHandle ? 'pointer' : ''
 }
 
 function onPointerLeave(): void {
-  if (placeDrag || moveDrag || resizeDrag) return
+  if (placeDrag || moveDrag || resizeDrag || frameDrag) return
   tools.hover(null)
 }
 
@@ -313,8 +379,9 @@ function onPointerDown(e: PointerEvent): void {
   placeDrag = null
   moveDrag = null
   resizeDrag = null
-  // 取っ手は範囲をつかむより先に当たる（#200）
-  if (e.button === 0 && (grabHandle(e) || grabSelection(e))) return
+  frameDrag = null
+  // 取っ手は範囲をつかむより先に当たる（#200）。範囲の取っ手、枠の取っ手（#201）の順
+  if (e.button === 0 && (grabHandle(e) || grabFrameHandle(e) || grabSelection(e))) return
   if (e.button !== 0 || tools.activeToolId !== 'place' || paste.active) return
   const target = pickAt(e)
   if (!target) return
@@ -329,6 +396,12 @@ function onPointerDown(e: PointerEvent): void {
 }
 
 function onPointerCancel(e: PointerEvent): void {
+  if (frameDrag) {
+    frameResize.cancel()
+    releaseFrameDrag(e)
+    downAt = null
+    return
+  }
   if (resizeDrag) {
     finishResizeDrag(e)
     downAt = null
@@ -347,6 +420,15 @@ function onPointerCancel(e: PointerEvent): void {
 }
 
 function onPointerUp(e: PointerEvent): void {
+  const framing = frameDrag
+  if (framing && framing.pointerId === e.pointerId) {
+    updateFrameDrag(e, framing)
+    releaseFrameDrag(e)
+    downAt = null
+    frameResize.finish()
+    tools.hover(pickAt(e))
+    return
+  }
   const resizing = resizeDrag
   if (resizing && resizing.pointerId === e.pointerId) {
     updateResize(e, resizing)
@@ -388,9 +470,11 @@ function onPointerUp(e: PointerEvent): void {
 onMounted(() => {
   scene.setTheme(viewportTheme(currentThemeName()))
   selectionOverlay.setTheme(viewportTheme(currentThemeName()))
+  frameOverlay.setTheme(viewportTheme(currentThemeName()))
   stopTheme = watchThemeName((name) => {
     scene.setTheme(viewportTheme(name))
     selectionOverlay.setTheme(viewportTheme(name))
+    frameOverlay.setTheme(viewportTheme(name))
     render()
   })
 
@@ -484,6 +568,23 @@ onMounted(() => {
         scene.setSelected(multi ? null : selected)
         scene.setHovered(hovered)
         selectionOverlay.update(box)
+        render()
+      },
+      { immediate: true },
+    ),
+    // 設計図の枠の取っ手（#201）
+    watch(
+      () => [tools.activeToolId, blueprintVersion.value, paste.active] as const,
+      () => {
+        frameOverlay.setHandles(frameHandlesShown() ? (session.current.value?.blueprint.size ?? null) : null)
+        render()
+      },
+      { immediate: true },
+    ),
+    watch(
+      () => resizeStore.preview,
+      (preview) => {
+        frameOverlay.setPreview(preview)
         render()
       },
       { immediate: true },
@@ -585,13 +686,14 @@ onBeforeUnmount(() => {
   rotationOverlay.dispose()
   portOverlay.dispose()
   selectionOverlay.dispose()
+  frameOverlay.dispose()
   pasteOverlay.dispose()
   lineOverlay.dispose()
   moveOverlay.dispose()
   tools.hover(null)
 })
 
-defineExpose({ scene, calcOverlay, rotationOverlay, portOverlay, selectionOverlay, pasteOverlay })
+defineExpose({ scene, calcOverlay, rotationOverlay, portOverlay, selectionOverlay, pasteOverlay, frameOverlay })
 </script>
 
 <template>

@@ -1,22 +1,23 @@
 <script setup lang="ts">
 // 「大きさを変える…」ボタン。6方向に足すマス数を入れて、設計図を広げる・縮める。余白を詰める（#191）。
 // 画面の操作は docs/ui.md「設計図の大きさ」。操作は edit/blueprintResize.ts が作り、編集の履歴に通す
-import { computed, ref } from 'vue'
+// 入力は blueprintResizeStore に置く。枠の取っ手（#201）が、引いた値を入れて開くため
+import { storeToRefs } from 'pinia'
+import { computed } from 'vue'
 import { resizeRegion, trimRegions } from '../../edit/blueprintResize'
 import { MAX_BLUEPRINT_SIDE } from '../../edit/regionTransform'
 import type { Vec3 } from '../../domain/vec3'
 import ModalDialog from '../shell/ModalDialog.vue'
+import { useBlueprintResizeStore } from '../stores/blueprintResizeStore'
 import { useBrushStore } from '../stores/brushStore'
 import { useDocumentSession } from './documentSession'
 
 const session = useDocumentSession()
 const brush = useBrushStore()
 
-const open = ref(false)
-const regionIndex = ref(0)
+const resize = useBlueprintResizeStore()
 /** 負の向き（x−・y−・z−）と正の向き（x+・y+・z+）に足すマス数 */
-const minGrow = ref<[number, number, number]>([0, 0, 0])
-const maxGrow = ref<[number, number, number]>([0, 0, 0])
+const { dialogOpen: open, regionIndex, minGrow, maxGrow } = storeToRefs(resize)
 
 const AXES = ['x', 'y', 'z'] as const
 
@@ -61,10 +62,7 @@ const trimPlan = computed(() => {
 })
 
 function show(): void {
-  regionIndex.value = 0
-  minGrow.value = [0, 0, 0]
-  maxGrow.value = [0, 0, 0]
-  open.value = true
+  resize.openDialog()
 }
 
 function finish(warnings: readonly string[]): void {
