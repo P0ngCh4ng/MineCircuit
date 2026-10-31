@@ -9,6 +9,7 @@ import { boxFromCorners } from '../../domain/box'
 import { createDocumentSession, DOCUMENT_SESSION_KEY } from '../document/documentSession'
 import { useBrushStore } from '../stores/brushStore'
 import { useToolStore } from '../stores/toolStore'
+import { useViewStore } from '../stores/viewStore'
 import type { RegionActions } from './regionActions'
 import { useEditTools, type EditKeyActions } from './useEditTools'
 
@@ -120,5 +121,23 @@ describe('F（範囲を塗る）と Ctrl+A（全体を選ぶ）', () => {
     tools.setSelected(null)
     expect(tools.selectionBox).toBeNull()
     expect(tools.selectedPos).toBeNull()
+  })
+})
+
+describe('Shift+矢印で範囲を広げる・縮める（#205）', () => {
+  it('2D では右が x の正。1マスの選択から広げ、Ctrl で縮める。設計図の端で止まり、履歴には入れない', () => {
+    const { edit, tools, session, brush } = setup()
+    useViewStore().setMode('2d')
+    tools.setSelected([1, 0, 0])
+    expect(edit.growSelection('right', false)).toBe(true)
+    expect(tools.selectionBox).toEqual({ min: [1, 0, 0], max: [2, 0, 0] })
+    expect(brush.message).toBe('範囲 2 × 1 × 1')
+    // 設計図の端（x = 2）より外へは広げない
+    expect(edit.growSelection('right', false)).toBe(false)
+    expect(edit.growSelection('left', false)).toBe(true)
+    expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [2, 0, 0] })
+    expect(edit.growSelection('left', true)).toBe(true)
+    expect(tools.selectionBox).toEqual({ min: [1, 0, 0], max: [2, 0, 0] })
+    expect(session.canUndo.value).toBe(false)
   })
 })

@@ -1,7 +1,7 @@
 // 編集のツール（置く・消す・スポイト）を使えるようにする（#18）。docs/ui.md「編集」。
 // ツールはストアと DocumentSession を EditToolContext としてまとめて受け取る。
 
-import { isSingleCell } from '../../domain/box'
+import { boxContains, isSingleCell } from '../../domain/box'
 import { eraseBlock } from '../../edit/editCommand'
 import { useDocumentSession } from '../document/documentSession'
 import { layerVisibility } from '../layers/layerDisplay'
@@ -16,6 +16,7 @@ import { PlaceTool } from '../tools/placeTool'
 import { completeBlockState, orientForPlacement, placementHelper, placementProblem } from './placementRules'
 import type { MoveDirection } from '../tools/keymap'
 import { moveVector } from './moveDirection'
+import { growToward, rangeSizeLabel } from './rangeHandles'
 import { useRegionActions } from './regionActions'
 
 /** 画面のストアと DocumentSession から EditToolContext を作る。部品の setup の中で呼ぶ */
@@ -66,6 +67,8 @@ export interface EditKeyActions {
   selectAll(): void
   /** 矢印キー・Shift+PageUp / PageDown。範囲を1マス動かす。Ctrl なら上書き。動かしたら true */
   moveSelection(direction: MoveDirection, overwrite: boolean): boolean
+  /** Shift+矢印・Ctrl+Shift+矢印。範囲（1マスでもよい）を矢印の向きに1マス広げる・縮める。履歴には入れない（#205）。変えたら true */
+  growSelection(direction: MoveDirection, shrink: boolean): boolean
 }
 
 /**
@@ -78,6 +81,7 @@ export function useEditTools(): EditKeyActions {
   const session = useDocumentSession()
   const region = useRegionActions()
   const view = useViewStore()
+  const brush = useBrushStore()
 
   tools.register(new PlaceTool(ctx))
   tools.register(new EraseTool(ctx))
@@ -104,6 +108,18 @@ export function useEditTools(): EditKeyActions {
     moveSelection(direction, overwrite) {
       if (!session.current.value) return false
       return region.move(moveVector(direction, view.mode, view.getCameraHeading()), overwrite)
+    },
+    growSelection(direction, shrink) {
+      const bp = session.current.value?.blueprint
+      const box = tools.selectionBox
+      if (!bp || !box) return false
+      const next = growToward(box, moveVector(direction, view.mode, view.getCameraHeading()), shrink, bp.size)
+      brush.setMessage(rangeSizeLabel(next))
+      if (next.min.every((v, a) => v === box.min[a]) && next.max.every((v, a) => v === box.max[a])) return false
+      // 起点（Shift+クリックで広げる元）は、新しい範囲に入っていればそのまま
+      const anchor = tools.selectedPos && boxContains(next, tools.selectedPos) ? tools.selectedPos : next.min
+      tools.setSelectionBox(next, anchor)
+      return true
     },
   }
 }

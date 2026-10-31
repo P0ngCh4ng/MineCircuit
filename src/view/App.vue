@@ -96,6 +96,7 @@ useKeyboardShortcuts({
   fillSelection: () => edit.fillSelection(),
   selectAll: () => edit.selectAll(),
   moveSelection: (a) => edit.moveSelection(a.direction, a.overwrite),
+  growSelection: (a) => edit.growSelection(a.direction, a.shrink),
   toggleGrid: () => view.toggleGrid(),
   copySelection: () => clipboard.copy(),
   cutSelection: () => clipboard.cut(),

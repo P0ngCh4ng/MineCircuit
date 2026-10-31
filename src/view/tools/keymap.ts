@@ -22,6 +22,8 @@ export type KeyAction =
   | { readonly type: 'fillSelection' }
   /** 範囲を1マス動かす（矢印キー、Shift+PageUp / PageDown）。overwrite は Ctrl を押しているとき */
   | { readonly type: 'moveSelection'; readonly direction: MoveDirection; readonly overwrite: boolean }
+  /** 範囲を矢印の向きに1マス広げる（Shift+矢印）。shrink なら縮める（Ctrl+Shift+矢印。#205） */
+  | { readonly type: 'growSelection'; readonly direction: MoveDirection; readonly shrink: boolean }
   /** 範囲のコピー・切り取り・貼り付け・複製（Ctrl+C / X / V / D。#133） */
   | { readonly type: 'copySelection' }
   | { readonly type: 'cutSelection' }
@@ -67,6 +69,7 @@ export function resolveKeyAction(e: KeyInput): KeyAction | null {
   if (!e.altKey) {
     const arrow = ARROW_KEYS.get(key)
     if (arrow && !e.shiftKey) return { type: 'moveSelection', direction: arrow, overwrite: ctrl }
+    if (arrow) return { type: 'growSelection', direction: arrow, shrink: ctrl }
     if (e.shiftKey && (key === 'pageup' || key === 'pagedown')) {
       return { type: 'moveSelection', direction: key === 'pageup' ? 'raise' : 'lower', overwrite: ctrl }
     }

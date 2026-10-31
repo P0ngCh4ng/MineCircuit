@@ -7,12 +7,9 @@ import { boxContains, isSingleCell } from '../../domain/box'
 import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
 import { useDragMove } from '../edit/useDragMove'
-import { handleCursor2D, handles2D, hitHandle2D, type Handle2D } from '../edit/rangeHandles'
+import { useSelectConnected } from '../edit/selectConnected'
+import { edgeCursor2D, hitEdge2D, type FaceHandle } from '../edit/rangeHandles'
 import { useRangeResize } from '../edit/useRangeResize'
-import { FRAME_HANDLES_2D, frameHandlePoint2D, hitFrameHandle2D } from '../edit/frameHandles'
-import type { FaceHandle } from '../edit/rangeHandles'
-import { frameHandlesAllowed, useFrameResize } from '../edit/useFrameResize'
-import { useBlueprintResizeStore } from '../stores/blueprintResizeStore'
 import { useDragMoveStore } from '../stores/dragMoveStore'
 import { useAppearanceStore } from '../stores/appearanceStore'
 import { useBrushStore } from '../stores/brushStore'
@@ -38,9 +35,6 @@ import {
   drawGrowMargin2D,
   drawLayer2D,
   drawPastePreview2D,
-  drawFrameHandles2D,
-  drawFramePreview2D,
-  drawRangeHandles2D,
   drawSelectionBox2D,
   GROW_MARGIN_2D,
   LIGHT_THEME_2D,
@@ -63,9 +57,8 @@ const ports = usePortStore()
 const paste = usePasteStore()
 const brush = useBrushStore()
 const dragMove = useDragMove()
+const selectConnected = useSelectConnected()
 const rangeResize = useRangeResize()
-const frameResize = useFrameResize()
-const resizeStore = useBlueprintResizeStore()
 const dragMoveStore = useDragMoveStore()
 const appearance = useAppearanceStore()
 /** テクスチャで描く（#85）。色で描くとき、見た目がないときは null */
@@ -131,39 +124,24 @@ const selectionRect = computed<ScreenRect | null>(() => {
   return { left: ox + box.min[0] * cs, top: oy + box.min[2] * cs, right: ox + (box.max[0] + 1) * cs, bottom: oy + (box.max[2] + 1) * cs }
 })
 
-/** 範囲の取っ手を出すか（#200）。選択ツールで2つ以上のマスが入る範囲を選び、範囲の段にいるとき */
-function handlesShown(): boolean {
+/** 範囲の辺を引けるか（#205）。選択ツールで2つ以上のマスが入る範囲を選び、範囲の段にいるとき */
+function edgesActive(): boolean {
   const box = tools.selectionBox
   if (tools.activeToolId !== 'select' || !box || isSingleCell(box) || paste.active) return false
   return layer.value >= box.min[1] && layer.value <= box.max[1]
 }
 
-/** マウスの下の取っ手。なければ null */
-function handleAt(e: MouseEvent): Handle2D | null {
+/** マウスの下の範囲の辺（角なら2つ）。なければ null */
+function edgeAt(e: MouseEvent): readonly FaceHandle[] | null {
   const box = tools.selectionBox
   const grid = layout.value
   const p = canvasPoint(e)
-  if (!box || !grid || !p || !handlesShown()) return null
-  return hitHandle2D(p.x, p.y, grid, box)
+  if (!box || !grid || !p || !edgesActive()) return null
+  return hitEdge2D(p.x, p.y, grid, box)
 }
 
-/** 枠の取っ手を出すか（#201）。選択ツールで、リージョンが1つの設計図を開き、貼り付けの見本がないとき */
-function frameHandlesShown(): boolean {
-  const bp = blueprint.value
-  return tools.activeToolId === 'select' && !!bp && frameHandlesAllowed(bp.regions.length) && !paste.active
-}
-
-/** マウスの下の枠の取っ手。なければ null */
-function frameHandleAt(e: MouseEvent): FaceHandle | null {
-  const bp = blueprint.value
-  const grid = layout.value
-  const p = canvasPoint(e)
-  if (!bp || !grid || !p || !frameHandlesShown()) return null
-  return hitFrameHandle2D(p.x, p.y, grid, bp.size)
-}
-
-/** 取っ手に重ねたときのカーソル */
-const handleCursor = ref<string | null>(null)
+/** 辺に重ねたときのカーソル */
+const edgeCursor = ref<string | null>(null)
 
 const layerLabel = computed(() => {
   const s = size.value
@@ -204,12 +182,6 @@ function draw(): void {
   if (tools.activeToolId === 'place') drawGrowMargin2D(ctx, grid, bp.size, GROW_MARGIN_2D, theme)
   // 選択範囲の長方形。範囲の外の段では点線（#130）
   drawSelectionBox2D(ctx, grid, layer.value, box, theme)
-  // 範囲の取っ手（#200）
-  if (box && handlesShown()) drawRangeHandles2D(ctx, grid, handles2D(box), theme)
-  // 設計図の枠の取っ手と、引いている間の変えたあとの枠（#201）
-  if (frameHandlesShown()) drawFrameHandles2D(ctx, FRAME_HANDLES_2D.map((h) => frameHandlePoint2D(bp.size, grid, h)), theme)
-  const framePreview = resizeStore.preview
-  if (framePreview) drawFramePreview2D(ctx, grid, framePreview.box, framePreview.removes, theme)
   // 計測と同じブロック（#16）
   drawAnalysisOverlay2D(
     ctx,
@@ -299,7 +271,7 @@ watch(
 
 // 設計図・段・表示の設定・マウスの下・選択が変わったら描き直す
 watch(
-  () => [layout.value, session.version.value, layer.value, viewMode.showLabels, props.showGrid, tools.hoverTarget, tools.selectedPos, tools.selectionBox, tools.activeToolId, paste.active, resizeStore.preview, dark.value, highlight.value],
+  () => [layout.value, session.version.value, layer.value, viewMode.showLabels, props.showGrid, tools.hoverTarget, tools.selectedPos, tools.selectionBox, tools.activeToolId, paste.active, dark.value, highlight.value],
   () => draw(),
   { flush: 'post' },
 )
@@ -371,20 +343,13 @@ interface DragMoveRange {
   offset: Vec3
   moved: boolean
 }
-/** 範囲の取っ手を引くドラッグ（#200）。押したらすぐ始め、離したときのクリックは出さない */
+/** 範囲の辺を引くドラッグ（#205）。押したらすぐ始め、離したときのクリックは出さない */
 interface DragResize {
   readonly kind: 'resize'
   readonly pointerId: number
   moved: boolean
 }
-/** 設計図の枠の取っ手を引くドラッグ（#201）。離したら大きさを変える */
-interface DragFrame {
-  readonly kind: 'frame'
-  readonly pointerId: number
-  readonly face: FaceHandle
-  moved: boolean
-}
-let drag: DragSelect | DragPlace | DragMoveRange | DragResize | DragFrame | null = null
+let drag: DragSelect | DragPlace | DragMoveRange | DragResize | null = null
 
 /** canvas の中の位置のマス。マス目の外でもそのまま（範囲を枠の外へ動かせるように） */
 function cellAt(p: { x: number; y: number }, grid: GridLayout2D): Cell2D {
@@ -399,12 +364,6 @@ function updateDrag(e: PointerEvent): void {
   const grid = layout.value
   const p = canvasPoint(e)
   if (!drag || !bp || !grid || !p) return
-  if (drag.kind === 'frame') {
-    const v = drag.face.axis === 0 ? (p.x - grid.originX) / grid.cellSize : (p.y - grid.originY) / grid.cellSize
-    frameResize.update(v)
-    drag.moved = true
-    return
-  }
   if (drag.kind === 'resize') {
     // マウスの位置にいちばん近いマスの境目へ、つかんだ辺を動かす
     rangeResize.update((axis) => (axis === 0 ? (p.x - grid.originX) / grid.cellSize : (p.y - grid.originY) / grid.cellSize))
@@ -533,21 +492,10 @@ function onPointerDown(e: PointerEvent): void {
   const grid = layout.value
   const p = canvasPoint(e)
   if (!bp || !grid || !p) return
-  // 範囲の取っ手（#200）。マス目の外にはみ出していても当たる
-  const handle = kind === 'select' ? handleAt(e) : null
-  if (handle && rangeResize.begin(handle.faces)) {
+  // 範囲の辺（#205）。範囲をつかむより先に当たる。マス目の外側から近づいても当たる
+  const edge = kind === 'select' ? edgeAt(e) : null
+  if (edge && rangeResize.begin(edge)) {
     drag = { kind: 'resize', pointerId: e.pointerId, moved: false }
-    try {
-      canvas.value?.setPointerCapture?.(e.pointerId)
-    } catch {
-      // 捕まえられなくても、ドラッグはできる
-    }
-    return
-  }
-  // 設計図の枠の取っ手（#201）。マス目の外にある
-  const frameFace = kind === 'select' ? frameHandleAt(e) : null
-  if (frameFace && frameResize.begin(frameFace)) {
-    drag = { kind: 'frame', pointerId: e.pointerId, face: frameFace, moved: false }
     try {
       canvas.value?.setPointerCapture?.(e.pointerId)
     } catch {
@@ -584,7 +532,6 @@ function endDrag(e: PointerEvent): void {
   // 範囲をつかんだまま取られたときは、動かさない（#199）
   if (drag?.kind === 'move') dragMove.cancel()
   if (drag?.kind === 'resize') rangeResize.end()
-  if (drag?.kind === 'frame') frameResize.cancel()
   try {
     if (canvas.value?.hasPointerCapture?.(e.pointerId)) canvas.value.releasePointerCapture(e.pointerId)
   } catch {
@@ -600,10 +547,8 @@ function onPointerUp(e: PointerEvent): void {
   }
   if (!drag || drag.pointerId !== e.pointerId) return
   updateDrag(e)
-  // 範囲を選んだとき・線を引いたとき・取っ手を押したときは、続いて来るクリックで選び直さない・置かない
-  if (drag.moved || drag.kind === 'resize' || drag.kind === 'frame') suppressClick = true
-  // 枠の大きさを変える（#201）
-  if (drag.kind === 'frame') frameResize.finish()
+  // 範囲を選んだとき・線を引いたとき・辺を引いたときは、続いて来るクリックで選び直さない・置かない
+  if (drag.moved || drag.kind === 'resize') suppressClick = true
   // 一直線に置く（#161）。離したマスまでで置く
   if (drag.kind === 'place' && tools.isDragging()) tools.endDrag(null, modsOf(e))
   // 範囲を動かす・写す（#199）
@@ -636,9 +581,8 @@ function onPointerMove(e: PointerEvent): void {
   onHover(e)
   if (drag && drag.pointerId === e.pointerId) updateDrag(e)
   else if (e.buttons === 0) {
-    const h = handleAt(e)
-    const f = h ? null : frameHandleAt(e)
-    handleCursor.value = h ? handleCursor2D(h) : f ? (f.axis === 0 ? 'ew-resize' : 'ns-resize') : null
+    const h = edgeAt(e)
+    edgeCursor.value = h ? edgeCursor2D(h) : null
   }
 }
 
@@ -649,6 +593,13 @@ function onPointerEnter(): void {
 function onPointerLeave(): void {
   pointerInside = false
   tools.hover(null)
+}
+
+/** 選択ツールでブロックをダブルクリックすると、つながったブロックをまとめて選ぶ（#205） */
+function onDoubleClick(e: MouseEvent): void {
+  if (e.button !== 0 || tools.activeToolId !== 'select' || paste.active) return
+  const target = pickAt(e)
+  if (target && !target.empty) selectConnected(target.pos)
 }
 
 function onClick(e: MouseEvent): void {
@@ -709,7 +660,7 @@ onBeforeUnmount(() => {
       ref="canvas"
       aria-label="今の段のマス目"
       :class="{ grab: spaceHeld, grabbing: panning }"
-      :style="handleCursor && !spaceHeld && !panning ? { cursor: handleCursor } : undefined"
+      :style="edgeCursor && !spaceHeld && !panning ? { cursor: edgeCursor } : undefined"
       @pointerenter="onPointerEnter"
       @pointermove="onPointerMove"
       @pointerleave="onPointerLeave"
@@ -717,6 +668,7 @@ onBeforeUnmount(() => {
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
       @click="onClick"
+      @dblclick="onDoubleClick"
       @mousedown="onMouseDown"
       @wheel.prevent="onWheel"
     ></canvas>

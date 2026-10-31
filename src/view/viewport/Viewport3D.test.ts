@@ -13,7 +13,6 @@ import { useViewStore } from '../stores/viewStore'
 import type { PickRay } from '../tools/picker'
 import type { PickTarget } from '../tools/tool'
 import type { BlueprintScene } from './blueprintScene'
-import type { FrameOverlay3D } from './frameOverlay3D'
 import type { CameraView } from './cameraViews'
 import type { SelectionOverlay3D } from './selectionOverlay3D'
 import type { SceneRenderer } from './viewportRenderer'
@@ -115,63 +114,15 @@ describe('Viewport3D', () => {
     expect(view.cameraView).toBeNull()
   })
 
-  it('選択ツールで範囲の取っ手を引くと、面の向きに範囲を広げる。カメラは回さず、履歴にも入れない（#200）', async () => {
-    class OrbitRenderer extends FakeRenderer {
-      orbit: boolean[] = []
-      setOrbitEnabled(on: boolean): void {
-        this.orbit.push(on)
-      }
-    }
-    const fake = new OrbitRenderer()
-    const { wrapper, tools, session } = setup(() => fake)
-    const overlay = (wrapper.vm as unknown as { selectionOverlay: SelectionOverlay3D }).selectionOverlay
-    tools.setSelectionBox({ min: [0, 0, 0], max: [1, 0, 0] })
-    await nextTick()
-    // 選択ツール（既定）なら6つの取っ手を出す
-    expect(overlay.shownHandles).toBe(6)
+  it('選択ツールでブロックをダブルクリックすると、つながったブロックをまとめて選ぶ（#205）', () => {
+    const { wrapper, tools } = setup()
     const canvas = wrapper.get('canvas').element
-    // x の大きい側の取っ手は (2.4, 0.5, 0.5)。偽のレイは画面の (x, y) の真上から下へ
-    canvas.dispatchEvent(pointer('pointerdown', 1.9, 0, { buttons: 1 }))
-    expect(fake.orbit).toEqual([false])
-    canvas.dispatchEvent(pointer('pointermove', 2.7, 0, { buttons: 1 }))
-    expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [2, 0, 0] })
-    canvas.dispatchEvent(pointer('pointerup', 2.7, 0))
-    expect(fake.orbit).toEqual([false, true])
-    expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [2, 0, 0] })
-    expect(session.canUndo.value).toBe(false)
-    // ほかのツールでは出さない
-    tools.register({ id: 'place', onHover: () => {}, onClick: () => {} })
-    tools.setTool('place')
-    await nextTick()
-    expect(overlay.shownHandles).toBe(0)
-  })
-
-  it('選択ツールで設計図の枠の取っ手を引くと、変えたあとの枠を出し、離すと大きさを変える（#201）', async () => {
-    class OrbitRenderer extends FakeRenderer {
-      orbit: boolean[] = []
-      setOrbitEnabled(on: boolean): void {
-        this.orbit.push(on)
-      }
-    }
-    const fake = new OrbitRenderer()
-    const { wrapper, session } = setup(() => fake)
-    await nextTick()
-    const overlay = (wrapper.vm as unknown as { frameOverlay: FrameOverlay3D }).frameOverlay
-    expect(overlay.shownHandles).toBe(6)
-    const canvas = wrapper.get('canvas').element
-    // 3×2×3 の x の大きい側の取っ手は (4.2, 1, 1.5)。偽のレイは画面の (x, y) の真上から下へ
-    canvas.dispatchEvent(pointer('pointerdown', 3.7, 1, { buttons: 1 }))
-    expect(fake.orbit).toEqual([false])
-    canvas.dispatchEvent(pointer('pointermove', 5.6, 1, { buttons: 1 }))
-    await nextTick()
-    expect(overlay.shownPreviewBox).toEqual({ min: [0, 0, 0], max: [5, 1, 2] })
-    canvas.dispatchEvent(pointer('pointerup', 5.6, 1))
-    await nextTick()
-    expect(fake.orbit).toEqual([false, true])
-    expect(overlay.shownPreviewBox).toBeNull()
-    expect(session.current.value!.blueprint.size).toEqual([6, 2, 3])
-    session.undo()
-    expect(session.current.value!.blueprint.size).toEqual([3, 2, 3])
+    // 上の段の軸 (1,1,0) から、下の石の列 (0..2,0,0) までつながる
+    canvas.dispatchEvent(new MouseEvent('dblclick', { clientX: 1, clientY: 0, button: 0, bubbles: true }))
+    expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [2, 1, 0] })
+    // 空きマスでは何もしない
+    canvas.dispatchEvent(new MouseEvent('dblclick', { clientX: 2, clientY: 2, button: 0, bubbles: true }))
+    expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [2, 1, 0] })
   })
 
   it('置くツールでブロックか床からドラッグすると、カメラを回さずに一直線のドラッグを渡す（#161）', () => {

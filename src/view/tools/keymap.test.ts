@@ -45,7 +45,8 @@ describe('resolveKeyAction', () => {
       direction: 'lower',
       overwrite: true,
     })
-    expect(resolveKeyAction(k('ArrowUp', { shiftKey: true }))).toBeNull()
+    expect(resolveKeyAction(k('ArrowUp', { shiftKey: true }))).toEqual({ type: 'growSelection', direction: 'up', shrink: false })
+    expect(resolveKeyAction(k('ArrowLeft', { shiftKey: true, ctrlKey: true }))).toEqual({ type: 'growSelection', direction: 'left', shrink: true })
     expect(resolveKeyAction(k('ArrowUp', { altKey: true }))).toBeNull()
   })
 

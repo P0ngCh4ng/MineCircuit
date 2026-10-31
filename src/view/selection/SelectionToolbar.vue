@@ -1,12 +1,13 @@
 <script setup lang="ts">
 // 範囲のツールバー（#160）。docs/ui.md「範囲のツールバー」。
 // 2つ以上のブロックが入る範囲を選んでいるとき、選んだ範囲の近くに浮かべる。2D表示と3D表示の両方がこの部品を置く。
-// 範囲の操作（消す・塗る・置き換え・回す・反転・コピー・切り取り・複製・貼り付け・全体を選ぶ）のボタンと、置き換えのフォームを持つ。
+// 範囲の操作（消す・塗る・置き換え・回す・反転・コピー・切り取り・複製・貼り付け・中身に合わせる・上下すべての段・全体を選ぶ）のボタンと、置き換えのフォームを持つ。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { isSingleCell } from '../../domain/box'
+import { isSingleCell, type Box } from '../../domain/box'
 import { useDocumentSession } from '../document/documentSession'
 import { useClipboardActions } from '../edit/clipboardActions'
 import { useRegionActions } from '../edit/regionActions'
+import { changedBox, fitToContent, fullHeight, rangeSizeLabel } from '../edit/rangeHandles'
 import { useBrushStore } from '../stores/brushStore'
 import { usePasteStore } from '../stores/pasteStore'
 import { useToolStore } from '../stores/toolStore'
@@ -45,6 +46,26 @@ const stats = computed(() => {
   const b = box.value
   return bp && b && shown.value ? selectionStats(bp, b) : null
 })
+
+/** 「中身に合わせる」「上下すべての段」で選び直す範囲（#205）。今と同じ・作れないなら null（押せない） */
+const fittedBox = computed(() => {
+  void session.version.value
+  const bp = session.current.value?.blueprint
+  const b = box.value
+  return bp && b && shown.value ? changedBox(fitToContent(bp, b), b) : null
+})
+const fullHeightBox = computed(() => {
+  const bp = session.current.value?.blueprint
+  const b = box.value
+  return bp && b && shown.value ? changedBox(fullHeight(b, bp.size), b) : null
+})
+
+/** 範囲を選び直す。履歴には入れない */
+function reselect(next: Box | null): void {
+  if (!next) return
+  tools.setSelectionBox(next)
+  brush.setMessage(rangeSizeLabel(next))
+}
 
 const fromState = computed(() => {
   const states = stats.value?.states ?? []
@@ -148,6 +169,24 @@ function replace(): void {
         貼り付け
       </button>
       <span class="sep" aria-hidden="true"></span>
+      <button
+        type="button"
+        data-action="fit-content"
+        :title="fittedBox ? '範囲を、中のブロックが入る一番小さい箱に縮める' : '範囲はもう中のブロックに合っています'"
+        :disabled="!fittedBox"
+        @click="reselect(fittedBox)"
+      >
+        中身に合わせる
+      </button>
+      <button
+        type="button"
+        data-action="full-height"
+        :title="fullHeightBox ? '範囲の高さを、一番下の段から一番上の段までにする' : '範囲はもう一番下から一番上の段まであります'"
+        :disabled="!fullHeightBox"
+        @click="reselect(fullHeightBox)"
+      >
+        上下すべての段
+      </button>
       <button type="button" data-action="select-all" title="設計図全体を選ぶ（Ctrl+A）" @click="actions.selectAll()">全体を選ぶ</button>
     </div>
 
