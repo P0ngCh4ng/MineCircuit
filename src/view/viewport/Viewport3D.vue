@@ -9,6 +9,8 @@ import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
 import { axisParam, planeHit } from '../edit/dragMove'
 import { useDragMove } from '../edit/useDragMove'
+import { faceCenter, hitHandle3D, type FaceHandle } from '../edit/rangeHandles'
+import { useRangeResize } from '../edit/useRangeResize'
 import { useDragMoveStore } from '../stores/dragMoveStore'
 import { useAppearanceStore } from '../stores/appearanceStore'
 import { useBrushStore } from '../stores/brushStore'
@@ -57,6 +59,7 @@ const ports = usePortStore()
 const paste = usePasteStore()
 const appearance = useAppearanceStore()
 const dragMove = useDragMove()
+const rangeResize = useRangeResize()
 const dragMoveStore = useDragMoveStore()
 
 const host = ref<HTMLDivElement | null>(null)
@@ -171,11 +174,68 @@ function moveOffset(e: PointerEvent, drag: MoveDrag): Vec3 {
   return hit === null ? drag.offset : [Math.round(hit[0] - drag.grab[0]), 0, Math.round(hit[1] - drag.grab[2])]
 }
 
+/**
+ * 範囲の取っ手を引くドラッグ（#200）。つかんだ面の真ん中を通り、面の向きに沿った直線の上で動かす。
+ * 押したらすぐ始め、離してもクリックにしない
+ */
+interface ResizeDrag {
+  readonly pointerId: number
+  readonly face: FaceHandle
+  /** つかんだときの面の真ん中 */
+  readonly center: Vec3
+}
+let resizeDrag: ResizeDrag | null = null
+
+/** 範囲の取っ手を出すか（#200）。選択ツールで2つ以上のマスが入る範囲を選び、貼り付けの見本がないとき */
+function handlesShown(): boolean {
+  const box = tools.selectionBox
+  return tools.activeToolId === 'select' && box !== null && !isSingleCell(box) && !paste.active
+}
+
+/** 取っ手を押したらつかむ。つかんだら true */
+function grabHandle(e: PointerEvent): boolean {
+  const box = tools.selectionBox
+  if (!renderer || !box || !handlesShown()) return false
+  const face = hitHandle3D(renderer.rayAt(e.clientX, e.clientY), box)
+  if (!face || !rangeResize.begin([face])) return false
+  resizeDrag = { pointerId: e.pointerId, face, center: faceCenter(box, face) }
+  renderer.setOrbitEnabled?.(false)
+  try {
+    canvas.value?.setPointerCapture?.(e.pointerId)
+  } catch {
+    // 捕まえられなくても、ドラッグはできる
+  }
+  return true
+}
+
+function updateResize(e: PointerEvent, drag: ResizeDrag): void {
+  if (!renderer) return
+  const s = axisParam(renderer.rayAt(e.clientX, e.clientY), drag.center, drag.face.axis)
+  // 面の向きと視線が平行なときは動かさない
+  if (s === null) return
+  rangeResize.update(() => drag.center[drag.face.axis] + s)
+}
+
+function finishResizeDrag(e: PointerEvent): void {
+  resizeDrag = null
+  rangeResize.end()
+  renderer?.setOrbitEnabled?.(true)
+  try {
+    if (canvas.value?.hasPointerCapture?.(e.pointerId)) canvas.value.releasePointerCapture(e.pointerId)
+  } catch {
+    // 放せなくても困らない
+  }
+}
+
 function modsOf(e: PointerEvent | MouseEvent): PickModifiers {
   return { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey }
 }
 
 function onPointerMove(e: PointerEvent): void {
+  if (resizeDrag && resizeDrag.pointerId === e.pointerId) {
+    updateResize(e, resizeDrag)
+    return
+  }
   if (moveDrag && moveDrag.pointerId === e.pointerId) {
     const start = downAt
     if (!moveDrag.begun && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > CLICK_TOLERANCE) {
@@ -199,10 +259,12 @@ function onPointerMove(e: PointerEvent): void {
   // ボタンを押している間はカメラの操作なので、マウスの下は調べない
   if (e.buttons !== 0) return
   tools.hover(pickAt(e))
+  const onHandle = renderer !== null && handlesShown() && hitHandle3D(renderer.rayAt(e.clientX, e.clientY), tools.selectionBox!) !== null
+  if (canvas.value) canvas.value.style.cursor = onHandle ? 'pointer' : ''
 }
 
 function onPointerLeave(): void {
-  if (placeDrag || moveDrag) return
+  if (placeDrag || moveDrag || resizeDrag) return
   tools.hover(null)
 }
 
@@ -250,7 +312,9 @@ function onPointerDown(e: PointerEvent): void {
   downAt = e.button === 0 ? { x: e.clientX, y: e.clientY } : null
   placeDrag = null
   moveDrag = null
-  if (e.button === 0 && grabSelection(e)) return
+  resizeDrag = null
+  // 取っ手は範囲をつかむより先に当たる（#200）
+  if (e.button === 0 && (grabHandle(e) || grabSelection(e))) return
   if (e.button !== 0 || tools.activeToolId !== 'place' || paste.active) return
   const target = pickAt(e)
   if (!target) return
@@ -265,6 +329,11 @@ function onPointerDown(e: PointerEvent): void {
 }
 
 function onPointerCancel(e: PointerEvent): void {
+  if (resizeDrag) {
+    finishResizeDrag(e)
+    downAt = null
+    return
+  }
   if (moveDrag) {
     dragMove.cancel()
     finishMoveDrag(e)
@@ -278,6 +347,14 @@ function onPointerCancel(e: PointerEvent): void {
 }
 
 function onPointerUp(e: PointerEvent): void {
+  const resizing = resizeDrag
+  if (resizing && resizing.pointerId === e.pointerId) {
+    updateResize(e, resizing)
+    finishResizeDrag(e)
+    downAt = null
+    tools.hover(pickAt(e))
+    return
+  }
   const grabbed = moveDrag
   if (grabbed && grabbed.pointerId === e.pointerId) {
     finishMoveDrag(e)
@@ -407,6 +484,15 @@ onMounted(() => {
         scene.setSelected(multi ? null : selected)
         scene.setHovered(hovered)
         selectionOverlay.update(box)
+        render()
+      },
+      { immediate: true },
+    ),
+    // 範囲の取っ手（#200）
+    watch(
+      () => [tools.activeToolId, tools.selectionBox, paste.active] as const,
+      () => {
+        selectionOverlay.setHandlesVisible(handlesShown())
         render()
       },
       { immediate: true },

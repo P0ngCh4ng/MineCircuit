@@ -7,6 +7,8 @@ import { boxContains, isSingleCell } from '../../domain/box'
 import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
 import { useDragMove } from '../edit/useDragMove'
+import { handleCursor2D, handles2D, hitHandle2D, type Handle2D } from '../edit/rangeHandles'
+import { useRangeResize } from '../edit/useRangeResize'
 import { useDragMoveStore } from '../stores/dragMoveStore'
 import { useAppearanceStore } from '../stores/appearanceStore'
 import { useBrushStore } from '../stores/brushStore'
@@ -32,6 +34,7 @@ import {
   drawGrowMargin2D,
   drawLayer2D,
   drawPastePreview2D,
+  drawRangeHandles2D,
   drawSelectionBox2D,
   GROW_MARGIN_2D,
   LIGHT_THEME_2D,
@@ -54,6 +57,7 @@ const ports = usePortStore()
 const paste = usePasteStore()
 const brush = useBrushStore()
 const dragMove = useDragMove()
+const rangeResize = useRangeResize()
 const dragMoveStore = useDragMoveStore()
 const appearance = useAppearanceStore()
 /** テクスチャで描く（#85）。色で描くとき、見た目がないときは null */
@@ -119,6 +123,25 @@ const selectionRect = computed<ScreenRect | null>(() => {
   return { left: ox + box.min[0] * cs, top: oy + box.min[2] * cs, right: ox + (box.max[0] + 1) * cs, bottom: oy + (box.max[2] + 1) * cs }
 })
 
+/** 範囲の取っ手を出すか（#200）。選択ツールで2つ以上のマスが入る範囲を選び、範囲の段にいるとき */
+function handlesShown(): boolean {
+  const box = tools.selectionBox
+  if (tools.activeToolId !== 'select' || !box || isSingleCell(box) || paste.active) return false
+  return layer.value >= box.min[1] && layer.value <= box.max[1]
+}
+
+/** マウスの下の取っ手。なければ null */
+function handleAt(e: MouseEvent): Handle2D | null {
+  const box = tools.selectionBox
+  const grid = layout.value
+  const p = canvasPoint(e)
+  if (!box || !grid || !p || !handlesShown()) return null
+  return hitHandle2D(p.x, p.y, grid, box)
+}
+
+/** 取っ手に重ねたときのカーソル */
+const handleCursor = ref<string | null>(null)
+
 const layerLabel = computed(() => {
   const s = size.value
   return s ? `段 ${layer.value + 1} / ${s[1]}` : ''
@@ -158,6 +181,8 @@ function draw(): void {
   if (tools.activeToolId === 'place') drawGrowMargin2D(ctx, grid, bp.size, GROW_MARGIN_2D, theme)
   // 選択範囲の長方形。範囲の外の段では点線（#130）
   drawSelectionBox2D(ctx, grid, layer.value, box, theme)
+  // 範囲の取っ手（#200）
+  if (box && handlesShown()) drawRangeHandles2D(ctx, grid, handles2D(box), theme)
   // 計測と同じブロック（#16）
   drawAnalysisOverlay2D(
     ctx,
@@ -247,7 +272,7 @@ watch(
 
 // 設計図・段・表示の設定・マウスの下・選択が変わったら描き直す
 watch(
-  () => [layout.value, session.version.value, layer.value, viewMode.showLabels, props.showGrid, tools.hoverTarget, tools.selectedPos, tools.selectionBox, dark.value, highlight.value],
+  () => [layout.value, session.version.value, layer.value, viewMode.showLabels, props.showGrid, tools.hoverTarget, tools.selectedPos, tools.selectionBox, tools.activeToolId, paste.active, dark.value, highlight.value],
   () => draw(),
   { flush: 'post' },
 )
@@ -319,7 +344,13 @@ interface DragMoveRange {
   offset: Vec3
   moved: boolean
 }
-let drag: DragSelect | DragPlace | DragMoveRange | null = null
+/** 範囲の取っ手を引くドラッグ（#200）。押したらすぐ始め、離したときのクリックは出さない */
+interface DragResize {
+  readonly kind: 'resize'
+  readonly pointerId: number
+  moved: boolean
+}
+let drag: DragSelect | DragPlace | DragMoveRange | DragResize | null = null
 
 /** canvas の中の位置のマス。マス目の外でもそのまま（範囲を枠の外へ動かせるように） */
 function cellAt(p: { x: number; y: number }, grid: GridLayout2D): Cell2D {
@@ -334,6 +365,12 @@ function updateDrag(e: PointerEvent): void {
   const grid = layout.value
   const p = canvasPoint(e)
   if (!drag || !bp || !grid || !p) return
+  if (drag.kind === 'resize') {
+    // マウスの位置にいちばん近いマスの境目へ、つかんだ辺を動かす
+    rangeResize.update((axis) => (axis === 0 ? (p.x - grid.originX) / grid.cellSize : (p.y - grid.originY) / grid.cellSize))
+    drag.moved = true
+    return
+  }
   if (drag.kind === 'move') {
     const at = cellAt(p, grid)
     if (!drag.moved && !isDrag2D(drag.start, at)) return
@@ -456,6 +493,17 @@ function onPointerDown(e: PointerEvent): void {
   const grid = layout.value
   const p = canvasPoint(e)
   if (!bp || !grid || !p) return
+  // 範囲の取っ手（#200）。マス目の外にはみ出していても当たる
+  const handle = kind === 'select' ? handleAt(e) : null
+  if (handle && rangeResize.begin(handle.faces)) {
+    drag = { kind: 'resize', pointerId: e.pointerId, moved: false }
+    try {
+      canvas.value?.setPointerCapture?.(e.pointerId)
+    } catch {
+      // 捕まえられなくても、ドラッグはできる
+    }
+    return
+  }
   // 置くツールは枠のすぐ外からも引ける（#191）。どこを押したかは pickAt で決める
   if (kind === 'select' && !insideGrid2D(p.x, p.y, grid, bp.size)) return
   const start = clampedCell2D(p.x, p.y, grid, bp.size)
@@ -484,6 +532,7 @@ function endDrag(e: PointerEvent): void {
   if (drag?.kind === 'place' && tools.isDragging()) tools.cancelDrag()
   // 範囲をつかんだまま取られたときは、動かさない（#199）
   if (drag?.kind === 'move') dragMove.cancel()
+  if (drag?.kind === 'resize') rangeResize.end()
   try {
     if (canvas.value?.hasPointerCapture?.(e.pointerId)) canvas.value.releasePointerCapture(e.pointerId)
   } catch {
@@ -499,8 +548,8 @@ function onPointerUp(e: PointerEvent): void {
   }
   if (!drag || drag.pointerId !== e.pointerId) return
   updateDrag(e)
-  // 範囲を選んだとき・線を引いたときは、続いて来るクリックで選び直さない・置かない
-  if (drag.moved) suppressClick = true
+  // 範囲を選んだとき・線を引いたとき・取っ手を押したときは、続いて来るクリックで選び直さない・置かない
+  if (drag.moved || drag.kind === 'resize') suppressClick = true
   // 一直線に置く（#161）。離したマスまでで置く
   if (drag.kind === 'place' && tools.isDragging()) tools.endDrag(null, modsOf(e))
   // 範囲を動かす・写す（#199）
@@ -532,6 +581,10 @@ function onPointerMove(e: PointerEvent): void {
   }
   onHover(e)
   if (drag && drag.pointerId === e.pointerId) updateDrag(e)
+  else if (e.buttons === 0) {
+    const h = handleAt(e)
+    handleCursor.value = h ? handleCursor2D(h) : null
+  }
 }
 
 function onPointerEnter(): void {
@@ -601,6 +654,7 @@ onBeforeUnmount(() => {
       ref="canvas"
       aria-label="今の段のマス目"
       :class="{ grab: spaceHeld, grabbing: panning }"
+      :style="handleCursor && !spaceHeld && !panning ? { cursor: handleCursor } : undefined"
       @pointerenter="onPointerEnter"
       @pointermove="onPointerMove"
       @pointerleave="onPointerLeave"
