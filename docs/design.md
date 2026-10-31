@@ -488,10 +488,9 @@ interface EditCommand {
   readonly relocation?: { source: Box; target: Box; transform: BlockTransform; shift: Vec3 }  // source は前の座標、target は後の座標
 }
 function relocatePos(r: Relocation, pos: Vec3, forward: boolean): Vec3
-function relocatePlace(r: Relocation, place: { pos: Vec3; face: Direction }, forward: boolean): { pos: Vec3; face: Direction }
 ```
 
-- 範囲の中の位置は `transform` と `shift`、外の位置は `shift` だけ動く。仮の入出力は面の向きも変える（`relocatePlace`）。
+- 範囲の中の位置は `transform` と `shift`、外の位置は `shift` だけ動く。仮の入出力はブロックに付けるので、位置だけを動かす（#195）。
 
 **矢印キーの向き。** 2D は画面の上が −Z、右が +X。3D は、カメラの水平の向きに一番近い x・z の向きを上にし、右はその右回り 90°（`view/edit/moveDirection.ts`）。
 
@@ -554,7 +553,7 @@ interface Relocation {
 
 **エンティティ。** 範囲の中にあるエンティティ（生データの `pos`・`blockPos`）は、ブロックと同じく動かす・回す・写す。向き（`Rotation` など）も回す（上の「範囲を動かす・回す・反転する」）。2マス以上の大きさの絵は、回すと基準のマスが変わることがあるが、直さない（ゲームで確かめていない）。
 
-**仮の入出力。** 動かしたブロックに付けた仮の入出力は、位置と面を変換に合わせて変える（画面の `portStore` が、操作の `relocation` を見て直す）。履歴には入れない（仮の入出力は設計図の変更ではないため）。
+**仮の入出力。** 動かしたブロックに付けた仮の入出力は、位置を変換に合わせて変える（画面の `portStore` が、操作の `relocation` を見て直す）。履歴には入れない（仮の入出力は設計図の変更ではないため）。
 
 **消したブロックの仮の入出力（#167）。** 操作でブロックがなくなったマス（`vacatedPositions`：前はブロック、後は空き）に付いていた仮の入出力は消す。`DocumentSession` はすべての操作の apply・undo・redo のあと（`onRelocate` のあと）に `onCommand` で合図し、`view/edit/relocationSync.ts` が `edit/attachmentLedger.ts` の `AttachmentLedger` で、操作ごとに消したものを覚える。元に戻すと、消したものを（範囲を動かした操作なら位置を戻して）一覧に戻し、やり直すとまた消す。edit は calc の `VirtualPort` を知らないので、`AttachmentLedger` は付けたものの型を引数に取る。操作（`EditCommand`）そのものは書き換えない。
 
@@ -667,13 +666,14 @@ interface Resolved<T> {
 
 ## 仮の入出力（VirtualPort）
 
-設計図の端のブロックの面に、利用者が仮の動力源や負荷を付けられる。計算では本物のブロックと同じように扱う。
+設計図のブロックに、利用者が仮の動力源や負荷を付けられる。計算では本物のブロックと同じように扱う。
+
+面には付けない（#195）。面の違いが計算に効くのは、軸の口かどうかと回転の向きだけで、回転数・応力の大きさには関係しない。面を選ばせると、軸の口でない面に置いて断られ、置き直す手間が出るため、ブロックに付け、つなぎ方はプラグインが決める。
 
 ```ts
 interface VirtualPort {
   id: string
-  pos: Vec3                       // 接続するブロックの位置
-  face: Direction                 // どの面から入るか
+  pos: Vec3                       // 付けるブロックの位置
   pluginId: string                // 'create-stress' など
   kind: string                    // 'rotation-source' など。種類はプラグインが定義
   params: Record<string, number>  // { rpm: 256, capacity: 4096 }
@@ -691,7 +691,7 @@ interface VirtualPort {
 | Createの応力と処理 | 物の入口（アイテム、個/秒）。#127 |
 | 生産量計算（将来） | 流体の流入（mB/秒） |
 
-画面（#70）：ツールバーの「仮の入出力」でブロックの面をクリックして置く。種類と数値の入力欄は、プラグインの `portKinds` から作る。2D表示では面が分からないので、右パネルの「2Dで置く面」（`portStore.face2D`）で置く前に選ぶ。初期値の「自動」は、ブロックの `axis` の面のうち外か空きの面を選ぶ（#167）。置いたあとも右パネルの一覧で直せる。置いた仮の入出力は右パネルの一覧で値・面・メモを変えたり消したりでき、3D・2D表示に印（動力源は緑、負荷は橙）を出す。つなげない面に置いたときは、プラグインが計算の問題として知らせる。
+画面（#70、#195）：ツールバーの「仮の入出力」でブロックをクリックして置く。3D でも 2D でも同じ。同じブロックに同じ種類の仮の入出力があれば、新しく置かずにそれを選ぶ（違う種類なら足す）。種類と数値の入力欄は、プラグインの `portKinds` から作る。置いた仮の入出力は右パネルの一覧で値・メモを変えたり消したりでき、3D・2D表示でブロックに印（動力源は緑、負荷は橙、物の入口は青）を出す。つなげないブロック（回転の入出力を回転しないブロックに付けたなど）に置いたときは、プラグインが計算の問題として知らせる。
 
 仮の入出力は設計図の変更ではないので、編集の履歴（元に戻す）には入れない。
 

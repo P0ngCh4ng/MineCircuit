@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { blueprintFixture, type BlueprintFixture } from '../../../tests/fixtures/blueprintFixture'
-import type { Direction } from '../../domain/direction'
 import { nbt } from '../../domain/nbt'
 import type { Vec3 } from '../../domain/vec3'
 import type { ProcessingRecipe, RecipeBook, RecipeResult } from '../../io/modpack/recipes'
@@ -43,10 +42,9 @@ const BOOK: RecipeBook = {
 const chest = nbt.compound({ Items: nbt.list('compound') })
 
 let portCount = 0
-const port = (pos: Vec3, face: Direction, item: string | null, rate = 1): VirtualPort => ({
+const port = (pos: Vec3, item: string | null, rate = 1): VirtualPort => ({
   id: `p${++portCount}`,
   pos,
-  face,
   pluginId: 'create-stress',
   kind: 'item-input',
   params: { rate },
@@ -117,7 +115,7 @@ describe('物の通り道', () => {
       .place([3, 1, 0], 'create:depot')
     belt(fx, 1, 0, [1, 2], 'east')
     // 回転数 < 0、軸が X なので正の向き（east）に進む
-    const { result } = trace(fx, [port([1, 3, 0], 'up', 'minecraft:wheat', 1)], { '1,3,0': 256, '1,1,0': -32, '2,1,0': -32 })
+    const { result } = trace(fx, [port([1, 3, 0], 'minecraft:wheat', 1)], { '1,3,0': 256, '1,1,0': -32, '2,1,0': -32 })
     expect(rateOf(result, '1,3,0', 'minecraft:wheat')).toBe(1)
     const mill = at(result, '1,3,0')!
     expect(mill.recipes[0]!.outputs).toEqual([
@@ -149,10 +147,10 @@ describe('物の通り道', () => {
       belt(blueprintFixture().place([0, 0, 0], 'minecraft:chest', chest).place([4, 0, 0], 'minecraft:chest', chest), 0, 0, [1, 2, 3], 'east')
     const speeds = (rpm: number) => ({ '1,0,0': rpm, '2,0,0': rpm, '3,0,0': rpm })
     // 軸が X で回転数 > 0 なら負の向き（west）
-    const west = trace(fx(), [port([2, 0, 0], 'up', 'minecraft:stone')], speeds(32)).result
+    const west = trace(fx(), [port([2, 0, 0], 'minecraft:stone')], speeds(32)).result
     expect(sinkOf(west, '0,0,0', 'minecraft:stone')).toBe(1)
     expect(at(west, '4,0,0')).toBeUndefined()
-    const east = trace(fx(), [port([2, 0, 0], 'up', 'minecraft:stone')], speeds(-32)).result
+    const east = trace(fx(), [port([2, 0, 0], 'minecraft:stone')], speeds(-32)).result
     expect(sinkOf(east, '4,0,0', 'minecraft:stone')).toBe(1)
 
     // 軸が Z なら回転数 > 0 で正の向き（south）
@@ -160,7 +158,7 @@ describe('物の通り道', () => {
       .place([0, 0, 0], 'create:belt', { facing: 'south', slope: 'horizontal', part: 'start' })
       .place([0, 0, 1], 'create:belt', { facing: 'south', slope: 'horizontal', part: 'end' })
       .place([0, 0, 2], 'minecraft:barrel', chest)
-    expect(sinkOf(trace(south, [port([0, 0, 0], 'up', 'minecraft:stone')], { '0,0,0': 8, '0,0,1': 8 }).result, '0,0,2', 'minecraft:stone')).toBe(1)
+    expect(sinkOf(trace(south, [port([0, 0, 0], 'minecraft:stone')], { '0,0,0': 8, '0,0,1': 8 }).result, '0,0,2', 'minecraft:stone')).toBe(1)
   })
 
   it('ベルト：坂をたどり、端の先が空気なら下に落ちるとして仮定に載せる', () => {
@@ -172,18 +170,18 @@ describe('物の通り道', () => {
       .place([4, 0, 0], 'minecraft:chest', chest)
     const speeds = (rpm: number) => ({ '1,0,0': rpm, '2,0,0': rpm, '3,1,0': rpm })
     // 東へ：端（3,1,0）の先（4,1,0）は空気なので、下の（4,0,0）に落ちる
-    const up = trace(fx, [port([1, 0, 0], 'up', 'minecraft:stone')], speeds(-16))
+    const up = trace(fx, [port([1, 0, 0], 'minecraft:stone')], speeds(-16))
     expect(sinkOf(up.result, '4,0,0', 'minecraft:stone')).toBe(1)
     expect(at(up.result, '4,0,0')?.sinks[0]?.source).toBe('assumed')
     expect(messages(up.log)).toContain('出す先（(4, 1, 0)）が空気なので、物は下の (4, 0, 0) に落ちるとした')
     // 西へ：上の端から坂を下りて（0,0,0）へ
-    const down = trace(fx, [port([3, 1, 0], 'up', 'minecraft:stone')], speeds(16))
+    const down = trace(fx, [port([3, 1, 0], 'minecraft:stone')], speeds(16))
     expect(sinkOf(down.result, '0,0,0', 'minecraft:stone')).toBe(1)
   })
 
   it('ベルト：止まっていればそこで止まる', () => {
     const fx = belt(blueprintFixture().place([3, 0, 0], 'minecraft:chest', chest), 0, 0, [0, 1, 2], 'east')
-    const { result } = trace(fx, [port([0, 0, 0], 'up', 'minecraft:stone')], { '0,0,0': 0, '1,0,0': 0, '2,0,0': 0 })
+    const { result } = trace(fx, [port([0, 0, 0], 'minecraft:stone')], { '0,0,0': 0, '1,0,0': 0, '2,0,0': 0 })
     expect(rateOf(result, '0,0,0', 'minecraft:stone')).toBe(1)
     expect(at(result, '0,0,0')?.notes).toContain('止まっているので、物はここで止まる')
     expect(at(result, '3,0,0')).toBeUndefined()
@@ -196,7 +194,7 @@ describe('物の通り道', () => {
       .place([3, 1, 0], 'minecraft:stone')
       .place([3, 2, 0], 'create:mechanical_press', { facing: 'north' })
     const speeds = { '0,0,0': -32, '1,0,0': -32, '2,0,0': -32, '3,0,0': -32, '1,2,0': 64, '2,2,0': 64, '3,2,0': 64 }
-    const { result } = trace(fx, [port([0, 0, 0], 'up', 'minecraft:iron_ingot', 0.5)], speeds)
+    const { result } = trace(fx, [port([0, 0, 0], 'minecraft:iron_ingot', 0.5)], speeds)
     expect(rateOf(result, '1,2,0', 'minecraft:iron_ingot')).toBe(0.5)
     expect(at(result, '1,2,0')?.recipes[0]?.choice.recipe?.id).toBe('create:pressing/iron_ingot')
     expect(rateOf(result, '2,2,0', 'create:iron_sheet')).toBe(0.5)
@@ -210,7 +208,7 @@ describe('物の通り道', () => {
       .place([2, 1, 0], 'create:andesite_belt_funnel', { facing: 'north', shape: 'pulling', powered: 'false' })
       .place([2, 1, 1], 'minecraft:barrel', chest)
     const speeds = { '0,0,0': -32, '1,0,0': -32, '2,0,0': -32, '3,0,0': -32 }
-    const { result } = trace(fx, [port([0, 0, 0], 'up', 'minecraft:stone')], speeds)
+    const { result } = trace(fx, [port([0, 0, 0], 'minecraft:stone')], speeds)
     expect(rateOf(result, '2,1,0', 'minecraft:stone')).toBe(1)
     expect(sinkOf(result, '2,1,1', 'minecraft:stone')).toBe(1)
     // 取り込んだ物は、ベルトの端の先には行かない
@@ -221,7 +219,7 @@ describe('物の通り道', () => {
     const fx = belt(blueprintFixture(), 0, 0, [0, 1, 2], 'east')
       .place([2, 1, 0], 'create:brass_belt_funnel', { facing: 'west', shape: 'extended', powered: 'false' })
       .place([3, 1, 0], 'minecraft:barrel', chest)
-    const { result } = trace(fx, [port([0, 0, 0], 'up', 'minecraft:stone')], { '0,0,0': -8, '1,0,0': -8, '2,0,0': -8 })
+    const { result } = trace(fx, [port([0, 0, 0], 'minecraft:stone')], { '0,0,0': -8, '1,0,0': -8, '2,0,0': -8 })
     expect(sinkOf(result, '3,1,0', 'minecraft:stone')).toBe(1)
   })
 
@@ -231,7 +229,7 @@ describe('物の通り道', () => {
       .place([1, 1, 1], 'create:andesite_belt_funnel', { facing: 'north', shape: 'pulling', powered: 'false' })
       .place([1, 1, 2], 'minecraft:chest', chest)
       .place([1, 2, 1], 'create:mechanical_press', { facing: 'east' })
-    const { result } = trace(fx, [port([1, 0, 1], 'west', 'minecraft:iron_ingot')], { '1,2,1': 256 })
+    const { result } = trace(fx, [port([1, 0, 1], 'minecraft:iron_ingot')], { '1,2,1': 256 })
     expect(at(result, '1,2,1')?.recipes[0]?.outputs[0]?.item).toBe('create:iron_sheet')
     expect(sinkOf(result, '1,1,2', 'create:iron_sheet')).toBe(1)
   })
@@ -242,12 +240,15 @@ describe('物の通り道', () => {
       .place([1, 2, 0], 'create:chute', { facing: 'east' })
       .place([0, 1, 0], 'minecraft:chest', chest)
       .place([1, 4, 0], 'create:encased_fan', { facing: 'down' })
-    const { result, log } = trace(fx, [port([1, 3, 0], 'up', 'minecraft:stone'), port([1, 2, 0], 'north', 'minecraft:dirt')])
+      // 横から入れる：チェスト (3,2,0) から取り出すファンネル (2,2,0) が、口の前のシュート (1,2,0) に西向きに出す
+      .place([3, 2, 0], 'minecraft:chest', chest)
+      .place([2, 2, 0], 'create:andesite_funnel', { facing: 'west', extracting: 'true', powered: 'false' })
+    const { result, log } = trace(fx, [port([1, 3, 0], 'minecraft:stone'), port([3, 2, 0], 'minecraft:dirt')])
     expect(sinkOf(result, '0,1,0', 'minecraft:stone')).toBe(1)
     expect(at(result, '0,1,0')?.sinks[0]?.source).toBe('assumed')
     expect(messages(log)).toContain('シュートに扇風機がつながっているが、物は下へ流れるとした')
     expect(messages(log)).toContain('シュートは上からしか受け取らないので、物はここで止まる')
-    expect(result.records.some((r) => r.arrivals.some((a) => a.item === 'minecraft:dirt'))).toBe(false)
+    expect(rateOf(result, '1,2,0', 'minecraft:dirt')).toBe(0)
   })
 
   it('粉砕ホイールの中心：タグのレシピで砕き、真下へ。横向きは扱わない', () => {
@@ -259,7 +260,7 @@ describe('物の通り道', () => {
       .place([1, 1, 2], 'create:crushing_wheel_controller', { facing: 'east' })
     const { result, log } = trace(
       fx,
-      [port([1, 1, 0], 'up', 'minecraft:iron_ore', 2), port([1, 1, 2], 'up', 'minecraft:iron_ore')],
+      [port([1, 1, 0], 'minecraft:iron_ore', 2), port([1, 1, 2], 'minecraft:iron_ore')],
       { '0,1,0': 64, '2,1,0': -64 },
     )
     expect(at(result, '1,1,0')?.recipes[0]?.choice.recipe?.id).toBe('create:crushing/iron_ore')
@@ -277,13 +278,13 @@ describe('物の通り道', () => {
       .place([1, 0, 3], 'minecraft:chest', chest)
     const { result } = trace(
       fx,
-      [port([1, 0, 1], 'up', 'minecraft:oak_log'), port([1, 0, 4], 'up', 'minecraft:oak_log')],
+      [port([1, 0, 1], 'minecraft:oak_log'), port([1, 0, 4], 'minecraft:oak_log')],
       { '1,0,1': 32, '1,0,4': 32 },
     )
     expect(sinkOf(result, '2,0,1', 'minecraft:stripped_oak_log')).toBe(1)
     expect(at(result, '0,0,1')).toBeUndefined()
     expect(sinkOf(result, '1,0,3', 'minecraft:stripped_oak_log')).toBe(1)
-    const reverse = trace(fx, [port([1, 0, 1], 'up', 'minecraft:oak_log')], { '1,0,1': -32 }).result
+    const reverse = trace(fx, [port([1, 0, 1], 'minecraft:oak_log')], { '1,0,1': -32 }).result
     expect(sinkOf(reverse, '0,0,1', 'minecraft:stripped_oak_log')).toBe(1)
   })
 
@@ -299,7 +300,7 @@ describe('物の通り道', () => {
     const { result, log } = trace(
       fx,
       // ミキサーは 256 RPM で1分に 21 回なので、入る数はそれより少なくする
-      [port([0, 1, 0], 'up', 'minecraft:andesite', 0.25), port([3, 1, 0], 'up', 'minecraft:flint')],
+      [port([0, 1, 0], 'minecraft:andesite', 0.25), port([3, 1, 0], 'minecraft:flint')],
       { '0,3,0': 256, '3,3,0': 256 },
     )
     expect(sinkOf(result, '1,0,0', 'create:andesite_alloy')).toBe(0.25)
@@ -317,13 +318,16 @@ describe('物の通り道', () => {
       .place([3, 0, 0], 'create:depot')
       .place([3, 2, 0], 'minecraft:chest', chest)
       .place([3, 2, 1], 'create:andesite_funnel', { facing: 'south', extracting: 'true', powered: 'false' })
-    const { result, log } = trace(fx, [port([1, 0, 1], 'south', 'minecraft:stone'), port([1, 0, 1], 'east', 'minecraft:dirt')])
+      // 横から入れる：チェスト (3,0,1) から取り出すファンネル (2,0,1) が、入れるファンネル (1,0,1) の東の面に出す
+      .place([3, 0, 1], 'minecraft:chest', chest)
+      .place([2, 0, 1], 'create:andesite_funnel', { facing: 'west', extracting: 'true', powered: 'false' })
+    const { result, log } = trace(fx, [port([1, 0, 1], 'minecraft:stone'), port([3, 0, 1], 'minecraft:dirt')])
     // ファンネル → 後ろの入れ物 (1,0,0) → 取り出すファンネル (2,0,0) → 口の前のデポ
     expect(rateOf(result, '1,0,0', 'minecraft:stone')).toBe(1)
     expect(sinkOf(result, '3,0,0', 'minecraft:stone')).toBe(1)
     expect(messages(log)).toContain('ファンネルは口の前からしか受け取らないので、物はここで止まる')
 
-    const fall = trace(fx, [port([3, 2, 0], 'up', 'minecraft:stone')])
+    const fall = trace(fx, [port([3, 2, 0], 'minecraft:stone')])
     expect(sinkOf(fall.result, '3,0,0', 'minecraft:stone')).toBe(0)
     expect(messages(fall.log)).toContain('出す先（(3, 2, 2)）が空気で、3 段下までにブロックがないので、その先はたどらない')
   })
@@ -339,13 +343,13 @@ describe('物の通り道', () => {
       .place([0, 0, 0], 'minecraft:chest', chest)
       .place([2, 0, 0], 'minecraft:chest', chest)
       .place([1, 0, 1], 'create:depot')
-    const { result } = trace(fx, [port([0, 0, 0], 'up', 'minecraft:stone', 3)], { '1,0,0': 64 })
+    const { result } = trace(fx, [port([0, 0, 0], 'minecraft:stone', 3)], { '1,0,0': 64 })
     expect(rateOf(result, '1,0,0', 'minecraft:stone')).toBe(3)
     expect(sinkOf(result, '2,0,0', 'minecraft:stone')).toBe(1.5)
     expect(sinkOf(result, '1,0,1', 'minecraft:stone')).toBe(1.5)
 
     // 止まっていれば運ばず、取る先に溜まる
-    const stopped = trace(fx, [port([0, 0, 0], 'up', 'minecraft:stone', 3)], { '1,0,0': 0 }).result
+    const stopped = trace(fx, [port([0, 0, 0], 'minecraft:stone', 3)], { '1,0,0': 0 }).result
     expect(sinkOf(stopped, '0,0,0', 'minecraft:stone')).toBe(3)
     expect(at(stopped, '1,0,0')?.notes).toContain('止まっているので、物を運ばない')
   })
@@ -363,7 +367,7 @@ describe('物の通り道', () => {
       .place([2, 0, 0], 'minecraft:chest', chest)
       .place([1, 0, 0], 'create:mechanical_arm', arm([-1, 0, 0], [1, 0, 0]))
       .place([1, 1, 0], 'create:mechanical_arm', arm([1, -1, 0], [-1, -1, 0]))
-    const { result, log } = trace(fx, [port([0, 0, 0], 'up', 'minecraft:stone')], { '1,0,0': 64, '1,1,0': 64 })
+    const { result, log } = trace(fx, [port([0, 0, 0], 'minecraft:stone')], { '1,0,0': 64, '1,1,0': 64 })
     expect(messages(log)).toContain('物の通り道が輪になっているので、同じ物が2回目に届いた所から先はたどらない')
     expect(rateOf(result, '2,0,0', 'minecraft:stone')).toBe(1)
   })
@@ -371,7 +375,7 @@ describe('物の通り道', () => {
   it('処理できる数を超えたら「処理が追いつかない」。レシピのない物はそこで止める', () => {
     const fx = blueprintFixture().place([0, 0, 0], 'create:millstone').place([2, 0, 0], 'create:millstone')
     // 16 RPM で小麦（処理時間 150）は 150 tick で1個 → 8 個/分。1 個/秒 = 60 個/分は多すぎる
-    const { result } = trace(fx, [port([0, 0, 0], 'up', 'minecraft:wheat'), port([2, 0, 0], 'up', 'minecraft:stone')], {
+    const { result } = trace(fx, [port([0, 0, 0], 'minecraft:wheat'), port([2, 0, 0], 'minecraft:stone')], {
       '0,0,0': 16,
       '2,0,0': 16,
     })
@@ -386,7 +390,7 @@ describe('物の通り道', () => {
 
   it('Modpack のレシピがなければ、レシピがないのではなく分からないと出す', () => {
     const fx = blueprintFixture().place([0, 0, 0], 'create:millstone')
-    const { result } = trace(fx, [port([0, 0, 0], 'up', 'minecraft:wheat')], { '0,0,0': 16 }, null)
+    const { result } = trace(fx, [port([0, 0, 0], 'minecraft:wheat')], { '0,0,0': 16 }, null)
     expect(at(result, '0,0,0')?.recipesUnknown).toBe(true)
     expect(itemPathValues(at(result, '0,0,0')!).find((v) => v.label === 'レシピ')?.value.value).toBe(
       'Modpack を読んでいないので、レシピが分からない（minecraft:wheat）。上のバーで Modpack を選ぶと、できる物をたどる',
@@ -395,10 +399,10 @@ describe('物の通り道', () => {
 
   it('アイテムを選んでいない物の入口は、仮定に載せてたどらない。Modpack がなければ機械で止まる', () => {
     const fx = blueprintFixture().place([0, 0, 0], 'create:millstone')
-    const { result, log } = trace(fx, [port([0, 0, 0], 'up', null)], { '0,0,0': 16 })
+    const { result, log } = trace(fx, [port([0, 0, 0], null)], { '0,0,0': 16 })
     expect(result.records).toEqual([])
     expect(messages(log)).toEqual(['物の入口のアイテムが選ばれていない'])
-    const none = trace(fx, [port([0, 0, 0], 'up', 'minecraft:wheat')], { '0,0,0': 16 }, null)
+    const none = trace(fx, [port([0, 0, 0], 'minecraft:wheat')], { '0,0,0': 16 }, null)
     expect(messages(none.log)).toContain('Modpack のレシピがないので、機械でできる物が分からず、物の通り道は機械で止まる')
   })
 })
@@ -411,7 +415,7 @@ describe('律速（docs/create-throughput.md「律速（#168）」の例）', ()
       .place([1, 2, 0], 'create:chute', { facing: 'down' })
       .place([3, 1, 0], 'create:depot')
     belt(fx, 1, 0, [1, 2], 'east')
-    return trace(fx, [port([1, 3, 0], 'up', 'minecraft:wheat', 1)], { '1,3,0': millRpm, '1,1,0': -32, '2,1,0': -32 }).result
+    return trace(fx, [port([1, 3, 0], 'minecraft:wheat', 1)], { '1,3,0': millRpm, '1,1,0': -32, '2,1,0': -32 }).result
   }
 
   it('256 RPM：石臼は 120 個/分。使用率 50%、出る数 105 個/分、入る数は 120 個/分まで増やせる', () => {
@@ -445,13 +449,13 @@ describe('律速（docs/create-throughput.md「律速（#168）」の例）', ()
   it('使用率が一番高い機械を律速にする。同じなら先にたどった方', () => {
     // 2つの石臼に別々の入口。256 RPM（120 個/分）に 60 個/分、64 RPM（⌈150 / 4⌉ = 38 tick、32 個/分）に 30 個/分
     const fx = blueprintFixture().place([0, 0, 0], 'create:millstone').place([2, 0, 0], 'create:millstone')
-    const busy = trace(fx, [port([0, 0, 0], 'up', 'minecraft:wheat', 1), port([2, 0, 0], 'up', 'minecraft:wheat', 0.5)], {
+    const busy = trace(fx, [port([0, 0, 0], 'minecraft:wheat', 1), port([2, 0, 0], 'minecraft:wheat', 0.5)], {
       '0,0,0': 256,
       '2,0,0': 64,
     }).result
     expect(busy.line?.inputPerMinute).toBe(90)
     expect(busy.line?.bottleneck?.pos).toEqual([2, 0, 0])
-    const tie = trace(fx, [port([2, 0, 0], 'up', 'minecraft:wheat', 1), port([0, 0, 0], 'up', 'minecraft:wheat', 1)], {
+    const tie = trace(fx, [port([2, 0, 0], 'minecraft:wheat', 1), port([0, 0, 0], 'minecraft:wheat', 1)], {
       '0,0,0': 256,
       '2,0,0': 256,
     }).result
@@ -460,7 +464,7 @@ describe('律速（docs/create-throughput.md「律速（#168）」の例）', ()
 
   it('処理する機械がなければ、律速を出さずに入る数と出る数だけ。入口がなければ null', () => {
     const fx = blueprintFixture().place([0, 0, 0], 'create:depot')
-    const result = trace(fx, [port([0, 0, 0], 'up', 'minecraft:wheat', 1)]).result
+    const result = trace(fx, [port([0, 0, 0], 'minecraft:wheat', 1)]).result
     expect(result.line?.bottleneck).toBeNull()
     expect(lineSummary(result.line!).value.value).toBe('入る 60 個/分 → 出る 60 個/分。処理する機械がない')
     expect(lineSummary(result.line!).pos).toBeUndefined()
@@ -470,7 +474,7 @@ describe('律速（docs/create-throughput.md「律速（#168）」の例）', ()
   it('Modpack がなければ、処理時間は Create の初期値（石臼 100）で律速を出し、出どころは仮定', () => {
     // 256 RPM：⌈100 / 16⌉ = 7 tick で1個、171 個/分
     const fx = blueprintFixture().place([0, 0, 0], 'create:millstone')
-    const { result, log } = trace(fx, [port([0, 0, 0], 'up', 'minecraft:wheat', 1)], { '0,0,0': 256 }, null)
+    const { result, log } = trace(fx, [port([0, 0, 0], 'minecraft:wheat', 1)], { '0,0,0': 256 }, null)
     expect(result.line?.bottleneck).toMatchObject({ machine: '石臼', arrivingPerMinute: 60 })
     expect(result.line?.bottleneck?.capacityPerMinute).toBeCloseTo(1200 / 7)
     expect(result.line?.source).toBe('assumed')
@@ -497,7 +501,7 @@ describe('物の通り道（runCreateStress）', () => {
     r.probes?.find((p) => p.pos.join() === pos)?.values.find((v) => v.label === label)?.value
 
   it('届く物・レシピ・溜まる物をプローブに出し、処理時間は通り道のレシピで計算する', async () => {
-    const result = await runCreateStress(bp(), { pack, ports: [port([0, 1, 0], 'up', 'minecraft:wheat', 0.5)] })
+    const result = await runCreateStress(bp(), { pack, ports: [port([0, 1, 0], 'minecraft:wheat', 0.5)] })
     expect(value(result, '0,1,0', '届く物')).toEqual({ value: 'minecraft:wheat 0.5 個/秒（物の入口から）', source: 'virtual' })
     expect(value(result, '0,1,0', 'レシピ')?.value).toContain('create:milling/wheat（minecraft:wheat → create:wheat_flour 0.75 個/秒')
     // 生データの骨ではなく、届く小麦のレシピ（処理時間 150）で計算する
@@ -514,7 +518,7 @@ describe('物の通り道（runCreateStress）', () => {
   it('処理が追いつかないと計算の問題に出す。アイテムのない入口は仮定に載せる', async () => {
     const result = await runCreateStress(bp(), {
       pack,
-      ports: [port([0, 1, 0], 'up', 'minecraft:wheat', 1), port([2, 0, 0], 'up', null)],
+      ports: [port([0, 1, 0], 'minecraft:wheat', 1), port([2, 0, 0], null)],
     })
     expect(result.issues.map((i) => i.message)).toContain(
       '処理が追いつきません。届く数は 60 個/分、処理できるのは 32 個/分です。入る数を減らすか、回転数を上げてください。',

@@ -272,35 +272,35 @@ export class KineticGraph {
       }
     }
 
-    // 仮の入出力：面の向こうにノードを置き、シャフトとして r = 1 でつなぐ
-    const portFaces = new Set<string>()
+    // 仮の入出力：付けたブロックと r = 1 でつながるノードを足す（面には付けない。#195）
+    const portBlocks = new Set<string>()
     for (const port of ports) {
-      // 物の入口（#127）は回転とつながないので、軸の口は要らない
+      // 物の入口（#127）は回転とつながない
       if (port.kind === ITEM_INPUT_PORT_KIND) continue
       const target = at(port.pos)
       const node = target === undefined ? null : nodes[target]
-      if (target === undefined || !node || !node.shaftFaces.includes(port.face)) {
+      if (target === undefined || !node) {
         issues.push({
           pos: [port.pos[0], port.pos[1], port.pos[2]],
-          message: `仮の入出力${port.label ? `「${port.label}」` : ''}をつなげません。軸の口がある面に置いてください。`,
+          message: `仮の入出力${port.label ? `「${port.label}」` : ''}をつなげません。シャフトや歯車など、回転するブロックに付けてください。`,
         })
         continue
       }
-      const virtual = makePortNode(port, log)
+      const virtual = makePortNode(port, node, log)
       if (!virtual) continue
-      portFaces.add(`${posKey(port.pos)}|${port.face}`)
+      portBlocks.add(posKey(port.pos))
       const v = nodes.length
       nodes.push(virtual)
-      // virtual の回転数 = node の回転数 × faceFactor(node, face)
-      addEdge(target, v, faceFactor(node.shape, port.face), 'shaft')
+      // virtual の回転数 = node の回転数
+      addEdge(target, v, 1, 'shaft')
     }
 
     // 3. 範囲外を記録する
     for (let a = 0; a < realCount; a++) {
       const node = nodes[a]
-      const outside = node.shaftFaces.some(
-        (f) => !inside(addVec3(node.pos, directionVector(f))) && !portFaces.has(`${posKey(node.pos)}|${f}`),
-      )
+      // 仮の入出力を付けたブロックは、外とのつながりを仮の入出力で表したとみなす
+      const outside =
+        !portBlocks.has(posKey(node.pos)) && node.shaftFaces.some((f) => !inside(addVec3(node.pos, directionVector(f))))
       // 歯車は、回転軸に垂直な面の上の隣と斜めにかみ合う
       const cogOutside =
         node.cog !== 'none' &&
@@ -784,13 +784,12 @@ function makeSource(
   return null
 }
 
-/** 仮の入出力のノード。面の向こうに置き、その面の軸に沿って回る */
-function makePortNode(port: VirtualPort, log: AssumptionLog): KineticNode | null {
-  const face = port.face
-  const axis = directionAxis(face)
-  const shape: KineticShape = { axis, shaftFaces: [oppositeDirection(face)], cog: 'none', faceFactors: null, chain: null }
+/** 仮の入出力のノード。付けたブロック（node）と同じ所で、同じ軸・同じ向きに回る（#195） */
+function makePortNode(port: VirtualPort, node: KineticNode, log: AssumptionLog): KineticNode | null {
+  const axis = node.axis
+  const shape: KineticShape = { axis, shaftFaces: [], cog: 'none', faceFactors: null, chain: null }
   const base = {
-    pos: addVec3(port.pos, directionVector(face)),
+    pos: [port.pos[0], port.pos[1], port.pos[2]] as Vec3,
     id: `virtual:${port.kind}`,
     axis,
     shaftFaces: shape.shaftFaces,
@@ -800,6 +799,7 @@ function makePortNode(port: VirtualPort, log: AssumptionLog): KineticNode | null
     portId: port.id,
   }
   if (port.kind === 'rotation-source') {
+    log.add('仮の動力源は、付けたブロックと同じ向きに回るとみなした', port.pos)
     const rpm = port.params.rpm ?? 0
     const capacity = port.params.capacity ?? 0
     return {

@@ -18,13 +18,11 @@ import { PORT_ITEM_COLOR, PORT_LOAD_COLOR, PORT_SOURCE_COLOR, PortOverlay3D, por
 import PortPanel from './PortPanel.vue'
 import {
   createPort,
-  defaultPortFace,
   defaultPortParams,
   itemCandidates,
   parsePortNumber,
   portAt,
   portKindOptions,
-  withPortFace,
   withPortItem,
   withPortLabel,
   withPortParam,
@@ -50,7 +48,7 @@ const LOAD: PortKindDef = {
 }
 
 function port(over: Partial<VirtualPort> = {}): VirtualPort {
-  return { id: 'p', pos: [0, 0, 0], face: 'west', pluginId: 'create-stress', kind: 'rotation-source', params: { rpm: 16, capacity: 100 }, ...over }
+  return { id: 'p', pos: [0, 0, 0], pluginId: 'create-stress', kind: 'rotation-source', params: { rpm: 16, capacity: 100 }, ...over }
 }
 
 describe('portModel', () => {
@@ -63,21 +61,19 @@ describe('portModel', () => {
     expect(defaultPortParams(LOAD)).toEqual({ stress: 256 })
     const [source] = portKindOptions(createBuiltinRegistry().all())
     expect(defaultPortParams(source.def)).toEqual({ rpm: 16, capacity: 4096 })
-    expect(createPort('a', source, [1, 2, 3], 'up')).toEqual({
+    expect(createPort('a', source, [1, 2, 3])).toEqual({
       id: 'a',
       pos: [1, 2, 3],
-      face: 'up',
       pluginId: 'create-stress',
       kind: 'rotation-source',
       params: { rpm: 16, capacity: 4096 },
     })
   })
 
-  it('値・面・メモを変えた新しい仮の入出力を返す（元は変えない）', () => {
+  it('値・メモを変えた新しい仮の入出力を返す（元は変えない）', () => {
     const p = port()
     expect(withPortParam(p, 'rpm', -32).params).toEqual({ rpm: -32, capacity: 100 })
     expect(withPortParam(p, 'capacity', null).params).toEqual({ rpm: 16 })
-    expect(withPortFace(p, 'east').face).toBe('east')
     expect(withPortLabel(p, ' 外の水車 ').label).toBe('外の水車')
     expect('label' in withPortLabel({ ...p, label: 'x' }, '  ')).toBe(false)
     expect(p).toEqual(port())
@@ -89,29 +85,20 @@ describe('portModel', () => {
     expect(parsePortNumber('abc')).toBeUndefined()
   })
 
-  it('同じ位置と面の仮の入出力を探す', () => {
-    const ports = [port({ id: 'a' }), port({ id: 'b', face: 'east' })]
-    expect(portAt(ports, [0, 0, 0], 'east')?.id).toBe('b')
-    expect(portAt(ports, [0, 0, 0], 'up')).toBeNull()
-  })
-
-  it('面が分からないときは、軸の面のうち外か空きの面を選ぶ', () => {
-    const bp = shafts()
-    expect(defaultPortFace(bp, [0, 0, 0])).toBe('west')
-    expect(defaultPortFace(bp, [2, 0, 0])).toBe('east')
-    // 軸がなければ全部の面から（最初は下）
-    const stone = blueprintFixture({ size: [1, 2, 1] }).place([0, 1, 0], 'minecraft:stone').place([0, 0, 0], 'minecraft:stone').toBlueprint()
-    expect(defaultPortFace(stone, [0, 1, 0])).toBe('up')
+  it('同じブロックの同じ種類の仮の入出力を探す（#195）', () => {
+    const ports = [port({ id: 'a' }), port({ id: 'b', kind: 'rotation-load' })]
+    const load = { pluginId: 'create-stress', def: { kind: 'rotation-load' } }
+    expect(portAt(ports, [0, 0, 0], load)?.id).toBe('b')
+    expect(portAt(ports, [1, 0, 0], load)).toBeNull()
   })
 })
 
 describe('PortTool', () => {
-  it('面をクリックすると置き、2D では面を決めてもらう。空きマスで選択を外す', () => {
+  it('ブロックをクリックすると付ける。3D でも 2D でも面は使わない。空きマスで選択を外す（#195）', () => {
     const calls: string[] = []
     const tool = new PortTool({
       setHovered: (p) => calls.push(`hover ${p?.join() ?? 'null'}`),
-      defaultFace: () => 'north',
-      place: (p, f) => calls.push(`place ${p.join()} ${f}`),
+      place: (p) => calls.push(`place ${p.join()}`),
       deselect: () => calls.push('deselect'),
     })
     tool.onHover({ pos: [1, 0, 0], empty: false })
@@ -120,7 +107,7 @@ describe('PortTool', () => {
     tool.onClick({ pos: [2, 0, 0], empty: false }, { shift: false })
     tool.onClick({ pos: [3, 0, 0], empty: true }, { shift: false })
     tool.deactivate()
-    expect(calls).toEqual(['hover 1,0,0', 'hover null', 'place 1,0,0 up', 'place 2,0,0 north', 'deselect', 'hover null'])
+    expect(calls).toEqual(['hover 1,0,0', 'hover null', 'place 1,0,0', 'place 2,0,0', 'deselect', 'hover null'])
   })
 })
 
@@ -191,15 +178,19 @@ describe('仮の入出力と計算（#70 の完了の条件）', () => {
     expect(createOutcome(calc).issues).toEqual([])
   })
 
-  it('同じ面をもう一度クリックすると、新しく置かずに選ぶ。別の設計図を開くと消える', async () => {
+  it('同じブロックをもう一度クリックすると、別の面でも新しく置かずに選ぶ。違う種類なら足す。別の設計図を開くと消える', async () => {
     const { ports, tools } = await setup()
+    ports.setPlaceKey('create-stress/rotation-source')
     tools.setTool('port')
     tools.click({ pos: [0, 0, 0], face: 'west', empty: false })
     tools.click({ pos: [1, 0, 0], empty: true })
     expect(ports.selectedId).toBeNull()
-    tools.click({ pos: [0, 0, 0], face: 'west', empty: false })
+    tools.click({ pos: [0, 0, 0], face: 'up', empty: false })
     expect(ports.ports).toHaveLength(1)
     expect(ports.selectedId).toBe(ports.ports[0].id)
+    ports.setPlaceKey('create-stress/rotation-load')
+    tools.click({ pos: [0, 0, 0], empty: false })
+    expect(ports.ports.map((p) => p.kind)).toEqual(['rotation-source', 'rotation-load'])
 
     useDocumentSession().setBlueprint(shafts(), 'other.nbt')
     await flushPromises()
@@ -207,14 +198,16 @@ describe('仮の入出力と計算（#70 の完了の条件）', () => {
     expect(ports.selectedId).toBeNull()
   })
 
-  it('2D（面なし）では「2Dで置く面」の面に置く。「自動」なら軸と隣の空きから決める（#167）', async () => {
-    const { ports, tools } = await setup()
+  it('真ん中の軸の上の面から動力源を付けても、つなげて計算する（#195）', async () => {
+    const { calc, ports, tools } = await setup()
+    ports.setPlaceKey('create-stress/rotation-source')
     tools.setTool('port')
-    tools.click({ pos: [0, 0, 0], empty: false })
-    expect(ports.ports[0].face).toBe('west')
-    ports.setFace2D('up')
-    tools.click({ pos: [1, 0, 0], empty: false })
-    expect(ports.ports[1].face).toBe('up')
+    tools.click({ pos: [1, 0, 0], face: 'up', empty: false })
+    expect(ports.ports[0]).not.toHaveProperty('face')
+    await calc.recalculate()
+    expect(createOutcome(calc).issues).toEqual([])
+    useProbeStore().setProbed([2, 0, 0])
+    expect(useProbeStore().readings[0].values.find((v) => v.label === '回転数')?.value).toEqual({ value: '16 RPM', source: 'virtual' })
   })
 })
 
@@ -241,7 +234,7 @@ describe('PortPanel', () => {
 
   it('置いた仮の入出力の値を変え、消せる', async () => {
     const { wrapper, ports } = mountPanel()
-    ports.place([0, 0, 0], 'west')
+    ports.place([0, 0, 0])
     await flushPromises()
     const item = wrapper.find('[data-port]')
     expect(item.text()).toContain('回転の供給')
@@ -255,8 +248,8 @@ describe('PortPanel', () => {
     expect(ports.ports[0].params.rpm).toBe(-128)
     expect((rpm.element as HTMLInputElement).value).toBe('-128')
 
-    await item.find('select[data-field="face"]').setValue('east')
-    expect(ports.ports[0].face).toBe('east')
+    // 面の欄はない（#195）
+    expect(item.find('select[data-field="face"]').exists()).toBe(false)
     await item.find('input[data-field="label"]').setValue('外の水車列')
     expect(ports.ports[0].label).toBe('外の水車列')
 
@@ -267,7 +260,7 @@ describe('PortPanel', () => {
   it('物の入口のアイテムは、打っている途中で元に戻らず、欄を離れると入る（#127）', async () => {
     const { wrapper, ports } = mountPanel()
     ports.setPlaceKey('create-stress/item-input')
-    ports.place([0, 0, 0], 'up')
+    ports.place([0, 0, 0])
     await flushPromises()
     const input = wrapper.find('[data-port] input[data-item="item"]')
     const el = input.element as HTMLInputElement
@@ -285,7 +278,7 @@ describe('PortPanel', () => {
   it('負荷の省略できる値は空にできる', async () => {
     const { wrapper, ports } = mountPanel()
     ports.setPlaceKey('create-stress/rotation-load')
-    ports.place([0, 0, 0], 'east')
+    ports.place([0, 0, 0])
     await flushPromises()
     const item = wrapper.find('[data-port]')
     await item.find('input[data-param="impact"]').setValue('8')
@@ -300,39 +293,41 @@ describe('PortPanel', () => {
     await flushPromises()
     await wrapper.find('select[data-testid="port-kind"]').setValue('create-stress/rotation-load')
     expect(ports.placeOption?.def.kind).toBe('rotation-load')
-    await wrapper.find('select[data-testid="port-face-2d"]').setValue('north')
-    expect(ports.face2D).toBe('north')
-    await wrapper.find('select[data-testid="port-face-2d"]').setValue('auto')
-    expect(ports.face2D).toBe('auto')
+    expect(wrapper.find('select[data-testid="port-face-2d"]').exists()).toBe(false)
   })
 })
 
 describe('仮の入出力の印', () => {
-  it('3D：面の外側に板を置き、隠した段の印は出さない', () => {
+  it('3D：ブロックを少し大きい箱で包み、同じブロックの2つ目はもう少し大きくする。隠した段の印は出さない', () => {
     const overlay = new PortOverlay3D()
-    const ports = [port({ id: 'a' }), port({ id: 'b', kind: 'rotation-load', face: 'up', pos: [0, 2, 0] })]
+    const ports = [port({ id: 'a' }), port({ id: 'b', kind: 'rotation-load' }), port({ id: 'c', pos: [0, 2, 0] })]
     overlay.update(ports, 'a', SHOW_ALL_LAYERS)
-    expect(overlay.count()).toBe(2)
+    expect(overlay.count()).toBe(3)
     const a = overlay.group.getObjectByName('port-a')!
-    expect(a.position.x).toBeLessThan(0)
-    expect(a.scale.x).toBeLessThan(a.scale.y)
+    const b = overlay.group.getObjectByName('port-b')!
+    expect(a.position.toArray()).toEqual([0.5, 0.5, 0.5])
+    expect(a.scale.x).toBeGreaterThan(1)
+    expect(b.scale.x).toBeGreaterThan(a.scale.x)
     overlay.update(ports, null, { layer: 0, mode: 'only', hidden: new Set<number>() })
-    expect(overlay.count()).toBe(1)
+    expect(overlay.count()).toBe(2)
     overlay.dispose()
     expect(portColor('rotation-source')).toBe(PORT_SOURCE_COLOR)
     expect(portColor('rotation-load')).toBe(PORT_LOAD_COLOR)
   })
 
-  it('2D：東西南北はマスの外の帯、上下はマスの中央', () => {
-    const layout: GridLayout2D = { originX: 10, originY: 20, cellSize: 10 }
-    expect(portMarkRect(port({ face: 'west', pos: [1, 0, 1] }), layout)).toEqual([17, 30, 3, 10])
-    expect(portMarkRect(port({ face: 'south', pos: [1, 0, 1] }), layout)).toEqual([20, 40, 10, 3])
-    expect(portMarkRect(port({ face: 'up', pos: [0, 0, 0] }), layout)).toEqual([13, 23, 4, 4])
+  it('2D：マスの角の四角。同じブロックの2つ目からは角を変える（#195）', () => {
+    const layout: GridLayout2D = { originX: 10, originY: 20, cellSize: 50 }
+    const p = port({ pos: [1, 0, 1] })
+    // マス (60, 70)〜(110, 120)。四角は 17、余白は 4
+    expect(portMarkRect(p, layout)).toEqual([64, 74, 17, 17])
+    expect(portMarkRect(p, layout, 1)).toEqual([89, 74, 17, 17])
+    expect(portMarkRect(p, layout, 2)).toEqual([64, 99, 17, 17])
+    expect(portMarkRect(p, layout, 3)).toEqual([89, 99, 17, 17])
   })
 })
 
 describe('物の入口のアイテム（#127）', () => {
-  const port: VirtualPort = { id: 'p', pos: [0, 0, 0], face: 'up', pluginId: 'create-stress', kind: 'item-input', params: { rate: 1 } }
+  const port: VirtualPort = { id: 'p', pos: [0, 0, 0], pluginId: 'create-stress', kind: 'item-input', params: { rate: 1 } }
 
   it('アイテムの欄を入れる・消す。namespace がなければ minecraft: を付ける', () => {
     const withWheat = withPortItem(port, 'item', ' wheat ')

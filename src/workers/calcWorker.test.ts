@@ -42,7 +42,7 @@ describe('計算の Worker', () => {
     const outcomes = await backend.run({
       blueprint: bp,
       pack: null,
-      ports: [{ id: 'p1', pos: [0, 0, 0], face: 'west', pluginId: NOOP_PLUGIN_ID, kind: 'test-source', params: { amount: 1 } }],
+      ports: [{ id: 'p1', pos: [0, 0, 0], pluginId: NOOP_PLUGIN_ID, kind: 'test-source', params: { amount: 1 } }],
     })
     expect(outcomes).toHaveLength(1)
     const o = outcomes[0]

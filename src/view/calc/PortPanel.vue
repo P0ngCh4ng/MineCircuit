@@ -3,18 +3,15 @@
 // 右パネルの計算の「入出力」タブ（#157）に出す。置く種類の選択は、仮の入出力のツールを使っている間だけ出す。
 import { computed, ref } from 'vue'
 import type { PortItemParamDef, PortParamDef, VirtualPort } from '../../calc/virtualPort'
-import { DIRECTIONS, isDirection } from '../../domain/direction'
 import { useCalcStore } from '../stores/calcStore'
 import { useModpackContentStore } from '../stores/modpackContent'
 import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import {
-  FACE_LABELS,
   findPortKind,
   itemCandidates,
   parsePortNumber,
   portKindKey,
-  withPortFace,
   withPortItem,
   withPortLabel,
   withPortParam,
@@ -91,16 +88,6 @@ function onItemChange(port: VirtualPort, def: PortItemParamDef, e: Event): void 
   store.update(withPortItem(port, def.key, itemIdOf((e.target as HTMLInputElement).value)))
 }
 
-function onFace2DChange(e: Event): void {
-  const value = (e.target as HTMLSelectElement).value
-  store.setFace2D(isDirection(value) ? value : 'auto')
-}
-
-function onFaceChange(port: VirtualPort, e: Event): void {
-  const value = (e.target as HTMLSelectElement).value
-  if (isDirection(value)) store.update(withPortFace(port, value))
-}
-
 function onLabelChange(port: VirtualPort, e: Event): void {
   store.update(withPortLabel(port, (e.target as HTMLInputElement).value))
 }
@@ -125,15 +112,8 @@ function selectPort(port: VirtualPort): void {
           </select>
         </label>
         <p v-if="store.placeOption?.def.description" class="hint">{{ store.placeOption.def.description }}</p>
-        <label class="kind">
-          2Dで置く面
-          <select :value="store.face2D" data-testid="port-face-2d" @change="onFace2DChange">
-            <option value="auto">自動（軸と隣の空きから）</option>
-            <option v-for="d in DIRECTIONS" :key="d" :value="d">{{ FACE_LABELS[d] }}</option>
-          </select>
-        </label>
         <p class="hint">
-          ブロックの面をクリックすると置きます。2D表示では、上で選んだ面に置きます（下の一覧で直せます）。ブロックを消すと、そのブロックの仮の入出力も消えます。
+          ブロックをクリックすると、そのブロックに付けます。もう一度クリックすると選びます。ブロックを消すと、そのブロックの仮の入出力も消えます。
         </p>
       </template>
     </template>
@@ -157,12 +137,6 @@ function selectPort(port: VirtualPort): void {
           <button type="button" data-action="remove-port" @click="store.remove(port.id)">消す</button>
         </div>
         <div class="fields">
-          <label>
-            面
-            <select :value="port.face" data-field="face" @change="onFaceChange(port, $event)">
-              <option v-for="d in DIRECTIONS" :key="d" :value="d">{{ FACE_LABELS[d] }}</option>
-            </select>
-          </label>
           <label v-for="def in paramDefs(port)" :key="def.key">
             {{ def.label }}
             <input

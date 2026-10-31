@@ -328,7 +328,6 @@ describe('KineticGraph：組み間違いの検査（#148）', () => {
       pluginId: 'create-stress',
       kind: 'rotation-source',
       pos: [0, 0, 0],
-      face: 'west',
       params: { rpm: 32, capacity: 256 },
     }
     expect(evaluate(bp, [port]).ev.issues).toEqual([])
@@ -365,8 +364,8 @@ describe('KineticGraph：範囲外と仮の入出力', () => {
       .place([1, 0, 0], 'create:mechanical_press', { facing: 'east' })
       .toBlueprint()
     const ports: VirtualPort[] = [
-      { id: 'in', pos: [0, 0, 0], face: 'west', pluginId: 'create-stress', kind: 'rotation-source', params: { rpm: -32, capacity: 1000 } },
-      { id: 'out', pos: [1, 0, 0], face: 'east', pluginId: 'create-stress', kind: 'rotation-load', params: { stress: 500 } },
+      { id: 'in', pos: [0, 0, 0], pluginId: 'create-stress', kind: 'rotation-source', params: { rpm: -32, capacity: 1000 } },
+      { id: 'out', pos: [1, 0, 0], pluginId: 'create-stress', kind: 'rotation-load', params: { stress: 500 } },
     ]
     const r = evaluate(bp, ports)
     expect(r.speed([1, 0, 0])).toBe(-32)
@@ -374,8 +373,10 @@ describe('KineticGraph：範囲外と仮の入出力', () => {
     expect(net.capacity).toBe(1000)
     expect(net.stress).toBe(8 * 32 + 500)
     expect(net.overloaded).toBe(false)
-    // 仮の入出力を置いた面は範囲外の仮定に載せない
+    // 仮の入出力を付けたブロックは範囲外の仮定に載せない
     expect(r.log.list().some((a) => a.message === OUT_OF_RANGE_NOTE)).toBe(false)
+    // 動力源の向きは選んでいないので、仮定に載せる
+    expect(r.log.list().filter((a) => a.message === '仮の動力源は、付けたブロックと同じ向きに回るとみなした').map((a) => a.pos)).toEqual([[0, 0, 0]])
   })
 
   it('応力の使用率が 90% を超えたら、ネットワークごとに1件の警告（#159）', () => {
@@ -384,8 +385,8 @@ describe('KineticGraph：範囲外と仮の入出力', () => {
       .place([1, 0, 0], 'create:shaft', { axis: 'x' })
       .toBlueprint()
     const withLoad = (stress: number): VirtualPort[] => [
-      { id: 'in', pos: [0, 0, 0], face: 'west', pluginId: 'create-stress', kind: 'rotation-source', params: { rpm: 32, capacity: 1000 } },
-      { id: 'out', pos: [1, 0, 0], face: 'east', pluginId: 'create-stress', kind: 'rotation-load', params: { stress } },
+      { id: 'in', pos: [0, 0, 0], pluginId: 'create-stress', kind: 'rotation-source', params: { rpm: 32, capacity: 1000 } },
+      { id: 'out', pos: [1, 0, 0], pluginId: 'create-stress', kind: 'rotation-load', params: { stress } },
     ]
     // ちょうど 90% は出さない
     expect(evaluate(bp, withLoad(900)).ev.issues).toEqual([])
@@ -402,12 +403,31 @@ describe('KineticGraph：範囲外と仮の入出力', () => {
     expect(over.map((i) => i.severity ?? 'error')).toEqual(['error'])
   })
 
-  it('軸の口がない面には仮の入出力をつなげない', () => {
-    const bp = blueprintFixture().place([0, 0, 0], 'create:shaft', { axis: 'x' }).toBlueprint()
+  it('面を選ばずにブロックに付ける。回転しないブロックにはつなげない（#195）', () => {
+    // 以前は軸の口でない面（シャフトの上）には付けられなかった。今はブロックそのものが回る
+    const bp = blueprintFixture({ size: [2, 1, 1] })
+      .place([0, 0, 0], 'create:shaft', { axis: 'x' })
+      .place([1, 0, 0], 'minecraft:stone')
+      .toBlueprint()
     const r = evaluate(bp, [
-      { id: 'in', pos: [0, 0, 0], face: 'up', pluginId: 'create-stress', kind: 'rotation-source', params: { rpm: 16, capacity: 100 } },
+      { id: 'in', pos: [0, 0, 0], pluginId: 'create-stress', kind: 'rotation-source', params: { rpm: 16, capacity: 100 } },
+      { id: 'bad', pos: [1, 0, 0], pluginId: 'create-stress', kind: 'rotation-load', params: { stress: 10 } },
     ])
-    expect(r.issuesAt([0, 0, 0]).some((m) => m.includes('つなげません'))).toBe(true)
+    expect(r.speed([0, 0, 0])).toBe(16)
+    expect(r.issuesAt([0, 0, 0])).toEqual([])
+    expect(r.issuesAt([1, 0, 0]).some((m) => m.includes('つなげません'))).toBe(true)
+  })
+
+  it('ギアボックスに付けた動力源は、ギアボックスの回転数になる', () => {
+    const bp = blueprintFixture({ size: [2, 1, 1] })
+      .place([0, 0, 0], 'create:gearbox', { axis: 'y' })
+      .place([1, 0, 0], 'create:shaft', { axis: 'x' })
+      .toBlueprint()
+    const r = evaluate(bp, [
+      { id: 'in', pos: [0, 0, 0], pluginId: 'create-stress', kind: 'rotation-source', params: { rpm: 32, capacity: 1000 } },
+    ])
+    expect(Math.abs(r.speed([1, 0, 0]))).toBe(32)
+    expect(r.network([1, 0, 0]).capacity).toBe(1000)
   })
 
   it('nbt のない水車は流れを仮定する', () => {

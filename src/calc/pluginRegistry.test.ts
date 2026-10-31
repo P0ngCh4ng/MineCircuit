@@ -12,7 +12,7 @@ const bp = blueprintFixture()
   .toBlueprint()
 
 function port(pluginId: string, kind: string): VirtualPort {
-  return { id: kind, pos: [0, 0, 0], face: 'west', pluginId, kind, params: {} }
+  return { id: kind, pos: [0, 0, 0], pluginId, kind, params: {} }
 }
 
 describe('PluginRegistry', () => {

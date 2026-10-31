@@ -160,7 +160,7 @@ export function traceItemPaths(ports: readonly VirtualPort[], env: ItemPathEnv):
     }
     const rate = port.params.rate ?? 0
     if (!(rate > 0)) continue
-    tracer.tracePort(port.pos, port.face, { item, rate, source: 'virtual' })
+    tracer.tracePort(port.pos, { item, rate, source: 'virtual' })
   }
   return tracer.result()
 }
@@ -241,7 +241,8 @@ class ItemTracer {
     this.arms = findArms(env.bp)
   }
 
-  tracePort(pos: Vec3, face: Direction, flow: Flow): void {
+  /** 物の入口から pos のブロックに入れる。面は問わない（入れ物に直接入れるのと同じ。#195） */
+  tracePort(pos: Vec3, flow: Flow): void {
     this.steps = 0
     this.ancestors.clear()
     if (!this.env.bp.get(pos)) {
@@ -249,7 +250,7 @@ class ItemTracer {
       return
     }
     this.inputRate += flow.rate
-    this.deliver(pos, flow, null, face)
+    this.deliver(pos, flow, null, null)
   }
 
   result(): ItemPathResult {

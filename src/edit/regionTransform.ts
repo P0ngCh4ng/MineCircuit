@@ -5,7 +5,6 @@ import type { BlockState } from '../domain/blockState'
 import type { Blueprint } from '../domain/blueprint'
 import { EMPTY_CELL, type BlockVolume, type CellValue, type RawEntity } from '../domain/blockVolume'
 import {
-  inverseTransformDirection,
   inverseTransformPos,
   isPureTranslation,
   transformBox,
@@ -16,7 +15,7 @@ import {
   type BlockTransform,
 } from '../domain/blockTransform'
 import { boxContains, forEachInBox, type Box } from '../domain/box'
-import { DIRECTIONS, HORIZONTAL_DIRECTIONS, type Direction } from '../domain/direction'
+import { DIRECTIONS, type Direction } from '../domain/direction'
 import type { NbtTag, RawNbt } from '../domain/nbt'
 import { addVec3, subVec3, type Vec3 } from '../domain/vec3'
 import type { CellChange, EditCommand, EntityChange, RegionResize, Relocation } from './editCommand'
@@ -378,12 +377,6 @@ function transformEntityFacing(inner: Map<string, NbtTag>, t: BlockTransform): v
   }
 }
 
-/** 範囲の操作のあと、仮の入出力などの位置と面の行き先。forward が false なら元に戻すときの向き */
-export interface RelocatedPlace {
-  readonly pos: Vec3
-  readonly face: Direction
-}
-
 /**
  * 範囲の操作の前後で、位置 pos がどこへ移るか。forward が false なら元に戻すときの向き。
  * 範囲の中のものは変換と shift、外のものは shift だけ動く。source が null（貼り付け）なら、どれも shift だけ動く
@@ -392,13 +385,4 @@ export function relocatePos(r: Relocation, pos: Vec3, forward: boolean): Vec3 {
   if (forward) return addVec3(r.source && boxContains(r.source, pos) ? transformPos(r.transform, pos) : pos, r.shift)
   const unshifted = subVec3(pos, r.shift)
   return r.source && boxContains(r.target, pos) ? inverseTransformPos(r.transform, unshifted) : unshifted
-}
-
-/** relocatePos と同じく位置を移し、範囲の中のものは面の向きも変える */
-export function relocatePlace(r: Relocation, place: RelocatedPlace, forward: boolean): RelocatedPlace {
-  const pos = relocatePos(r, place.pos, forward)
-  if (!r.source) return { pos, face: place.face }
-  const inside = forward ? boxContains(r.source, place.pos) : boxContains(r.target, place.pos)
-  if (!inside || !HORIZONTAL_DIRECTIONS.includes(place.face)) return { pos, face: place.face }
-  return { pos, face: forward ? transformDirection(r.transform, place.face) : inverseTransformDirection(r.transform, place.face) }
 }

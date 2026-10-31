@@ -1,17 +1,14 @@
 // 仮の入出力（docs/design.md「仮の入出力（VirtualPort）」）。
-// 設計図の端のブロックの面に、利用者が仮の動力源や負荷を付ける。設計図（.nbt）には書かず、
+// 設計図のブロックに、利用者が仮の動力源や負荷を付ける。面には付けず、つなぎ方はプラグインが決める（#195）。設計図（.nbt）には書かず、
 // アプリ独自のファイル（.mcircuit.json）に保存する予定。
 
-import type { Direction } from '../domain/direction'
 import type { Vec3 } from '../domain/vec3'
 
 /** 仮の入出力1つ分。値の出どころは 'virtual' */
 export interface VirtualPort {
   readonly id: string
-  /** 接続するブロックの位置（設計図全体の座標） */
+  /** 付けるブロックの位置（設計図全体の座標） */
   readonly pos: Vec3
-  /** どの面から入るか */
-  readonly face: Direction
   /** 'create-stress' など。宛先のプラグインの id */
   readonly pluginId: string
   /** 'rotation-source' など。種類はプラグインが portKinds で定義する */
