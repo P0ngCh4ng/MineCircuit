@@ -104,6 +104,16 @@ export interface CalcRotation {
   readonly overloaded: boolean
 }
 
+/**
+ * 力や物が伝わるつながり1本。表示部分の「力の流れ」に使う（docs/ui.md「力の流れ」）。
+ * 'power' は回転のつながりで向きを持たない（向きは動力源から決める）。'item' は物が from から to へ進む
+ */
+export interface CalcLink {
+  readonly from: Vec3
+  readonly to: Vec3
+  readonly kind: 'power' | 'item'
+}
+
 export interface CalcResult {
   readonly summary: readonly CalcSummaryItem[]
   readonly issues: readonly CalcIssue[]
@@ -112,6 +122,10 @@ export interface CalcResult {
   readonly probes?: readonly CalcProbe[]
   /** 回るブロックごとの回転。表示部分の色分けで使う。なければ省略 */
   readonly rotations?: readonly CalcRotation[]
+  /** 力や物が伝わるつながり。なければ省略 */
+  readonly links?: readonly CalcLink[]
+  /** 動力源の位置（仮の動力源を付けたブロックを含む）。なければ省略 */
+  readonly sources?: readonly Vec3[]
 }
 
 export interface CalcPlugin {

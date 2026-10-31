@@ -25,6 +25,7 @@ import { orientForPlacement, placementHelper, placementProblem } from './createP
 import { transformCreateBlockEntity, transformCreateState } from './createTransform'
 import { kineticThroughputValues, staticThroughputValues, type ThroughputEnv } from './createThroughput'
 import { CreateValueResolver } from './createValueResolver'
+import { flowLinks } from './flowLinks'
 import { bottleneckValue, itemPathValues, lineSummary, traceItemPaths, type ItemPathRecord, type LineFlow } from './createItemPath'
 import {
   CREATE_STRESS_PLUGIN_ID,
@@ -98,13 +99,15 @@ export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<
   const evaluation = graph.evaluate({ maxRotationSpeed: maxRotationSpeed.value, disableStress: disableStress.value })
   if (disableStress.value) log.add('設定で応力が切ってある（disableStress）ので、過負荷にならない')
 
+  const rpmAt = runningSpeeds(graph, evaluation)
   const recipes = await loadRecipes(ctx, log)
   // 物の通り道（docs/create-throughput.md「物の通り道（#127）」）。届く物は、処理時間のレシピを決めるのにも使う
   const path = traceItemPaths(
     ctx.ports.filter((p) => p.kind === ITEM_INPUT_PORT_KIND),
-    { bp, recipes, log, rpmAt: runningSpeeds(graph, evaluation), bulkPressing: values.bulkPressing().value },
+    { bp, recipes, log, rpmAt, bulkPressing: values.bulkPressing().value },
   )
   const env: ThroughputEnv = { bp, values, recipes, log, pathItems: (pos) => path.itemsAt(pos) }
+  const flow = flowLinks(bp, graph, rpmAt)
   const allProbes = withBottleneck(withItemPath([...probes(graph, evaluation, env), ...staticProbes(bp, env)], path.records), path.line)
 
   return {
@@ -114,6 +117,8 @@ export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<
     assumptions: log.list(),
     probes: allProbes,
     rotations: rotations(graph, evaluation, values),
+    links: flow.links,
+    sources: flow.sources,
   }
 }
 

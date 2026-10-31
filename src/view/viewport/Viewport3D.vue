@@ -20,6 +20,7 @@ import { usePasteStore } from '../stores/pasteStore'
 import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
+import { useFlowTrace } from '../calc/useFlowTrace'
 import type { PickModifiers, PickTarget } from '../tools/tool'
 import SelectionToolbar from '../selection/SelectionToolbar.vue'
 import { boundingRect, sameRect, type ScreenRect } from '../selection/toolbarPosition'
@@ -48,6 +49,7 @@ const CLICK_TOLERANCE = 4
 const session = useDocumentSession()
 const tools = useToolStore()
 const view = useViewStore()
+const flow = useFlowTrace()
 const brush = useBrushStore()
 /** 検索で強調するブロックの位置（#15） */
 const highlight = useSearchHighlight()
@@ -466,11 +468,11 @@ onMounted(() => {
       },
       { immediate: true },
     ),
-    // 回転の表示（#117）。「回転」を切ったら出さない
+    // 回転の表示（#117）。「回転」を切ったら出さない。選んだブロックからの力の流れ（#207）も
     watch(
-      () => [view.showRotation, calc.rotations, view.layerDisplay] as const,
-      ([show, rotations, display]) => {
-        rotationOverlay.update(show ? rotations : [], display)
+      () => [view.showRotation, calc.rotations, view.layerDisplay, flow.value] as const,
+      ([show, rotations, display, trace]) => {
+        rotationOverlay.update(show ? rotations : [], display, trace)
         render()
       },
       { immediate: true },

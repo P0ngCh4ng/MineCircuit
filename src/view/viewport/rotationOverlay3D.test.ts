@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import type { CalcRotation } from '../../calc/calcPlugin'
+import type { FlowTrace } from '../../calc/flowTrace'
 import type { LayerDisplay } from '../layers/layerDisplay'
 import { rotationLabel } from './layerRenderer2D'
 import { ringMatrix, RotationOverlay3D } from './rotationOverlay3D'
@@ -50,7 +51,27 @@ describe('RotationOverlay3D', () => {
     overlay.update([rot({ pos: [0, 0, 0] }), rot({ pos: [0, 2, 0] })], only2)
     expect(overlay.count().boxes).toBe(1)
     overlay.update([])
-    expect(overlay.count()).toEqual({ boxes: 0, rings: 0 })
+    expect(overlay.count()).toEqual({ boxes: 0, rings: 0, arrows: 0 })
+    overlay.dispose()
+  })
+
+  it('力の流れの矢印は、どちらかの端が見えている段のものだけ出す（#207）', () => {
+    const overlay = new RotationOverlay3D()
+    const rotations = [rot({ pos: [0, 0, 0] }), rot({ pos: [1, 0, 0] }), rot({ pos: [1, 1, 0] }), rot({ pos: [1, 2, 0] })]
+    const flow: FlowTrace = {
+      arrows: [
+        { from: [0, 0, 0], to: [1, 0, 0], kind: 'power' },
+        { from: [1, 0, 0], to: [1, 1, 0], kind: 'power' },
+        { from: [1, 1, 0], to: [1, 2, 0], kind: 'item' },
+      ],
+      blocks: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [1, 2, 0]],
+    }
+    overlay.update(rotations, undefined, flow)
+    expect(overlay.count().arrows).toBe(3)
+    overlay.update(rotations, { layer: 0, mode: 'only', hidden: new Set() }, flow)
+    expect(overlay.count().arrows).toBe(2)
+    overlay.update(rotations)
+    expect(overlay.count().arrows).toBe(0)
     overlay.dispose()
   })
 })
@@ -64,9 +85,11 @@ describe('回転の色と2Dの文字', () => {
     expect(showsDirection(rot({ rpm: -8 }))).toBe(true)
   })
 
-  it('上下の軸は上から見た向き、横の軸は符号を付ける', () => {
-    expect(rotationLabel(rot({ axis: 'y', rpm: 16 }))).toBe('↺16')
-    expect(rotationLabel(rot({ axis: 'y', rpm: -32 }))).toBe('↻32')
+  it('回転数は符号を付ける。力の流れを出したブロックの上下の軸は、上から見た向き（#207）', () => {
+    expect(rotationLabel(rot({ axis: 'y', rpm: 16 }))).toBe('+16')
+    expect(rotationLabel(rot({ axis: 'y', rpm: 16 }), true)).toBe('↺16')
+    expect(rotationLabel(rot({ axis: 'y', rpm: -32 }), true)).toBe('↻32')
+    expect(rotationLabel(rot({ axis: 'x', rpm: 64 }), true)).toBe('+64')
     expect(rotationLabel(rot({ axis: 'x', rpm: 64 }))).toBe('+64')
     expect(rotationLabel(rot({ axis: 'z', rpm: -10.25 }))).toBe('−10.3')
   })

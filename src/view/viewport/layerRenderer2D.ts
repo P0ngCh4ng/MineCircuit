@@ -2,6 +2,7 @@
 // 1つ下の段を薄く出し、マスが大きいときはブロックの略称を出す。上が北（−Z）。
 
 import type { CalcRotation } from '../../calc/calcPlugin'
+import type { FlowArrow, FlowTrace } from '../../calc/flowTrace'
 import type { Blueprint } from '../../domain/blueprint'
 import { isSingleCell, type Box } from '../../domain/box'
 import type { Vec3 } from '../../domain/vec3'
@@ -79,6 +80,8 @@ export interface LayerScene2D {
   readonly calcMarks?: CalcMarks2D
   /** 回転の表示（#117）。今の段にあるものを速さの色で塗り、回転数を書く。null か省略で出さない */
   readonly rotations?: readonly CalcRotation[] | null
+  /** 選んだブロックからの力の流れ（#207）。今の段の矢印を描く。null か省略で出さない */
+  readonly flow?: FlowTrace | null
   /**
    * テクスチャで描く（#85）。描けないブロックと、null か省略のときは色で塗る
    */
@@ -110,11 +113,66 @@ export const ROTATION_LABEL_MIN_CELL_SIZE = 22
 /**
  * 2D のマスに書く回転数。上下の軸（y）なら上から見た向き（正は ↺）を付け、横の軸なら符号を付ける
  */
-export function rotationLabel(r: CalcRotation): string {
+export function rotationLabel(r: CalcRotation, turnMark = false): string {
   const speed = Math.round(Math.abs(r.rpm) * 10) / 10
-  if (r.axis === 'y') return `${r.rpm > 0 ? '↺' : '↻'}${speed}`
+  if (turnMark && r.axis === 'y') return `${r.rpm > 0 ? '↺' : '↻'}${speed}`
   return `${r.rpm > 0 ? '+' : '−'}${speed}`
 }
+/** 力の流れの矢印の色（#207）。回転は白、物は橙 */
+export const FLOW_COLORS: Readonly<Record<FlowArrow['kind'], string>> = { power: '#ffffff', item: '#ff9a1f' }
+
+/**
+ * 力の流れの矢印を描く（#207）。今の段の中の矢印は、マスの中心どうしを結ぶ線と、真ん中の矢じり。
+ * 段をまたぐ矢印は、今の段の側のマスの右上に ▲（上へ）・▼（下へ）を書く
+ */
+export function drawFlow2D(ctx: Canvas2DLike, layout: GridLayout2D, layer: number, flow: FlowTrace, fontFamily: string): void {
+  const { originX: ox, originY: oy, cellSize: cs } = layout
+  const cx = (p: Vec3): number => ox + (p[0] + 0.5) * cs
+  const cy = (p: Vec3): number => oy + (p[2] + 0.5) * cs
+  const head = Math.max(4, cs * 0.22)
+  ctx.save()
+  for (const a of flow.arrows) {
+    if (a.from[1] !== layer && a.to[1] !== layer) continue
+    const color = FLOW_COLORS[a.kind]
+    if (a.from[1] === layer && a.to[1] === layer) {
+      const x0 = cx(a.from)
+      const y0 = cy(a.from)
+      const x1 = cx(a.to)
+      const y1 = cy(a.to)
+      const len = Math.hypot(x1 - x0, y1 - y0) || 1
+      const ux = (x1 - x0) / len
+      const uy = (y1 - y0) / len
+      const mx = (x0 + x1) / 2 + ux * head * 0.5
+      const my = (y0 + y1) / 2 + uy * head * 0.5
+      const stroke = (style: string, width: number): void => {
+        ctx.strokeStyle = style
+        ctx.lineWidth = width
+        ctx.beginPath()
+        ctx.moveTo(x0, y0)
+        ctx.lineTo(x1, y1)
+        ctx.moveTo(mx - ux * head - uy * head * 0.7, my - uy * head + ux * head * 0.7)
+        ctx.lineTo(mx, my)
+        ctx.lineTo(mx - ux * head + uy * head * 0.7, my - uy * head - ux * head * 0.7)
+        ctx.stroke()
+      }
+      stroke('rgb(0 0 0 / 70%)', 5)
+      stroke(color, 2.5)
+      continue
+    }
+    const here = a.from[1] === layer ? a.from : a.to
+    const mark = a.to[1] > a.from[1] ? '▲' : '▼'
+    ctx.font = `600 ${Math.max(9, Math.floor(cs * 0.3))}px ${fontFamily}`
+    ctx.textAlign = 'right'
+    ctx.textBaseline = 'top'
+    ctx.strokeStyle = 'rgb(0 0 0 / 70%)'
+    ctx.lineWidth = 3
+    ctx.fillStyle = color
+    ctx.strokeText(mark, ox + (here[0] + 1) * cs - 1, oy + here[2] * cs + 1)
+    ctx.fillText(mark, ox + (here[0] + 1) * cs - 1, oy + here[2] * cs + 1)
+  }
+  ctx.restore()
+}
+
 /** 問題の印の色 */
 export const ISSUE_MARK_CSS = '#e0402a'
 
@@ -283,8 +341,9 @@ export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, sc
   ctx.fillText('z', ox - 34, oy + 2)
   ctx.fillText('↓', ox - 34, oy + 16)
 
-  // 回転の表示：速さの段階の色で塗り、マスが大きければ回転数を書く。上下の軸は、上から見た向き（↺ ↻）も
+  // 回転の表示：速さの段階の色で塗り、マスが大きければ回転数を書く。力の流れを出したブロックの上下の軸は、上から見た向き（↺ ↻）も
   if (scene.rotations) {
+    const traced = new Set(scene.flow?.blocks.map((p) => p.join(',')) ?? [])
     ctx.save()
     for (const r of scene.rotations) {
       if (r.pos[1] !== layer) continue
@@ -305,13 +364,15 @@ export function drawLayer2D(ctx: Canvas2DLike, width: number, height: number, sc
         ctx.fillStyle = '#ffffff'
         ctx.strokeStyle = 'rgb(0 0 0 / 70%)'
         ctx.lineWidth = 3
-        const text = rotationLabel(r)
+        const text = rotationLabel(r, traced.has(r.pos.join(',')))
         ctx.strokeText(text, px + cs / 2, py + cs / 2)
         ctx.fillText(text, px + cs / 2, py + cs / 2)
       }
     }
     ctx.restore()
   }
+
+  if (scene.flow) drawFlow2D(ctx, scene.layout, layer, scene.flow, scene.fontFamily)
 
   // 計算結果の印：ネットワークは青緑、問題は赤。半透明で塗って枠を引く
   const calcMark = (positions: readonly Vec3[] | null | undefined, color: string, lineWidth: number): void => {

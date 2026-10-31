@@ -14,6 +14,8 @@ import {
   SELECTION_DASH_2D,
   TEXTURE_BACKDROP_ALPHA,
   type Canvas2DLike,
+  drawFlow2D,
+  FLOW_COLORS,
   type SelectionCanvas2D,
 } from './layerRenderer2D'
 import { boxFromCorners, singleCellBox } from '../../domain/box'
@@ -259,5 +261,56 @@ describe('drawGrowMargin2D（#191）', () => {
     }
     drawGrowMargin2D(ctx as unknown as SelectionCanvas2D, { originX: 10, originY: 20, cellSize: 8 }, [3, 2, 4], 1, LIGHT_THEME_2D)
     expect(rects).toEqual([{ x: 2.5, y: 12.5, w: 40, h: 48, dash: [...SELECTION_DASH_2D] }])
+  })
+})
+
+describe('drawFlow2D（#207）', () => {
+  function recorder() {
+    const lines: string[] = []
+    const texts: { text: string; style: string }[] = []
+    const ctx = {
+      strokeStyle: '',
+      fillStyle: '',
+      lineWidth: 1,
+      font: '',
+      textAlign: 'start',
+      textBaseline: 'alphabetic',
+      beginPath() {},
+      moveTo(x: number, y: number) {
+        lines.push(`${ctx.strokeStyle} ${x},${y}`)
+      },
+      lineTo() {},
+      stroke() {},
+      strokeText() {},
+      fillText(text: string) {
+        texts.push({ text, style: String(ctx.fillStyle) })
+      },
+      save() {},
+      restore() {},
+    }
+    return { ctx: ctx as unknown as Canvas2DLike, lines, texts }
+  }
+  const layout = { originX: 0, originY: 0, cellSize: 20 }
+
+  it('今の段の矢印は、マスの中心から線を引く（縁取りと色の2回）', () => {
+    const { ctx, lines, texts } = recorder()
+    drawFlow2D(ctx, layout, 0, { arrows: [{ from: [0, 0, 0], to: [1, 0, 0], kind: 'item' }], blocks: [] }, 'sans-serif')
+    expect(lines.filter((l) => l.endsWith(' 10,10'))).toEqual(['rgb(0 0 0 / 70%) 10,10', `${FLOW_COLORS.item} 10,10`])
+    expect(texts).toEqual([])
+  })
+
+  it('段をまたぐ矢印は、今の段の側に ▲・▼ を書き、ほかの段の矢印は描かない', () => {
+    const { ctx, lines, texts } = recorder()
+    const flow = {
+      arrows: [
+        { from: [0, 0, 0] as const, to: [0, 1, 0] as const, kind: 'power' as const },
+        { from: [1, 2, 0] as const, to: [1, 1, 0] as const, kind: 'power' as const },
+        { from: [3, 2, 0] as const, to: [4, 2, 0] as const, kind: 'power' as const },
+      ],
+      blocks: [],
+    }
+    drawFlow2D(ctx, layout, 1, flow, 'sans-serif')
+    expect(texts.map((t) => t.text)).toEqual(['▲', '▼'])
+    expect(lines).toEqual([])
   })
 })

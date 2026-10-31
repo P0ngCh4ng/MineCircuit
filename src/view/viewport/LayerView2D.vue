@@ -21,6 +21,7 @@ import { usePasteStore } from '../stores/pasteStore'
 import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
+import { useFlowTrace } from '../calc/useFlowTrace'
 import SelectionToolbar from '../selection/SelectionToolbar.vue'
 import type { ScreenRect } from '../selection/toolbarPosition'
 import { pick2D, type GridLayout2D, type PickScene2D } from '../tools/picker'
@@ -48,6 +49,7 @@ const session = useDocumentSession()
 const layers = useLayerStore()
 const tools = useToolStore()
 const viewMode = useViewStore()
+const flow = useFlowTrace()
 /** 検索で強調するブロックの位置（#15） */
 const highlight = useSearchHighlight()
 const calc = useCalcStore()
@@ -176,6 +178,7 @@ function draw(): void {
     highlighted: highlight.value,
     calcMarks: { network: probe.networkPositions, issues: calc.issuePositions },
     rotations: viewMode.showRotation ? calc.rotations : null,
+    flow: flow.value,
     cellPainter: cellPainter.value,
   })
   // 置くツールのとき、枠のすぐ外に置ける余白（#191）
@@ -257,7 +260,7 @@ watch(
 
 // 計算結果の印（ネットワークの強調と問題の位置。#31）と回転の表示（#117）が変わったら描き直す
 watch(
-  () => [probe.networkPositions, calc.issuePositions, viewMode.showRotation, calc.rotations],
+  () => [probe.networkPositions, calc.issuePositions, viewMode.showRotation, calc.rotations, flow.value],
   () => draw(),
   { flush: 'post' },
 )
