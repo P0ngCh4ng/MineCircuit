@@ -3,9 +3,11 @@
 // マウスの位置は picker.ts の pick2D でマスに直し、toolStore を通して今のツールに渡す。
 // ホイールで拡大・縮小、中ボタンか空白キー＋左ドラッグで表示を動かす（#155。計算は view2D.ts）。
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { isSingleCell } from '../../domain/box'
+import { boxContains, isSingleCell } from '../../domain/box'
 import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
+import { useDragMove } from '../edit/useDragMove'
+import { useDragMoveStore } from '../stores/dragMoveStore'
 import { useAppearanceStore } from '../stores/appearanceStore'
 import { useBrushStore } from '../stores/brushStore'
 import { useCalcStore } from '../stores/calcStore'
@@ -19,7 +21,8 @@ import { useViewStore } from '../stores/viewStore'
 import SelectionToolbar from '../selection/SelectionToolbar.vue'
 import type { ScreenRect } from '../selection/toolbarPosition'
 import { pick2D, type GridLayout2D, type PickScene2D } from '../tools/picker'
-import type { PickTarget } from '../tools/tool'
+import type { Vec3 } from '../../domain/vec3'
+import type { PickModifiers, PickTarget } from '../tools/tool'
 import { ANALYSIS_COLORS_2D, drawAnalysisOverlay2D } from './analysisOverlay2D'
 import { clampedCell2D, dragSelectionBox, insideGrid2D, isDrag2D, type Cell2D } from './dragSelect2D'
 import { layoutGrid2D } from './layerGrid2D'
@@ -50,6 +53,8 @@ const measures = useMeasureStore()
 const ports = usePortStore()
 const paste = usePasteStore()
 const brush = useBrushStore()
+const dragMove = useDragMove()
+const dragMoveStore = useDragMoveStore()
 const appearance = useAppearanceStore()
 /** テクスチャで描く（#85）。色で描くとき、見た目がないときは null */
 const cellPainter = computed(() => createTextureCellPainter(appearance.active))
@@ -172,6 +177,18 @@ function draw(): void {
     paste.box,
     paste.blocked,
   )
+  // 範囲をつかんで動かす見本（#199）
+  const moving = dragMoveStore.preview
+  if (moving) {
+    drawPastePreview2D(
+      ctx,
+      grid,
+      layer.value,
+      moving.cells.map((c) => ({ pos: c.pos, id: c.state.id.toString() })),
+      moving.box,
+      moving.blocked > 0,
+    )
+  }
   // 置くツールで一直線に置く見本（#161）
   const line = brush.linePreview
   if (line) {
@@ -188,6 +205,12 @@ function draw(): void {
 // 一直線に置く見本が変わったら描き直す（#161）
 watch(
   () => brush.linePreview,
+  () => draw(),
+  { flush: 'post' },
+)
+// 範囲をつかんで動かす見本が変わったら描き直す（#199）
+watch(
+  () => dragMoveStore.preview,
   () => draw(),
   { flush: 'post' },
 )
@@ -250,6 +273,10 @@ function samePos(a: PickTarget | null, b: PickTarget | null): boolean {
   return a.empty === b.empty && a.pos[0] === b.pos[0] && a.pos[1] === b.pos[1] && a.pos[2] === b.pos[2]
 }
 
+function modsOf(e: MouseEvent): PickModifiers {
+  return { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey }
+}
+
 /** canvas の中の位置 */
 function canvasPoint(e: MouseEvent): { x: number; y: number } | null {
   const el = canvas.value
@@ -280,7 +307,24 @@ interface DragPlace {
   readonly target: PickTarget
   moved: boolean
 }
-let drag: DragSelect | DragPlace | null = null
+/**
+ * 範囲をつかんで動かすドラッグ（#199）。押したマスから別のマスへ動いたら始める。
+ * 動かずに離したときは、ふつうのクリック（onClick）に任せる
+ */
+interface DragMoveRange {
+  readonly kind: 'move'
+  readonly pointerId: number
+  readonly start: Cell2D
+  /** 今のずれ */
+  offset: Vec3
+  moved: boolean
+}
+let drag: DragSelect | DragPlace | DragMoveRange | null = null
+
+/** canvas の中の位置のマス。マス目の外でもそのまま（範囲を枠の外へ動かせるように） */
+function cellAt(p: { x: number; y: number }, grid: GridLayout2D): Cell2D {
+  return [Math.floor((p.x - grid.originX) / grid.cellSize), Math.floor((p.y - grid.originY) / grid.cellSize)]
+}
 /** ドラッグで範囲を選んだ直後のクリックを、選択の操作にしない */
 let suppressClick = false
 
@@ -290,6 +334,17 @@ function updateDrag(e: PointerEvent): void {
   const grid = layout.value
   const p = canvasPoint(e)
   if (!drag || !bp || !grid || !p) return
+  if (drag.kind === 'move') {
+    const at = cellAt(p, grid)
+    if (!drag.moved && !isDrag2D(drag.start, at)) return
+    if (!drag.moved) {
+      drag.moved = true
+      if (!dragMove.begin()) return
+    }
+    drag.offset = [at[0] - drag.start[0], 0, at[1] - drag.start[1]]
+    dragMove.update(drag.offset, modsOf(e))
+    return
+  }
   const cell = clampedCell2D(p.x, p.y, grid, bp.size)
   if (!drag.moved && !isDrag2D(drag.start, cell)) return
   if (drag.kind === 'place') {
@@ -404,7 +459,12 @@ function onPointerDown(e: PointerEvent): void {
   // 置くツールは枠のすぐ外からも引ける（#191）。どこを押したかは pickAt で決める
   if (kind === 'select' && !insideGrid2D(p.x, p.y, grid, bp.size)) return
   const start = clampedCell2D(p.x, p.y, grid, bp.size)
-  if (kind === 'select') {
+  // 範囲の中（範囲の段にいるとき）を押したら、範囲をつかむ（#199）
+  const box = tools.selectionBox
+  // 1マスだけのとき（クリックで選んだブロック）は、今までどおりそこから範囲を選ぶ
+  if (kind === 'select' && box && !isSingleCell(box) && boxContains(box, [start[0], layer.value, start[1]])) {
+    drag = { kind: 'move', pointerId: e.pointerId, start, offset: [0, 0, 0], moved: false }
+  } else if (kind === 'select') {
     drag = { kind, pointerId: e.pointerId, start, anchorLayer: tools.selectedPos ? tools.selectedPos[1] : null, moved: false }
   } else {
     const target = pickAt(e)
@@ -422,6 +482,8 @@ function onPointerDown(e: PointerEvent): void {
 function endDrag(e: PointerEvent): void {
   // 置くツールのドラッグの途中で取られたときは、線をやめる
   if (drag?.kind === 'place' && tools.isDragging()) tools.cancelDrag()
+  // 範囲をつかんだまま取られたときは、動かさない（#199）
+  if (drag?.kind === 'move') dragMove.cancel()
   try {
     if (canvas.value?.hasPointerCapture?.(e.pointerId)) canvas.value.releasePointerCapture(e.pointerId)
   } catch {
@@ -440,7 +502,12 @@ function onPointerUp(e: PointerEvent): void {
   // 範囲を選んだとき・線を引いたときは、続いて来るクリックで選び直さない・置かない
   if (drag.moved) suppressClick = true
   // 一直線に置く（#161）。離したマスまでで置く
-  if (drag.kind === 'place' && tools.isDragging()) tools.endDrag(null, { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey })
+  if (drag.kind === 'place' && tools.isDragging()) tools.endDrag(null, modsOf(e))
+  // 範囲を動かす・写す（#199）
+  if (drag.kind === 'move' && drag.moved) {
+    dragMove.finish(drag.offset, modsOf(e))
+    drag = null
+  }
   endDrag(e)
 }
 

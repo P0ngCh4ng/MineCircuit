@@ -3,9 +3,13 @@
 // 左ドラッグで回す、右ドラッグで動かす、ホイールで拡大・縮小。動かさずに離したらクリック。
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { Blueprint } from '../../domain/blueprint'
-import { isSingleCell } from '../../domain/box'
+import { boxContains, isSingleCell } from '../../domain/box'
+import type { Vec3 } from '../../domain/vec3'
 import { useSearchHighlight } from '../analysis/useSearchHighlight'
 import { useDocumentSession } from '../document/documentSession'
+import { axisParam, planeHit } from '../edit/dragMove'
+import { useDragMove } from '../edit/useDragMove'
+import { useDragMoveStore } from '../stores/dragMoveStore'
 import { useAppearanceStore } from '../stores/appearanceStore'
 import { useBrushStore } from '../stores/brushStore'
 import { useCalcStore } from '../stores/calcStore'
@@ -52,6 +56,8 @@ const measures = useMeasureStore()
 const ports = usePortStore()
 const paste = usePasteStore()
 const appearance = useAppearanceStore()
+const dragMove = useDragMove()
+const dragMoveStore = useDragMoveStore()
 
 const host = ref<HTMLDivElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -84,6 +90,9 @@ scene.scene.add(pasteOverlay.group)
 // 置くツールで一直線に置く見本（#161）。貼り付けの見本と同じ形で出す
 const lineOverlay = new PasteOverlay3D()
 scene.scene.add(lineOverlay.group)
+// 範囲をつかんで動かす見本（#199）。貼り付けの見本と同じ形で出す
+const moveOverlay = new PasteOverlay3D()
+scene.scene.add(moveOverlay.group)
 let renderer: SceneRenderer | null = null
 let resizeObserver: ResizeObserver | null = null
 let stopTheme: (() => void) | null = null
@@ -136,11 +145,48 @@ interface PlaceDrag {
 }
 let placeDrag: PlaceDrag | null = null
 
+/**
+ * 範囲をつかんで動かすドラッグ（#199）。範囲の中のブロックを押したら、カメラを回さずに動かす。
+ * 押したブロックの真ん中の高さの水平な面の上で動かし、Shift の間は押した点を通る縦の線の上で動かす。
+ * 少し動いたら始め、動かずに離したときはふつうのクリック
+ */
+interface MoveDrag {
+  readonly pointerId: number
+  /** 押したブロックの真ん中 */
+  readonly grab: Vec3
+  begun: boolean
+  offset: Vec3
+}
+let moveDrag: MoveDrag | null = null
+
+/** つかんだ点からのずれ（マス）。求められなければ前のまま */
+function moveOffset(e: PointerEvent, drag: MoveDrag): Vec3 {
+  if (!renderer) return drag.offset
+  const ray = renderer.rayAt(e.clientX, e.clientY)
+  if (e.shiftKey) {
+    const s = axisParam(ray, drag.grab, 1)
+    return s === null ? drag.offset : [0, Math.round(s), 0]
+  }
+  const hit = planeHit(ray, drag.grab[1])
+  return hit === null ? drag.offset : [Math.round(hit[0] - drag.grab[0]), 0, Math.round(hit[1] - drag.grab[2])]
+}
+
 function modsOf(e: PointerEvent | MouseEvent): PickModifiers {
   return { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey }
 }
 
 function onPointerMove(e: PointerEvent): void {
+  if (moveDrag && moveDrag.pointerId === e.pointerId) {
+    const start = downAt
+    if (!moveDrag.begun && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > CLICK_TOLERANCE) {
+      moveDrag.begun = dragMove.begin()
+    }
+    if (moveDrag.begun) {
+      moveDrag.offset = moveOffset(e, moveDrag)
+      dragMove.update(moveDrag.offset, modsOf(e))
+    }
+    return
+  }
   if (placeDrag && placeDrag.pointerId === e.pointerId) {
     const start = downAt
     if (!placeDrag.begun && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > CLICK_TOLERANCE) {
@@ -156,7 +202,7 @@ function onPointerMove(e: PointerEvent): void {
 }
 
 function onPointerLeave(): void {
-  if (placeDrag) return
+  if (placeDrag || moveDrag) return
   tools.hover(null)
 }
 
@@ -171,9 +217,40 @@ function finishPlaceDrag(e: PointerEvent): void {
   }
 }
 
+/** 範囲を動かすドラッグを終える。カメラの操作を戻す */
+function finishMoveDrag(e: PointerEvent): void {
+  moveDrag = null
+  renderer?.setOrbitEnabled?.(true)
+  try {
+    if (canvas.value?.hasPointerCapture?.(e.pointerId)) canvas.value.releasePointerCapture(e.pointerId)
+  } catch {
+    // 放せなくても困らない
+  }
+}
+
+/** 選択ツールで、範囲の中のブロックを押したら範囲をつかむ（#199）。つかんだら true */
+function grabSelection(e: PointerEvent): boolean {
+  const box = tools.selectionBox
+  // 1マスだけのとき（クリックで選んだブロック）は、今までどおりカメラを回す
+  if (tools.activeToolId !== 'select' || !box || isSingleCell(box) || paste.active) return false
+  const target = pickAt(e)
+  if (!target || target.empty || !boxContains(box, target.pos)) return false
+  const [x, y, z] = target.pos
+  moveDrag = { pointerId: e.pointerId, grab: [x + 0.5, y + 0.5, z + 0.5], begun: false, offset: [0, 0, 0] }
+  renderer?.setOrbitEnabled?.(false)
+  try {
+    canvas.value?.setPointerCapture?.(e.pointerId)
+  } catch {
+    // 捕まえられなくても、ドラッグはできる
+  }
+  return true
+}
+
 function onPointerDown(e: PointerEvent): void {
   downAt = e.button === 0 ? { x: e.clientX, y: e.clientY } : null
   placeDrag = null
+  moveDrag = null
+  if (e.button === 0 && grabSelection(e)) return
   if (e.button !== 0 || tools.activeToolId !== 'place' || paste.active) return
   const target = pickAt(e)
   if (!target) return
@@ -188,6 +265,12 @@ function onPointerDown(e: PointerEvent): void {
 }
 
 function onPointerCancel(e: PointerEvent): void {
+  if (moveDrag) {
+    dragMove.cancel()
+    finishMoveDrag(e)
+    downAt = null
+    return
+  }
   if (!placeDrag) return
   if (placeDrag.begun && !placeDrag.refused) tools.cancelDrag()
   finishPlaceDrag(e)
@@ -195,6 +278,16 @@ function onPointerCancel(e: PointerEvent): void {
 }
 
 function onPointerUp(e: PointerEvent): void {
+  const grabbed = moveDrag
+  if (grabbed && grabbed.pointerId === e.pointerId) {
+    finishMoveDrag(e)
+    if (grabbed.begun) {
+      downAt = null
+      dragMove.finish(moveOffset(e, grabbed), modsOf(e))
+      tools.hover(pickAt(e))
+      return
+    }
+  }
   const drag = placeDrag
   if (drag && drag.pointerId === e.pointerId) {
     finishPlaceDrag(e)
@@ -337,6 +430,15 @@ onMounted(() => {
       },
       { immediate: true },
     ),
+    // 範囲をつかんで動かす見本（#199）
+    watch(
+      () => dragMoveStore.preview,
+      (preview) => {
+        moveOverlay.update(preview?.cells ?? [], preview?.box ?? null, (preview?.blocked ?? 0) > 0)
+        render()
+      },
+      { immediate: true },
+    ),
     // 貼り付けの見本（#133）
     watch(
       () => [paste.cells, paste.box, paste.blocked] as const,
@@ -399,6 +501,7 @@ onBeforeUnmount(() => {
   selectionOverlay.dispose()
   pasteOverlay.dispose()
   lineOverlay.dispose()
+  moveOverlay.dispose()
   tools.hover(null)
 })
 
