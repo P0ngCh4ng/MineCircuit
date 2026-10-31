@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { blueprintFixture, state } from '../../../tests/fixtures/blueprintFixture'
 import { BlockVolume } from '../../domain/blockVolume'
 import { Blueprint } from '../../domain/blueprint'
+import { resizeRegion, type ResizePlan } from '../../edit/blueprintResize'
 import { placeBlock } from '../../edit/editCommand'
 import { EditHistory } from '../../edit/editHistory'
 import { layerVisibility, SHOW_ALL_LAYERS, type LayerDisplay } from '../layers/layerDisplay'
@@ -187,6 +188,11 @@ describe('BlueprintMeshBuilder', () => {
   })
 })
 
+function planOf(result: ResizePlan | string | null): ResizePlan {
+  if (result === null || typeof result === 'string') throw new Error(`操作を作れません: ${result}`)
+  return result
+}
+
 describe('BlueprintScene', () => {
   it('設計図を入れ替えると描き直し、null なら何も描かない', () => {
     const scene = new BlueprintScene()
@@ -212,6 +218,25 @@ describe('BlueprintScene', () => {
     history.undo()
     scene.setBlueprint(bp)
     expect(scene.renderStats.solid).toBe(6)
+  })
+
+  it('同じ設計図のまま大きさを変えると、グリッドを今の大きさで作り直す（#193）', () => {
+    const bp = sample()
+    const history = new EditHistory(bp)
+    const scene = new BlueprintScene()
+    scene.setBlueprint(bp)
+    const gridWidth = () => {
+      const grid = scene.scene.getObjectByName('grid') as THREE.LineSegments
+      grid.geometry.computeBoundingBox()
+      return grid.geometry.boundingBox!.max.x - grid.geometry.boundingBox!.min.x
+    }
+    expect(gridWidth()).toBe(3)
+    history.apply(planOf(resizeRegion(bp, 0, { min: [0, 0, 0], max: [2, 0, 0] })).command)
+    scene.setBlueprint(bp)
+    expect(gridWidth()).toBe(5)
+    history.undo()
+    scene.setBlueprint(bp)
+    expect(gridWidth()).toBe(3)
   })
 
   it('段の表示方法を変えると、隠す段を描かず、今の段に枠を出す', () => {
