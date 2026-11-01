@@ -125,6 +125,38 @@ describe('Viewport3D', () => {
     expect(tools.selectionBox).toEqual({ min: [0, 0, 0], max: [2, 1, 0] })
   })
 
+  it('選択ツールで1つだけ選んだブロックを押してドラッグすると、カメラを回さずに動かす（#209）', () => {
+    /** 画面の 10px が 1 マス（クリックとドラッグを分ける幅より大きく動かすため） */
+    class OrbitRenderer extends FakeRenderer {
+      orbit: boolean[] = []
+      override rayAt(clientX: number, clientY: number): PickRay {
+        return { origin: [clientX / 10 + 0.05, 50, clientY / 10 + 0.05], direction: [0, -1, 0] }
+      }
+      setOrbitEnabled(enabled: boolean): void {
+        this.orbit.push(enabled)
+      }
+    }
+    const fake = new OrbitRenderer()
+    const { wrapper, tools, session } = setup(() => fake)
+    const bp = session.current.value!.blueprint
+    const canvas = wrapper.get('canvas').element
+    tools.setSelected([0, 0, 0])
+
+    // 選んだ石 (0,0,0) を z +2 へ
+    canvas.dispatchEvent(pointer('pointerdown', 0, 0, { buttons: 1 }))
+    expect(fake.orbit).toEqual([false])
+    canvas.dispatchEvent(pointer('pointermove', 0, 20, { buttons: 1 }))
+    canvas.dispatchEvent(pointer('pointerup', 0, 20))
+    expect(bp.get([0, 0, 0])).toBeNull()
+    expect(bp.get([0, 0, 2])?.key).toBe('minecraft:stone')
+
+    // 選んでいないブロック (2,0,0) からは、今までどおりカメラを回す
+    fake.orbit.length = 0
+    tools.setSelected([1, 0, 0])
+    canvas.dispatchEvent(pointer('pointerdown', 20, 0, { buttons: 1 }))
+    expect(fake.orbit).toEqual([])
+  })
+
   it('置くツールでブロックか床からドラッグすると、カメラを回さずに一直線のドラッグを渡す（#161）', () => {
     /** 画面の 10px が 1 マス。カメラを回すのを止めたかを記録する */
     class ScaledRenderer extends FakeRenderer {

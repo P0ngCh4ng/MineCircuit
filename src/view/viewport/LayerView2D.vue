@@ -511,8 +511,9 @@ function onPointerDown(e: PointerEvent): void {
   const start = clampedCell2D(p.x, p.y, grid, bp.size)
   // 範囲の中（範囲の段にいるとき）を押したら、範囲をつかむ（#199）
   const box = tools.selectionBox
-  // 1マスだけのとき（クリックで選んだブロック）は、今までどおりそこから範囲を選ぶ
-  if (kind === 'select' && box && !isSingleCell(box) && boxContains(box, [start[0], layer.value, start[1]])) {
+  // 1マスだけのとき（クリックで選んだブロック）もつかむ（#209）。空きマスなら、今までどおりそこから範囲を選ぶ
+  const startCell: Vec3 = [start[0], layer.value, start[1]]
+  if (kind === 'select' && box && boxContains(box, startCell) && (!isSingleCell(box) || bp.get(startCell) !== null)) {
     drag = { kind: 'move', pointerId: e.pointerId, start, offset: [0, 0, 0], moved: false }
   } else if (kind === 'select') {
     drag = { kind, pointerId: e.pointerId, start, anchorLayer: tools.selectedPos ? tools.selectedPos[1] : null, moved: false }

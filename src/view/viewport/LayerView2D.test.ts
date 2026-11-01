@@ -118,7 +118,7 @@ describe('LayerView2D', () => {
     wrapper.unmount()
   })
 
-  it('範囲の中を押してドラッグすると範囲を動かし、続くクリックで選び直さない。1マスの選択からは範囲を選ぶ（#199）', async () => {
+  it('範囲の中を押してドラッグすると範囲を動かし、続くクリックで選び直さない。1つだけ選んだブロックも動かす（#199・#209）', async () => {
     const { wrapper, session, at } = mountView()
     const tools = useToolStore()
     const bp = session.current.value!.blueprint
@@ -135,13 +135,22 @@ describe('LayerView2D', () => {
     expect(bp.get([1, 0, 2])).toBeNull()
     expect(bp.get([3, 0, 1])?.key).toBe('minecraft:stone')
 
-    // 1マスだけ選んでいるときは、押したマスから範囲を選ぶ
-    tools.setSelectionBox({ min: [3, 0, 1], max: [3, 0, 1] })
+    // 1つだけ選んだブロックも、押してドラッグすれば動かす（#209）
+    tools.setSelected([3, 0, 1])
     await canvas.trigger('pointerdown', { button: 0, ...at(3, 1) })
-    await canvas.trigger('pointermove', { buttons: 1, ...at(2, 0) })
-    await canvas.trigger('pointerup', { button: 0, ...at(2, 0) })
+    await canvas.trigger('pointermove', { buttons: 1, ...at(3, 2) })
+    await canvas.trigger('pointerup', { button: 0, ...at(3, 2) })
+    await canvas.trigger('click', at(3, 2))
+    expect(bp.get([3, 0, 1])).toBeNull()
+    expect(bp.get([3, 0, 2])?.key).toBe('minecraft:stone')
+
+    // 選んだマスが空きなら、今までどおり押したマスから範囲を選ぶ
+    tools.setSelected([3, 0, 0])
+    await canvas.trigger('pointerdown', { button: 0, ...at(3, 0) })
+    await canvas.trigger('pointermove', { buttons: 1, ...at(2, 1) })
+    await canvas.trigger('pointerup', { button: 0, ...at(2, 1) })
     expect(tools.selectionBox).toEqual({ min: [2, 0, 0], max: [3, 0, 1] })
-    expect(bp.get([3, 0, 1])?.key).toBe('minecraft:stone')
+    expect(bp.get([3, 0, 2])?.key).toBe('minecraft:stone')
     wrapper.unmount()
   })
 
