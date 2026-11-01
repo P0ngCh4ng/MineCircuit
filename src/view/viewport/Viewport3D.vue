@@ -232,11 +232,11 @@ function finishMoveDrag(e: PointerEvent): void {
   }
 }
 
-/** 選択ツールで、範囲の中のブロックを押したら範囲をつかむ（#199）。つかんだら true */
+/** 選択ツールで、範囲（1つだけ選んだブロックも）の中のブロックを押したら範囲をつかむ（#199・#209）。つかんだら true */
 function grabSelection(e: PointerEvent): boolean {
   const box = tools.selectionBox
-  // 1マスだけのとき（クリックで選んだブロック）は、今までどおりカメラを回す
-  if (tools.activeToolId !== 'select' || !box || isSingleCell(box) || paste.active) return false
+  // 1マスだけのとき（クリックで選んだブロック）もつかむ（#209）。範囲の外のブロックなら、今までどおりカメラを回す
+  if (tools.activeToolId !== 'select' || !box || paste.active) return false
   const target = pickAt(e)
   if (!target || target.empty || !boxContains(box, target.pos)) return false
   const [x, y, z] = target.pos
