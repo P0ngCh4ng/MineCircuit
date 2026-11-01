@@ -53,4 +53,48 @@ describe('flowLinks（#207）', () => {
     const result = await runCreateStress(beltLine(0), { pack: null, ports: [] })
     expect(text(result.links, 'item')).toEqual([])
   })
+
+  it('物の入口があれば、通り道に沿ってベルトの外（ファンネル・ベイスン・デポ）へもつなぐ（#211）', async () => {
+    const chest = nbt.compound({ Items: nbt.list('compound') })
+    const fx = blueprintFixture({ size: [9, 6, 3] })
+      .place([0, 1, 1], 'minecraft:chest', chest)
+      .place([1, 1, 1], 'create:andesite_funnel', { facing: 'east', extracting: 'true', powered: 'false' })
+      .place([2, 1, 0], 'create:creative_motor', { facing: 'south' }, scroll(-64))
+      .place([2, 1, 1], 'create:belt', { facing: 'east', slope: 'horizontal', part: 'start' })
+      .place([3, 1, 1], 'create:belt', { facing: 'east', slope: 'horizontal', part: 'end' })
+      .place([4, 1, 1], 'create:basin', { facing: 'east' })
+      .place([4, 3, 1], 'create:mechanical_mixer')
+      .place([5, 3, 1], 'create:cogwheel', { axis: 'y' })
+      .place([5, 2, 1], 'create:creative_motor', { facing: 'up' }, scroll(64))
+      .place([5, 0, 1], 'create:depot')
+    const recipeBook = async () => ({
+      recipes: [
+        {
+          id: 'create:mixing/andesite_alloy',
+          type: 'mixing' as const,
+          items: ['minecraft:andesite'],
+          tags: [],
+          duration: 0,
+          results: [{ item: 'create:andesite_alloy', count: 1, chance: 1 }],
+        },
+      ],
+      scriptsChangeRecipes: false,
+      itemTags: {},
+    })
+    const port: VirtualPort = {
+      id: 'p',
+      pos: [0, 1, 1],
+      pluginId: 'create-stress',
+      kind: 'item-input',
+      params: { rate: 0.1 },
+      items: { item: 'minecraft:andesite' },
+    }
+    const result = await runCreateStress(fx.toBlueprint(), {
+      pack: { hasNamespace: (ns) => ns === 'create', config: async () => null, recipeBook },
+      ports: [port],
+    })
+    // ベルトの端の先（ベイスン）は、ベルトのつながりと通り道で重なるので1本
+    expect(text(result.links, 'item')).toEqual(['2,1,1>3,1,1', '3,1,1>4,1,1', '0,1,1>1,1,1', '1,1,1>2,1,1', '4,1,1>5,0,1'])
+    expect(structuredClone(result)).toEqual(result)
+  })
 })

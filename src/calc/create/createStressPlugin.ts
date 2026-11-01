@@ -25,7 +25,7 @@ import { orientForPlacement, placementHelper, placementProblem } from './createP
 import { transformCreateBlockEntity, transformCreateState } from './createTransform'
 import { kineticThroughputValues, staticThroughputValues, type ThroughputEnv } from './createThroughput'
 import { CreateValueResolver } from './createValueResolver'
-import { flowLinks } from './flowLinks'
+import { flowLinks, withItemPathLinks } from './flowLinks'
 import { bottleneckValue, itemPathValues, lineSummary, traceItemPaths, type ItemPathRecord, type LineFlow } from './createItemPath'
 import {
   CREATE_STRESS_PLUGIN_ID,
@@ -117,7 +117,7 @@ export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<
     assumptions: log.list(),
     probes: allProbes,
     rotations: rotations(graph, evaluation, values),
-    links: flow.links,
+    links: withItemPathLinks(flow.links, path.records),
     sources: flow.sources,
   }
 }

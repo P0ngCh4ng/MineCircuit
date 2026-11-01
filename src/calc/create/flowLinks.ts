@@ -1,12 +1,14 @@
 // 力の流れの表示に使うつながり（#207、docs/ui.md「力の流れ」）。
 // 回転のつながりは応力の計算（kineticGraph.ts）の辺と速度コントローラーから、
-// 物の向きはベルトの進む向き（docs/create-throughput.md「物の通り道」と同じ規則）から作る。
+// 物の向きはベルトの進む向き（docs/create-throughput.md「物の通り道」と同じ規則）と、
+// 物の入口からたどった通り道（ファンネル・ベイスンなど。#211）から作る。
 
 import type { Blueprint } from '../../domain/blueprint'
 import { directionVector, isDirection, type Direction } from '../../domain/direction'
 import { addVec3, type Vec3 } from '../../domain/vec3'
 import type { CalcLink } from '../calcPlugin'
 import { axisDirections, directionAxis } from './kineticBlocks'
+import type { ItemPathRecord } from './createItemPath'
 import type { KineticGraph } from './kineticGraph'
 
 const BELT_SLOPES = new Set(['horizontal', 'upward', 'downward'])
@@ -83,6 +85,25 @@ export function flowLinks(bp: Blueprint, graph: KineticGraph, rpmAt: (pos: Vec3)
     sources.push(copy(node.pos))
   }
   return { links, sources }
+}
+
+/**
+ * 物の通り道で届いた所（どこから → その位置）を、物のつながりに足す（#211）。
+ * ベルトの外（チェスト → ファンネル、ベイスン → デポなど）にも矢印が出る。同じつながりは1本にする
+ */
+export function withItemPathLinks(links: readonly CalcLink[], records: readonly ItemPathRecord[]): CalcLink[] {
+  const result = [...links]
+  const seen = new Set(links.filter((l) => l.kind === 'item').map((l) => `${l.from.join(',')}>${l.to.join(',')}`))
+  for (const record of records) {
+    for (const arrival of record.arrivals) {
+      if (!arrival.from || arrival.from.join(',') === record.pos.join(',')) continue
+      const key = `${arrival.from.join(',')}>${record.pos.join(',')}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      result.push({ from: copy(arrival.from), to: copy(record.pos), kind: 'item' })
+    }
+  }
+  return result
 }
 
 function copy(p: Vec3): Vec3 {
