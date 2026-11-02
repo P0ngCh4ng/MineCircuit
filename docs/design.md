@@ -909,7 +909,7 @@ flowchart LR
 | 親の継承 | `modelResolver.ts` | `textures` は根から順に子が上書きする。`elements` と `ambientocclusion` は一番子に近いものを使う。変数（`#a` → `#b` → ID）が決まらない面は `minecraft:missingno`（アトラスでは紫と黒）にする。親の循環は止めて null |
 | OBJ のモデル | `objModel.ts` | 下の「OBJ のモデル」 |
 | 液体 | `fluidModel.ts` | 下の「液体」 |
-| 描けないもの | 同上 | `builtin/generated`・`builtin/entity` まで親をたどったら null。要素も OBJ の三角形も1つもない見た目（BlockEntityRenderer で描くブロック）も null にして箱で描く。空気は何もない見た目 |
+| 描けないもの | 同上 | `builtin/generated`・`builtin/entity` まで親をたどったら null。要素も OBJ の三角形も1つもない見た目（BlockEntityRenderer で描くブロック）は、液体なら液体の箱、particle のテクスチャが決まればそれを貼った箱（下の「形のないブロック」）、どちらでもなければ null にして色の箱で描く。空気は何もない見た目 |
 | 覚えておく | 同上 | ブロック状態の key ごと、モデルの ID ごと、ファイルのパスごとに結果を1つ持つ。同じ問題は1回だけ書く |
 
 **OBJ のモデル。** Create などは、モデルの JSON に `"loader": "forge:obj"`（`neoforge:obj`・`porting_lib:obj` も同じ）と `"model": "<ns>:models/<パス>.obj"` を書き、形を Wavefront OBJ に置く（ブレイズバーナーの籠、粉砕ホイール、フライホイール、水車、バルブのハンドル、線路など）。`objModel.ts` で読み、`ResolvedModel.meshes`（テクスチャごとの三角形。`domain/blockModel.ts` の `ModelMesh`）にする。
@@ -928,6 +928,12 @@ flowchart LR
 - 横と下の面は、隣の不透明なブロックで隠す。上の面は、1 ブロックの高さのときだけ隠す。
 - 横の面も still のテクスチャを使う（flow のテクスチャは使わない）。透けさせず、ほかのブロックと同じく描く。
 - 水のテクスチャは灰色なので、決まった水の色（平原の `#3f76e4`）を掛ける。ほかの液体には掛けない（Mod の液体のテクスチャは色が付いている）。
+
+**形のないブロック（#215）。** チェスト・ベッド・看板・シュルカーボックスや、Mod の多くの機械は、モデルに形がなく particle（壊したときの粒の絵）のテクスチャだけがあり、ゲームでは描画のコード（BlockEntityRenderer）が形を描く。形はアプリに持たせない（書き写さず、こちらで考えた形も作らない）。代わりに、その particle のテクスチャを6面に貼った1ブロックの箱で描く（`particleBoxModel.ts`）。何のブロックかが見て分かれば足りる。
+
+- 液体（particle が `_still`）は液体の箱を先に選ぶ。複数のモデルを重ねる（multipart）ときは、最初に particle が決まったものを使う。
+- 各面は、その向きの隣の不透明なブロックで隠す。色付けはしない。
+- テクスチャは利用者の jar から読むだけで、アプリにもリポジトリにも入れない。particle も決まらなければ、これまでどおり色の箱で描き、理由を problems に書く。
 
 **部品のモデルの表。** Create のベルトやブレイズバーナーの頭は、blockstates のモデルが空（`belt/particle`）か籠だけで、ゲームでは描画のコード（BlockEntityRenderer）が状態に合わせて部品のモデル（partial model）を選んで描く。jar のファイルからは分からないので、選び方を表に書き写す（`io/assets/partialModels.ts`）。Mod 固有の知識をアプリに持たせる例外なので、入れるものを絞る。
 

@@ -5,6 +5,7 @@ import { ResourceLocation } from '../../domain/resourceLocation'
 import { MemoryAssetReader } from '../../../tests/fixtures/fakeAppearance'
 import { BUILTIN_PARENT_MODEL_IDS } from './builtinParentModels'
 import { MISSING_TEXTURE, ModelResolver, resolveTextureReference } from './modelResolver'
+import { particleBoxModel } from './particleBoxModel'
 
 function state(id: string, properties: Record<string, string> = {}): BlockState {
   return new BlockState(ResourceLocation.parse(id), properties)
@@ -250,13 +251,13 @@ describe('ModelResolver：parent と変数', () => {
     expect(reader.reads).not.toContain('assets/minecraft/models/builtin/entity.json')
   })
 
-  it('要素が1つもなければ null（ゲームではプログラムで描くブロック）', async () => {
+  it('要素も particle もなければ null（ゲームではプログラムで描くブロック）', async () => {
     const { resolver } = resolverOf({
       'assets/test/blockstates/wheel.json': { variants: { '': { model: 'test:block/wheel' } } },
-      'assets/test/models/block/wheel.json': { parent: 'block/block', textures: { particle: 'test:block/red' } },
+      'assets/test/models/block/wheel.json': { parent: 'block/block', textures: {} },
     })
     expect(await resolver.resolve(state('test:wheel'))).toBeNull()
-    expect(resolver.problems[0]).toContain('描く要素がありません')
+    expect(resolver.problems).toEqual(['test:wheel: モデルに描く要素も particle のテクスチャもありません（ゲームではプログラムで描くブロックです）'])
   })
 })
 
@@ -459,18 +460,18 @@ describe('ModelResolver：部品のモデルの表', () => {
     expect(look!.parts[0]!.matrix).toBeUndefined()
   })
 
-  it('読めない部品は飛ばし、何も描くものがなければ null', async () => {
+  it('読めない部品は飛ばし、部品が1つも読めなければ particle の箱', async () => {
     const { resolver } = resolverOf({ ...files, 'assets/create/models/block/belt/middle_bottom.json': undefined as unknown as string })
     expect((await resolver.resolve(belt))!.parts).toHaveLength(2)
     expect(resolver.problems).toContain('モデル create:block/belt/middle_bottom が見つかりません（assets/create/models/block/belt/middle_bottom.json）')
 
     const none = resolverOf({ 'assets/create/blockstates/belt.json': files['assets/create/blockstates/belt.json'], 'assets/create/models/block/belt/particle.json': files['assets/create/models/block/belt/particle.json'] })
-    expect(await none.resolver.resolve(belt)).toBeNull()
+    expect((await none.resolver.resolve(belt))!.parts[0]!.model.id).toBe('create:belt#particle')
   })
 })
 
 describe('ModelResolver：液体', () => {
-  it('形がなく particle が still のテクスチャなら、液体の箱にする。ほかの形のないモデルは null のまま', async () => {
+  it('形がなく particle が still のテクスチャなら、液体の箱にする。ほかの形のないモデルは particle の箱', async () => {
     const { resolver } = resolverOf({
       'assets/minecraft/blockstates/water.json': { variants: { '': { model: 'minecraft:block/water' } } },
       'assets/minecraft/models/block/water.json': { textures: { particle: 'block/water_still' } },
@@ -480,8 +481,35 @@ describe('ModelResolver：液体', () => {
     const water = await resolver.resolve(state('minecraft:water', { level: '4' }))
     expect(water!.parts[0]!.model.id).toBe('minecraft:water#fluid')
     expect(water!.parts[0]!.model.elements[0]!.to[1]).toBeCloseTo((4 / 9) * 16)
-    expect(await resolver.resolve(state('test:chest'))).toBeNull()
-    expect(resolver.problems).toEqual(['test:chest: モデルに描く要素がありません（ゲームではプログラムで描くブロックです）'])
+    expect((await resolver.resolve(state('test:chest')))!.parts[0]!.model.id).toBe('test:chest#particle')
+    expect(resolver.problems).toEqual([])
+  })
+})
+
+describe('ModelResolver：形のないブロック（#215）', () => {
+  it('particle のテクスチャを6面に貼った1ブロックの箱にする。各面は隣で隠す。multipart は最初に決まった particle', async () => {
+    const { resolver } = resolverOf({
+      'assets/minecraft/blockstates/chest.json': { variants: { 'facing=north': { model: 'minecraft:block/chest' } } },
+      'assets/minecraft/models/block/chest.json': { textures: { particle: 'block/oak_planks' } },
+      'assets/test/blockstates/machine.json': {
+        multipart: [{ apply: { model: 'test:block/none' } }, { apply: { model: 'test:block/casing' } }, { apply: { model: 'test:block/other' } }],
+      },
+      'assets/test/models/block/none.json': { textures: {} },
+      'assets/test/models/block/casing.json': { textures: { particle: '#side', side: 'test:block/casing' } },
+      'assets/test/models/block/other.json': { textures: { particle: 'test:block/other' } },
+    })
+    const chest = await resolver.resolve(state('minecraft:chest', { facing: 'north', type: 'single', waterlogged: 'false' }))
+    expect(chest).toEqual({
+      parts: [{ model: particleBoxModel('minecraft:chest', 'minecraft:block/oak_planks'), x: 0, y: 0, uvlock: false }],
+    })
+    const element = chest!.parts[0]!.model.elements[0]!
+    expect([element.from, element.to]).toEqual([[0, 0, 0], [16, 16, 16]])
+    expect(Object.entries(element.faces).map(([d, f]) => [d, f.texture, f.cullface])).toEqual(
+      DIRECTIONS.map((d) => [d, 'minecraft:block/oak_planks', d]),
+    )
+    const machine = await resolver.resolve(state('test:machine'))
+    expect(machine!.parts[0]!.model.elements[0]!.faces.up!.texture).toBe('test:block/casing')
+    expect(resolver.problems).toEqual([])
   })
 })
 
