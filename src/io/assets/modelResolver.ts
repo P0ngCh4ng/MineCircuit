@@ -5,6 +5,7 @@
 // 3. 描画のコードが部品のモデルを選ぶブロック（Create のベルトなど）は、表の部品を重ねる（partialModels）
 // 4. 形がなく particle が液体のテクスチャ（…_still）なら、液体の箱にする（fluidModel）
 // 5. ほかの形のないモデルは、particle のテクスチャを貼った箱にする（particleBoxModel。#215）
+//    チェストは、チェスト本来の絵があれば、面ごとに切り出して貼った箱にする（chestModel。#219）
 // 読むのは AssetReader だけ。jar をどう読むかは知らない。
 // 結果はブロック状態ごと・モデルごとに覚えておき、同じものは2度読まない。
 
@@ -15,6 +16,7 @@ import type { ResourceLocation } from '../../domain/resourceLocation'
 import { parseLenientJson, type JsonValue } from '../modpack/jarScanner'
 import type { AssetReader } from './assetTypes'
 import { selectModels } from './blockStateSelector'
+import { chestAppearance } from './chestModel'
 import { builtinParentModel, UNDRAWABLE_BUILTIN_MODELS } from './builtinParentModels'
 import { modelPath, parseModelJson, withNamespace, type ObjModelRef, type UnbakedElement, type UnbakedModel } from './modelJson'
 import { objModelPath, parseMtl, parseObj, siblingPath, type ParsedObj } from './objModel'
@@ -109,6 +111,15 @@ export class ModelResolver {
     this.problemList.push(message)
   }
 
+  /** そのパスのファイルがあるか（読めなければ false） */
+  private async hasFile(path: string): Promise<boolean> {
+    try {
+      return (await this.reader.readBytes(path)) !== null
+    } catch {
+      return false
+    }
+  }
+
   private async readJson(path: string): Promise<JsonFile> {
     let text: string | null
     try {
@@ -143,6 +154,8 @@ export class ModelResolver {
   private async resolveState(state: BlockState): Promise<BlockAppearance | null> {
     const id = state.id.toString()
     if (AIR_IDS.includes(id)) return { parts: [] }
+    const chest = chestAppearance(state)
+    if (chest && (await this.hasFile(chest.texturePath))) return chest.appearance
     const file = await this.loadDefinition(state.id)
     if (file === 'missing' || file === 'invalid') return null
 
