@@ -5,6 +5,7 @@
 // 3. 描画のコードが部品のモデルを選ぶブロック（Create のベルトなど）は、表の部品を重ねる（partialModels）
 // 4. 形がなく particle が液体のテクスチャ（…_still）なら、液体の箱にする（fluidModel）
 // 5. ほかの形のないモデルは、particle のテクスチャを貼った箱にする（particleBoxModel。#215）
+//    アイテムの絵が平らな1枚絵なら、その絵の板を立てる（itemSpriteModel。#223）
 //    チェスト・シュルカーボックスは、本来の絵があれば、面ごとに切り出して貼った箱にする（chestModel・shulkerModel。#219・#221）
 // 読むのは AssetReader だけ。jar をどう読むかは知らない。
 // 結果はブロック状態ごと・モデルごとに覚えておき、同じものは2度読まない。
@@ -18,6 +19,7 @@ import type { AssetReader } from './assetTypes'
 import { selectModels } from './blockStateSelector'
 import { chestAppearance, type EntityTextureAppearance } from './chestModel'
 import { shulkerAppearance } from './shulkerModel'
+import { itemModelCandidates, itemSpriteAppearance } from './itemSpriteModel'
 import { builtinParentModel, UNDRAWABLE_BUILTIN_MODELS } from './builtinParentModels'
 import { modelPath, parseModelJson, withNamespace, type ObjModelRef, type UnbakedElement, type UnbakedModel } from './modelJson'
 import { objModelPath, parseMtl, parseObj, siblingPath, type ParsedObj } from './objModel'
@@ -30,6 +32,9 @@ import { particleBoxModel } from './particleBoxModel'
  * 資産にはないので、アトラスでは見つからないテクスチャ（紫と黒）になる
  */
 export const MISSING_TEXTURE: TextureId = 'minecraft:missingno'
+
+/** アイテムの平らな1枚絵のモデル */
+const BUILTIN_GENERATED_MODEL = 'minecraft:builtin/generated'
 
 /** ゲームの描画のコードで描くモデル。親がこれなら形のないモデルにする */
 const BUILTIN_ENTITY_MODEL = 'minecraft:builtin/entity'
@@ -129,6 +134,29 @@ export class ModelResolver {
     return (await this.isEntityTexture(candidate.texturePath)) ? candidate.appearance : null
   }
 
+  /**
+   * ブロックのアイテムのモデルが平らな1枚絵（親が builtin/generated）なら、その絵（layer0）。
+   * アイテムのモデルがない、平らでないなら null。問題には書かない（なければ particle の箱で描くだけ）
+   */
+  private async flatItemSprite(state: BlockState): Promise<TextureId | null> {
+    for (const id of itemModelCandidates(state)) {
+      const chain: UnbakedModel[] = []
+      let current: string | null = id
+      while (current !== null && current !== BUILTIN_GENERATED_MODEL && chain.length < MAX_PARENT_DEPTH) {
+        const raw: RawModel = await this.loadRaw(current)
+        if (typeof raw === 'string') break
+        chain.push(raw.model)
+        current = raw.model.parent
+      }
+      if (chain.length === 0) continue // このアイテムのモデルはない。次の候補へ
+      if (current !== BUILTIN_GENERATED_MODEL) return null
+      const textures: Record<string, string> = {}
+      for (let i = chain.length - 1; i >= 0; i--) Object.assign(textures, chain[i]!.textures)
+      return resolveTextureReference('#layer0', textures)
+    }
+    return null
+  }
+
   /** そのパスに 64 × 64 の PNG があるか（読めなければ false） */
   private async isEntityTexture(path: string): Promise<boolean> {
     let bytes: Uint8Array | null
@@ -207,6 +235,9 @@ export class ModelResolver {
       // チェストとシュルカーボックスは本来の絵を面ごとに貼った箱、ほかは particle のテクスチャを貼った箱にする
       const entity = await this.entityTextureAppearance(state)
       if (entity) return entity
+      // 看板など、アイテムの絵が平らな1枚絵なら、その絵の板を立てる
+      const sprite = await this.flatItemSprite(state)
+      if (sprite) return itemSpriteAppearance(state, sprite)
       const particle = particles[0]
       if (particle) return { parts: [{ model: particleBoxModel(id, particle), x: 0, y: 0, uvlock: false }] }
       this.problem(`${key}: モデルに描く要素も particle のテクスチャもありません（ゲームではプログラムで描くブロックです）`)
