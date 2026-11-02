@@ -5,7 +5,7 @@
 // 3. 描画のコードが部品のモデルを選ぶブロック（Create のベルトなど）は、表の部品を重ねる（partialModels）
 // 4. 形がなく particle が液体のテクスチャ（…_still）なら、液体の箱にする（fluidModel）
 // 5. ほかの形のないモデルは、particle のテクスチャを貼った箱にする（particleBoxModel。#215）
-//    チェストは、チェスト本来の絵があれば、面ごとに切り出して貼った箱にする（chestModel。#219）
+//    チェスト・シュルカーボックスは、本来の絵があれば、面ごとに切り出して貼った箱にする（chestModel・shulkerModel。#219・#221）
 // 読むのは AssetReader だけ。jar をどう読むかは知らない。
 // 結果はブロック状態ごと・モデルごとに覚えておき、同じものは2度読まない。
 
@@ -16,7 +16,8 @@ import type { ResourceLocation } from '../../domain/resourceLocation'
 import { parseLenientJson, type JsonValue } from '../modpack/jarScanner'
 import type { AssetReader } from './assetTypes'
 import { selectModels } from './blockStateSelector'
-import { chestAppearance } from './chestModel'
+import { chestAppearance, type EntityTextureAppearance } from './chestModel'
+import { shulkerAppearance } from './shulkerModel'
 import { builtinParentModel, UNDRAWABLE_BUILTIN_MODELS } from './builtinParentModels'
 import { modelPath, parseModelJson, withNamespace, type ObjModelRef, type UnbakedElement, type UnbakedModel } from './modelJson'
 import { objModelPath, parseMtl, parseObj, siblingPath, type ParsedObj } from './objModel'
@@ -32,6 +33,17 @@ export const MISSING_TEXTURE: TextureId = 'minecraft:missingno'
 
 /** ゲームの描画のコードで描くモデル。親がこれなら形のないモデルにする */
 const BUILTIN_ENTITY_MODEL = 'minecraft:builtin/entity'
+
+/** チェスト・シュルカーボックスの絵の大きさ（ピクセル） */
+const ENTITY_TEXTURE_SIZE = 64
+
+/** PNG の幅と高さ（IHDR）。PNG でなければ null */
+function pngSize(bytes: Uint8Array): [number, number] | null {
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+  if (bytes.length < 24 || signature.some((b, i) => bytes[i] !== b)) return null
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  return [view.getUint32(16), view.getUint32(20)]
+}
 
 /** 何もない見た目にするブロック。blockstates がなくても空にする */
 const AIR_IDS: readonly string[] = ['minecraft:air', 'minecraft:cave_air', 'minecraft:void_air']
@@ -111,13 +123,22 @@ export class ModelResolver {
     this.problemList.push(message)
   }
 
-  /** そのパスのファイルがあるか（読めなければ false） */
-  private async hasFile(path: string): Promise<boolean> {
+  /** シュルカーボックス・チェストの見た目。絵（64 × 64 の PNG）がなければ null */
+  private async entityTextureAppearance(state: BlockState): Promise<BlockAppearance | null> {
+    const candidate: EntityTextureAppearance = shulkerAppearance(state) ?? chestAppearance(state)
+    return (await this.isEntityTexture(candidate.texturePath)) ? candidate.appearance : null
+  }
+
+  /** そのパスに 64 × 64 の PNG があるか（読めなければ false） */
+  private async isEntityTexture(path: string): Promise<boolean> {
+    let bytes: Uint8Array | null
     try {
-      return (await this.reader.readBytes(path)) !== null
+      bytes = await this.reader.readBytes(path)
     } catch {
       return false
     }
+    const size = bytes ? pngSize(bytes) : null
+    return size !== null && size[0] === ENTITY_TEXTURE_SIZE && size[1] === ENTITY_TEXTURE_SIZE
   }
 
   private async readJson(path: string): Promise<JsonFile> {
@@ -154,8 +175,6 @@ export class ModelResolver {
   private async resolveState(state: BlockState): Promise<BlockAppearance | null> {
     const id = state.id.toString()
     if (AIR_IDS.includes(id)) return { parts: [] }
-    const chest = chestAppearance(state)
-    if (chest && (await this.hasFile(chest.texturePath))) return chest.appearance
     const file = await this.loadDefinition(state.id)
     if (file === 'missing' || file === 'invalid') return null
 
@@ -184,7 +203,10 @@ export class ModelResolver {
       const particles = parts.map((p) => this.particles.get(p.model.id) ?? null).filter((t): t is TextureId => t !== null)
       const fluid = particles.find(isFluidTexture)
       if (fluid) return { parts: [{ model: fluidModel(id, fluid, state.properties.level), x: 0, y: 0, uvlock: false }] }
-      // ゲームでは BlockEntityRenderer などのプログラムで描くブロック。形は持たず、particle のテクスチャを貼った箱にする
+      // ゲームでは BlockEntityRenderer などのプログラムで描くブロック。形は持たず、
+      // チェストとシュルカーボックスは本来の絵を面ごとに貼った箱、ほかは particle のテクスチャを貼った箱にする
+      const entity = await this.entityTextureAppearance(state)
+      if (entity) return entity
       const particle = particles[0]
       if (particle) return { parts: [{ model: particleBoxModel(id, particle), x: 0, y: 0, uvlock: false }] }
       this.problem(`${key}: モデルに描く要素も particle のテクスチャもありません（ゲームではプログラムで描くブロックです）`)
