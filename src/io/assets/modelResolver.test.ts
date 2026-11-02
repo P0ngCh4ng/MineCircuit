@@ -236,7 +236,7 @@ describe('ModelResolver：parent と変数', () => {
     expect(resolver.problems[0]).toContain('循環')
   })
 
-  it('builtin/generated・builtin/entity は描けないので null と問題', async () => {
+  it('builtin/generated は描けないので null と問題。builtin/entity は particle の箱（#217）', async () => {
     const { resolver, reader } = resolverOf({
       'assets/test/blockstates/chest.json': { variants: { '': { model: 'test:block/chest' } } },
       'assets/test/models/block/chest.json': { parent: 'builtin/entity', textures: { particle: 'test:block/red' } },
@@ -244,10 +244,12 @@ describe('ModelResolver：parent と変数', () => {
       'assets/test/models/item/flat.json': { parent: 'item/generated', textures: { layer0: 'test:block/red' } },
       'assets/minecraft/models/item/generated.json': { parent: 'builtin/generated' },
     })
-    expect(await resolver.resolve(state('test:chest'))).toBeNull()
+    expect(await resolver.resolve(state('test:chest'))).toEqual({
+      parts: [{ model: particleBoxModel('test:chest', 'test:block/red'), x: 0, y: 0, uvlock: false }],
+    })
     expect(await resolver.resolve(state('test:flat'))).toBeNull()
-    expect(resolver.problems).toHaveLength(2)
-    expect(resolver.problems.every((p) => p.includes('描けません'))).toBe(true)
+    expect(resolver.problems).toHaveLength(1)
+    expect(resolver.problems[0]).toContain('描けません')
     expect(reader.reads).not.toContain('assets/minecraft/models/builtin/entity.json')
   })
 

@@ -28,6 +28,9 @@ import { particleBoxModel } from './particleBoxModel'
  */
 export const MISSING_TEXTURE: TextureId = 'minecraft:missingno'
 
+/** ゲームの描画のコードで描くモデル。親がこれなら形のないモデルにする */
+const BUILTIN_ENTITY_MODEL = 'minecraft:builtin/entity'
+
 /** 何もない見た目にするブロック。blockstates がなくても空にする */
 const AIR_IDS: readonly string[] = ['minecraft:air', 'minecraft:cave_air', 'minecraft:void_air']
 
@@ -226,6 +229,8 @@ export class ModelResolver {
         return { error: `モデル ${id}: 親モデルが循環しています（${[...visited, current].join(' → ')}）` }
       }
       visited.push(current)
+      // builtin/entity はゲームの描画のコードで描くモデル。そこまでのテクスチャで形のないモデルにする（particle の箱になる。#217）
+      if (current === BUILTIN_ENTITY_MODEL) break
       const raw: RawModel = await this.loadRaw(current)
       const via = current === id ? '' : `（${id} の親）`
       if (raw === 'undrawable') return { error: `モデル ${id}: ${current} はゲームのプログラムで描くモデルなので、描けません` }

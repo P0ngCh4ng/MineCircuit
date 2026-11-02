@@ -909,7 +909,7 @@ flowchart LR
 | 親の継承 | `modelResolver.ts` | `textures` は根から順に子が上書きする。`elements` と `ambientocclusion` は一番子に近いものを使う。変数（`#a` → `#b` → ID）が決まらない面は `minecraft:missingno`（アトラスでは紫と黒）にする。親の循環は止めて null |
 | OBJ のモデル | `objModel.ts` | 下の「OBJ のモデル」 |
 | 液体 | `fluidModel.ts` | 下の「液体」 |
-| 描けないもの | 同上 | `builtin/generated`・`builtin/entity` まで親をたどったら null。要素も OBJ の三角形も1つもない見た目（BlockEntityRenderer で描くブロック）は、液体なら液体の箱、particle のテクスチャが決まればそれを貼った箱（下の「形のないブロック」）、どちらでもなければ null にして色の箱で描く。空気は何もない見た目 |
+| 描けないもの | 同上 | `builtin/generated` まで親をたどったら null。`builtin/entity` まで親をたどったら、そこまでのテクスチャの変数で形のないモデルにする（ゲームでは描画のコードで描く。リソースパックがチェストをこれにすることがある。#217）。要素も OBJ の三角形も1つもない見た目（BlockEntityRenderer で描くブロック）は、液体なら液体の箱、particle のテクスチャが決まればそれを貼った箱（下の「形のないブロック」）、どちらでもなければ null にして色の箱で描く。空気は何もない見た目 |
 | 覚えておく | 同上 | ブロック状態の key ごと、モデルの ID ごと、ファイルのパスごとに結果を1つ持つ。同じ問題は1回だけ書く |
 
 **OBJ のモデル。** Create などは、モデルの JSON に `"loader": "forge:obj"`（`neoforge:obj`・`porting_lib:obj` も同じ）と `"model": "<ns>:models/<パス>.obj"` を書き、形を Wavefront OBJ に置く（ブレイズバーナーの籠、粉砕ホイール、フライホイール、水車、バルブのハンドル、線路など）。`objModel.ts` で読み、`ResolvedModel.meshes`（テクスチャごとの三角形。`domain/blockModel.ts` の `ModelMesh`）にする。
