@@ -4,6 +4,7 @@
 //    OBJ のモデル（`"loader": "forge:obj"`）なら、.obj と .mtl を読んで三角形にする（objModel）
 // 3. 描画のコードが部品のモデルを選ぶブロック（Create のベルトなど）は、表の部品を重ねる（partialModels）
 // 4. 形がなく particle が液体のテクスチャ（…_still）なら、液体の箱にする（fluidModel）
+// 5. ほかの形のないモデルは、particle のテクスチャを貼った箱にする（particleBoxModel。#215）
 // 読むのは AssetReader だけ。jar をどう読むかは知らない。
 // 結果はブロック状態ごと・モデルごとに覚えておき、同じものは2度読まない。
 
@@ -19,6 +20,7 @@ import { modelPath, parseModelJson, withNamespace, type ObjModelRef, type Unbake
 import { objModelPath, parseMtl, parseObj, siblingPath, type ParsedObj } from './objModel'
 import { fluidModel, isFluidTexture } from './fluidModel'
 import { partialModelsFor } from './partialModels'
+import { particleBoxModel } from './particleBoxModel'
 
 /**
  * テクスチャの変数が決まらなかった面に使う ID（Minecraft と同じ名前）。
@@ -61,7 +63,7 @@ export class ModelResolver {
   private readonly rawModels = new Map<string, Promise<RawModel>>()
   private readonly definitions = new Map<string, Promise<JsonFile>>()
   private readonly objs = new Map<string, Promise<ObjResult>>()
-  /** モデルの ID → particle のテクスチャ（決まらなければ null）。液体の見分けに使う */
+  /** モデルの ID → particle のテクスチャ（決まらなければ null）。形のないブロックの見た目に使う */
   private readonly particles = new Map<string, TextureId | null>()
 
   constructor(private readonly reader: AssetReader) {}
@@ -163,10 +165,13 @@ export class ModelResolver {
     })
     if (parts.every((p) => p.model.elements.length === 0 && p.model.meshes.length === 0)) {
       // 液体は、ゲームでは液体の描画のコードが描く。still のテクスチャで高さのある箱にする
-      const particle = parts.map((p) => this.particles.get(p.model.id) ?? null).find((t) => t !== null && isFluidTexture(t))
-      if (particle) return { parts: [{ model: fluidModel(id, particle, state.properties.level), x: 0, y: 0, uvlock: false }] }
-      // ゲームでは BlockEntityRenderer などのプログラムで描くブロック。箱で描いたほうが場所が分かる
-      this.problem(`${key}: モデルに描く要素がありません（ゲームではプログラムで描くブロックです）`)
+      const particles = parts.map((p) => this.particles.get(p.model.id) ?? null).filter((t): t is TextureId => t !== null)
+      const fluid = particles.find(isFluidTexture)
+      if (fluid) return { parts: [{ model: fluidModel(id, fluid, state.properties.level), x: 0, y: 0, uvlock: false }] }
+      // ゲームでは BlockEntityRenderer などのプログラムで描くブロック。形は持たず、particle のテクスチャを貼った箱にする
+      const particle = particles[0]
+      if (particle) return { parts: [{ model: particleBoxModel(id, particle), x: 0, y: 0, uvlock: false }] }
+      this.problem(`${key}: モデルに描く要素も particle のテクスチャもありません（ゲームではプログラムで描くブロックです）`)
       return null
     }
     return { parts }
