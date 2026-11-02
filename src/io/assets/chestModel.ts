@@ -5,12 +5,13 @@
 // - ふた（上の段）と本体（下の段）の横の面は、絵の中で別の帯なので、箱を上下2つの要素に分ける（高さの比は帯の 5:10）
 // - 絵は上下が逆さまに描かれているので、横の面は上下を返して貼る
 // - 前の面（錠前の影がある帯）を北に作り、facing に向けて回す
+// Mod のチェストは、textures/entity/chest/<ブロック名>.png があれば同じ並びとみなす（#221）。あるかどうかは呼ぶ側が確かめる
 
 import type { BlockAppearance, ModelElement, ModelFace, QuarterTurn, ResolvedModel, TextureId } from '../../domain/blockModel'
 import type { BlockState } from '../../domain/blockState'
 import type { Direction } from '../../domain/direction'
 
-/** ブロックの ID → 絵の名前（textures/entity/chest/<名前>.png） */
+/** 本体のチェストの ID → 絵の名前（textures/entity/chest/<名前>.png）。ほかはブロック名を絵の名前とみなす */
 const CHEST_TEXTURES: Readonly<Record<string, string>> = {
   'minecraft:chest': 'normal',
   'minecraft:trapped_chest': 'trapped',
@@ -77,17 +78,28 @@ const SPLIT = 16 * (10 / 15)
 /** ピクセル → モデルの uv（0〜16。絵は 64 ピクセル） */
 const px = (n: number): number => (n * 16) / 64
 
-/** チェストなら、絵のパスと見た目。チェストでなければ null */
-export function chestAppearance(state: BlockState): { readonly texturePath: string; readonly appearance: BlockAppearance } | null {
-  const name = CHEST_TEXTURES[state.id.toString()]
-  if (name === undefined) return null
+/** 見た目の候補と、使う絵のパス。絵があって 64 × 64 なら、この見た目を使う */
+export interface EntityTextureAppearance {
+  readonly texturePath: string
+  readonly appearance: BlockAppearance
+}
+
+/**
+ * チェストとして描いたときの見た目。絵は本体のチェストなら決まった名前、ほかは
+ * assets/<namespace>/textures/entity/chest/<ブロック名>.png（大きいチェストの半分は _left・_right）
+ */
+export function chestAppearance(state: BlockState): EntityTextureAppearance {
+  const id = state.id.toString()
+  const ns = state.id.namespace
+  const name = CHEST_TEXTURES[id] ?? state.id.path
   const type = state.properties.type
   const half = type === 'left' || type === 'right' ? HALVES[type] : null
-  const texture: TextureId = `minecraft:entity/chest/${name}${half?.suffix ?? ''}`
-  const model = chestModel(`${state.id.toString()}#chest${half?.suffix ?? ''}`, texture, half?.layout ?? SINGLE)
+  const file = `${name}${half?.suffix ?? ''}`
+  const texture: TextureId = `${ns}:entity/chest/${file}`
+  const model = chestModel(`${id}#chest${half?.suffix ?? ''}`, texture, half?.layout ?? SINGLE)
   const y = FACING_TURNS[state.properties.facing ?? 'north'] ?? 0
   return {
-    texturePath: `assets/minecraft/textures/entity/chest/${name}${half?.suffix ?? ''}.png`,
+    texturePath: `assets/${ns}/textures/entity/chest/${file}.png`,
     appearance: { parts: [{ model, x: 0, y, uvlock: false }] },
   }
 }

@@ -7,9 +7,19 @@ import { ModelResolver } from './modelResolver'
 
 const state = (id: string, props: Record<string, string> = {}) => new BlockState(ResourceLocation.parse(id), props)
 
+/** 幅と高さだけを持つ PNG の頭（署名と IHDR） */
+function pngHeader(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(33)
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52])
+  const view = new DataView(bytes.buffer)
+  view.setUint32(16, width)
+  view.setUint32(20, height)
+  return bytes
+}
+
 describe('chestAppearance（#219）', () => {
   it('1つのチェスト：本体とふたの2つの要素。前の帯を北に貼り、facing に向けて回す。横の面は上下を返す', () => {
-    const chest = chestAppearance(state('minecraft:chest', { facing: 'east', type: 'single', waterlogged: 'false' }))!
+    const chest = chestAppearance(state('minecraft:chest', { facing: 'east', type: 'single', waterlogged: 'false' }))
     expect(chest.texturePath).toBe('assets/minecraft/textures/entity/chest/normal.png')
     const part = chest.appearance.parts[0]!
     expect(part.y).toBe(90)
@@ -25,15 +35,18 @@ describe('chestAppearance（#219）', () => {
   })
 
   it('大きいチェストの半分：錠前の影がもう半分の側に来る絵を使う。トラップ・エンダーも', () => {
-    expect(chestAppearance(state('minecraft:chest', { facing: 'north', type: 'left' }))!.texturePath).toBe('assets/minecraft/textures/entity/chest/normal_right.png')
-    expect(chestAppearance(state('minecraft:trapped_chest', { facing: 'north', type: 'right' }))!.texturePath).toBe(
+    expect(chestAppearance(state('minecraft:chest', { facing: 'north', type: 'left' })).texturePath).toBe('assets/minecraft/textures/entity/chest/normal_right.png')
+    expect(chestAppearance(state('minecraft:trapped_chest', { facing: 'north', type: 'right' })).texturePath).toBe(
       'assets/minecraft/textures/entity/chest/trapped_left.png',
     )
-    expect(chestAppearance(state('minecraft:ender_chest', { facing: 'south' }))!.appearance.parts[0]!.y).toBe(180)
-    expect(chestAppearance(state('minecraft:barrel'))).toBeNull()
+    expect(chestAppearance(state('minecraft:ender_chest', { facing: 'south' })).appearance.parts[0]!.y).toBe(180)
+    // Mod のチェストは、ブロック名を絵の名前にする（#221）
+    expect(chestAppearance(state('ad_astra:aeronos_chest', { facing: 'north', type: 'right' })).texturePath).toBe(
+      'assets/ad_astra/textures/entity/chest/aeronos_chest_left.png',
+    )
   })
 
-  it('ModelResolver：絵があればチェストの箱、なければ particle の箱', async () => {
+  it('ModelResolver：64 × 64 の絵があればチェストの箱、なければ particle の箱。Mod のチェストも', async () => {
     const files = {
       'assets/minecraft/blockstates/chest.json': JSON.stringify({ variants: { '': { model: 'minecraft:block/chest' } } }),
       'assets/minecraft/models/block/chest.json': JSON.stringify({ textures: { particle: 'block/oak_planks' } }),
@@ -41,9 +54,25 @@ describe('chestAppearance（#219）', () => {
     const s = state('minecraft:chest', { facing: 'west', type: 'single', waterlogged: 'false' })
     const none = await new ModelResolver(new MemoryAssetReader(files)).resolve(s)
     expect(none!.parts[0]!.model.id).toBe('minecraft:chest#particle')
-    const withTexture = new MemoryAssetReader({ ...files, 'assets/minecraft/textures/entity/chest/normal.png': new Uint8Array([1]) })
+    const withTexture = new MemoryAssetReader({ ...files, 'assets/minecraft/textures/entity/chest/normal.png': pngHeader(64, 64) })
     const chest = await new ModelResolver(withTexture).resolve(s)
     expect(chest!.parts[0]!.model.id).toBe('minecraft:chest#chest')
     expect(chest!.parts[0]!.y).toBe(270)
+    // 大きさが違う絵は、並びが違うかもしれないので使わない
+    const wrongSize = new MemoryAssetReader({ ...files, 'assets/minecraft/textures/entity/chest/normal.png': pngHeader(128, 128) })
+    expect((await new ModelResolver(wrongSize).resolve(s))!.parts[0]!.model.id).toBe('minecraft:chest#particle')
+
+    const mod = new MemoryAssetReader({
+      'assets/ad_astra/blockstates/aeronos_chest.json': JSON.stringify({ variants: { '': { model: 'ad_astra:block/aeronos_chest' } } }),
+      'assets/ad_astra/models/block/aeronos_chest.json': JSON.stringify({ textures: { particle: 'ad_astra:block/aeronos_planks' } }),
+      'assets/ad_astra/textures/entity/chest/aeronos_chest.png': pngHeader(64, 64),
+      'assets/test/blockstates/machine.json': JSON.stringify({ variants: { '': { model: 'test:block/machine' } } }),
+      'assets/test/models/block/machine.json': JSON.stringify({ textures: { particle: 'test:block/casing' } }),
+    })
+    const resolver = new ModelResolver(mod)
+    const aeronos = await resolver.resolve(state('ad_astra:aeronos_chest', { facing: 'east', type: 'single' }))
+    expect(aeronos!.parts[0]!.model.elements[0]!.faces.north!.texture).toBe('ad_astra:entity/chest/aeronos_chest')
+    // 絵のない形のないブロックは particle の箱のまま
+    expect((await resolver.resolve(state('test:machine')))!.parts[0]!.model.id).toBe('test:machine#particle')
   })
 })
