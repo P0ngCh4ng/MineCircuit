@@ -176,11 +176,12 @@ class TauriFileSink implements FileSink { /* @tauri-apps/plugin-dialog の save 
 | 許可 | 使いみち |
 | --- | --- |
 | `core:default` | Tauri の基本（ウィンドウ・イベント・パスなどの読み取り）。通信やファイルの許可は含まない |
-| `dialog:allow-open`・`dialog:allow-save` | ファイル・フォルダを選ぶ画面と、保存先を選ぶ画面。メッセージの画面は使わない |
+| `dialog:allow-open`・`dialog:allow-save` | ファイル・フォルダを選ぶ画面と、保存先を選ぶ画面。メッセージの画面は使わない（確認の画面は下の `dialog:allow-message`） |
 | `fs:allow-read-file`・`fs:allow-read-dir`・`fs:allow-stat`・`fs:allow-exists` | 選んだフォルダ（Modpack）と選んだファイルを読む |
 | `fs:allow-open`・`fs:allow-read`・`fs:allow-seek` | jar の一部だけを読む（開く・位置を移す・読む）。開くのは読むためだけ（`read: true`）。閉じるのは `core:default` に入っている |
 | `fs:allow-write-file` | 保存の画面で選んだファイルに書く |
 | `core:window:allow-destroy` | ウィンドウを閉じる前に書き出していない変更を確かめ、閉じてよければ自分で閉じる（#173）。閉じるのを一度止めると、Tauri はウィンドウを destroy で閉じるため |
+| `dialog:allow-message` | 書き出していない変更をなくす前に、OS の確認の画面（OK・キャンセル）を出す（#225）。dialog プラグインの確認（`confirm`）はこのコマンドで出す。`dialog:allow-confirm` はこれの別名で、プラグインの次の版で消えるため使わない。プラグインが差し替える `window.confirm` は、なくなったコマンドを呼んで失敗するので使わない |
 
 - fs の許可には固定の範囲（`$HOME` など）を付けない。範囲は、dialog プラグインが利用者の選んだパスを実行中に足すものだけになる。フォルダを選ぶときは `recursive: true` を渡して中まで読めるようにし、persisted-scope がその範囲を次回も残す。
 - fs の範囲は読み書きで分かれていないので、選んだフォルダにも書けてしまう。書き込みは `TauriFileSink` が保存の画面で選んだパスにだけ行う、とコードで守る。

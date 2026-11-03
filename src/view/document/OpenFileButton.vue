@@ -25,19 +25,19 @@ async function onClick(): Promise<void> {
   pickError.value = null
   try {
     const file = await pickDesktopBlueprintFile(blueprintFileExtensions)
-    if (file && confirmDiscard(session)) await session.openFile(file)
+    if (file && (await confirmDiscard(session))) await session.openFile(file)
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e)
     pickError.value = `ファイルを選ぶ画面を開けませんでした（${detail}）。もう一度「ファイルを開く…」を押してください。`
   }
 }
 
-function onPicked(event: Event): void {
+async function onPicked(event: Event): Promise<void> {
   const el = event.target as HTMLInputElement
   const file = el.files?.[0]
   // 同じファイルをもう一度選んでも change が起きるように空にする
   el.value = ''
-  if (file && confirmDiscard(session)) void session.openFile(file)
+  if (file && (await confirmDiscard(session))) await session.openFile(file)
 }
 </script>
 

@@ -16,7 +16,9 @@ const session = useDocumentSession()
 const { current, opening, error } = session
 const view = useViewStore()
 const drop = useFileDrop((file) => {
-  if (confirmDiscard(session)) void session.openFile(file)
+  void confirmDiscard(session).then((ok) => {
+    if (ok) void session.openFile(file)
+  })
 })
 </script>
 
