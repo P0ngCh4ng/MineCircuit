@@ -83,6 +83,11 @@ export const useToolStore = defineStore('tool', () => {
     controller.click(target, mods)
   }
 
+  /** 3D/2D表示の中ボタンのクリックから呼ぶ。どのツールでも、指したブロックを置くブロックにする（#227） */
+  function pickBlock(target: PickTarget): boolean {
+    return controller.pickBlock(target)
+  }
+
   /** 1つのブロックを選ぶ（範囲もそのマスだけにする）。null なら選択を解除する */
   function setSelected(pos: Vec3 | null): void {
     selectedPos.value = pos
@@ -137,6 +142,7 @@ export const useToolStore = defineStore('tool', () => {
     cancelDrag,
     isDragging,
     click,
+    pickBlock,
     setSelected,
     extendSelection,
     setSelectionBox,
