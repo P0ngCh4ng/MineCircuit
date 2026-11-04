@@ -93,6 +93,30 @@ describe('ToolController', () => {
   })
 })
 
+describe('ToolController の中ボタンのスポイト（#227）', () => {
+  it('今のツールにかかわらず、スポイトに渡す。ツールは替えない', () => {
+    const c = new ToolController()
+    const select = new FakeTool('select')
+    const pick = new FakeTool('pick')
+    c.register(select)
+    c.register(pick)
+    select.log.length = 0
+    expect(c.pickBlock(block([1, 0, 2]))).toBe(true)
+    expect(pick.log).toEqual(['click:1,0,2'])
+    expect(select.log).toEqual([])
+    expect(c.active).toBe('select')
+  })
+
+  it('スポイトを登録していなければ何もせず false', () => {
+    const c = new ToolController()
+    const select = new FakeTool('select')
+    c.register(select)
+    select.log.length = 0
+    expect(c.pickBlock(block([1, 0, 2]))).toBe(false)
+    expect(select.log).toEqual([])
+  })
+})
+
 describe('SelectTool', () => {
   function setup() {
     const state: { selected: Vec3 | null; extendedTo: Vec3 | null; hovered: Vec3 | null } = {

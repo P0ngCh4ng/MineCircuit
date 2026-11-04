@@ -120,6 +120,17 @@ export class ToolController {
     tool?.dragCancel?.()
   }
 
+  /**
+   * 表示から中ボタンのクリックを受け取る（#227）。今のツールにかかわらず、スポイトに渡して
+   * 指したブロックを置くブロックにする。ツールは替えない。スポイトがなければ何もせず false
+   */
+  pickBlock(target: PickTarget): boolean {
+    const pick = this.tools.get('pick')
+    if (!pick) return false
+    pick.onClick(target, { shift: false })
+    return true
+  }
+
   /** 表示からクリックを受け取る */
   click(target: PickTarget, mods: PickModifiers = { shift: false }): void {
     ;(this.override ?? this.activeTool)?.onClick(target, mods)

@@ -6,7 +6,7 @@ import { createDocumentSession, DOCUMENT_SESSION_KEY } from '../document/documen
 import { useLayerStore } from '../stores/layerStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
-import type { PickTarget } from '../tools/tool'
+import type { PickModifiers, PickTarget, Tool } from '../tools/tool'
 import ViewControls from '../shell/ViewControls.vue'
 import ViewModeSwitch from '../shell/ViewModeSwitch.vue'
 import { layoutGrid2D } from './layerGrid2D'
@@ -55,6 +55,16 @@ function mountView() {
     clientY: layout.originY + (z + 0.5) * layout.cellSize,
   })
   return { wrapper, session, at, layout }
+}
+
+/** 中ボタンで渡されたものを記録する偽のスポイト */
+class FakePickTool implements Tool {
+  readonly id = 'pick' as const
+  readonly picked: PickTarget[] = []
+  onHover(): void {}
+  onClick(target: PickTarget, _mods: PickModifiers): void {
+    this.picked.push(target)
+  }
 }
 
 describe('LayerView2D', () => {
@@ -297,6 +307,35 @@ describe('LayerView2D の拡大・縮小と移動（#155）', () => {
     // 動かしたあと、もとの (2, 1) の位置にはマス (0, 0) がある
     await canvas.trigger('pointermove', at(2, 1))
     expect(tools.hoverTarget?.pos).toEqual([0, 0, 0])
+    wrapper.unmount()
+  })
+
+  it('どのツールでも、中ボタンを動かさずに離すと、指したブロックをスポイトに渡す（#227）', async () => {
+    const { wrapper, at, layout } = mountView()
+    const tools = useToolStore()
+    const pick = new FakePickTool()
+    tools.register(pick)
+    expect(tools.activeToolId).toBe('select')
+    const canvas = wrapper.get('canvas')
+
+    await canvas.trigger('pointerdown', { button: 1, pointerId: 1, ...at(1, 2) })
+    await canvas.trigger('pointerup', { button: 1, pointerId: 1, ...at(1, 2) })
+    expect(pick.picked.map((t) => t.pos)).toEqual([[1, 0, 2]])
+    expect(tools.activeToolId).toBe('select')
+    expect(tools.selectedPos).toBeNull()
+
+    // 動かしたら表示を動かすドラッグなので拾わない
+    const start = at(1, 2)
+    const end = { clientX: start.clientX + layout.cellSize, clientY: start.clientY }
+    await canvas.trigger('pointerdown', { button: 1, pointerId: 1, ...start })
+    await canvas.trigger('pointermove', { buttons: 4, pointerId: 1, ...end })
+    await canvas.trigger('pointerup', { button: 1, pointerId: 1, ...end })
+    // 空きマスや設計図の外では何もしない
+    await canvas.trigger('pointerdown', { button: 1, pointerId: 1, ...at(0, 0) })
+    await canvas.trigger('pointerup', { button: 1, pointerId: 1, ...at(0, 0) })
+    await canvas.trigger('pointerdown', { button: 1, pointerId: 1, clientX: 1, clientY: 1 })
+    await canvas.trigger('pointerup', { button: 1, pointerId: 1, clientX: 1, clientY: 1 })
+    expect(pick.picked).toHaveLength(1)
     wrapper.unmount()
   })
 

@@ -11,7 +11,7 @@ import { useLayerStore } from '../stores/layerStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
 import type { PickRay } from '../tools/picker'
-import type { PickTarget } from '../tools/tool'
+import type { PickModifiers, PickTarget, Tool } from '../tools/tool'
 import type { BlueprintScene } from './blueprintScene'
 import type { CameraView } from './cameraViews'
 import type { SelectionOverlay3D } from './selectionOverlay3D'
@@ -64,6 +64,16 @@ function pointer(type: string, x: number, y: number, extra: Record<string, unkno
   return new PointerEvent(type, { clientX: x, clientY: y, button: 0, buttons: 0, bubbles: true, ...extra })
 }
 
+/** 中ボタンで渡されたものを記録する偽のスポイト */
+class FakePickTool implements Tool {
+  readonly id = 'pick' as const
+  readonly picked: PickTarget[] = []
+  onHover(): void {}
+  onClick(target: PickTarget, _mods: PickModifiers): void {
+    this.picked.push(target)
+  }
+}
+
 describe('Viewport3D', () => {
   it('開いている設計図を描き、斜めの視点で全体を見る', () => {
     const { scene, fake, view } = setup()
@@ -112,6 +122,38 @@ describe('Viewport3D', () => {
     canvas.dispatchEvent(pointer('pointerup', 30, 40))
     expect(tools.selectedPos).toBeNull()
     expect(view.cameraView).toBeNull()
+  })
+
+  it('どのツールでも、中ボタンを動かさずに離すと、指したブロックをスポイトに渡す（#227）', () => {
+    const { wrapper, tools } = setup()
+    const pick = new FakePickTool()
+    tools.register(pick)
+    expect(tools.activeToolId).toBe('select')
+    const canvas = wrapper.get('canvas').element
+
+    canvas.dispatchEvent(pointer('pointerdown', 1, 0, { button: 1, buttons: 4 }))
+    canvas.dispatchEvent(pointer('pointerup', 1, 0, { button: 1 }))
+    expect(pick.picked.map((t) => t.pos)).toEqual([[1, 1, 0]])
+    // ツールは替えず、選択もしない
+    expect(tools.activeToolId).toBe('select')
+    expect(tools.selectedPos).toBeNull()
+
+    // 動かしたら拡大・縮小のドラッグなので拾わない
+    canvas.dispatchEvent(pointer('pointerdown', 0, 0, { button: 1, buttons: 4 }))
+    canvas.dispatchEvent(pointer('pointerup', 30, 40, { button: 1 }))
+    // 床の空きマスや設計図の外では何もしない
+    canvas.dispatchEvent(pointer('pointerdown', 2, 2, { button: 1, buttons: 4 }))
+    canvas.dispatchEvent(pointer('pointerup', 2, 2, { button: 1 }))
+    canvas.dispatchEvent(pointer('pointerdown', 9, 9, { button: 1, buttons: 4 }))
+    canvas.dispatchEvent(pointer('pointerup', 9, 9, { button: 1 }))
+    expect(pick.picked).toHaveLength(1)
+  })
+
+  it('中ボタンを押しても、ブラウザの自動スクロールを出さない（#227）', () => {
+    const { wrapper } = setup()
+    const down = new MouseEvent('mousedown', { button: 1, cancelable: true, bubbles: true })
+    wrapper.get('canvas').element.dispatchEvent(down)
+    expect(down.defaultPrevented).toBe(true)
   })
 
   it('選択ツールでブロックをダブルクリックすると、つながったブロックをまとめて選ぶ（#205）', () => {

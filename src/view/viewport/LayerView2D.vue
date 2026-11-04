@@ -407,6 +407,9 @@ function updatePlaceDrag(d: DragPlace, cell: Cell2D): void {
   tools.dragTo({ pos: [cell[0], layer.value, cell[1]], empty: blueprint.value?.get([cell[0], layer.value, cell[1]]) === null })
 }
 
+/** 中ボタンを押して離すまでに、これより動かなければクリック（スポイト。#227）。CSS ピクセル */
+const CLICK_TOLERANCE = 4
+
 /** 表示を動かすドラッグ（#155）。押した位置と、そのときのマス目の置き方 */
 interface Pan {
   readonly pointerId: number
@@ -438,10 +441,16 @@ function startPan(e: PointerEvent): boolean {
   return true
 }
 
-function endPan(e: PointerEvent): void {
+/** 表示を動かすドラッグを終える。released はボタンを離したとき（取られたときは false） */
+function endPan(e: PointerEvent, released = false): void {
   if (!pan) return
   // 左ドラッグで動かしたときは、続いて来るクリックで選ばない
   if (pan.button === 0) suppressClick = true
+  // 中ボタンを動かさずに離したら、指したブロックを置くブロックにする（#227）
+  if (pan.button === 1 && released && Math.hypot(e.clientX - pan.startX, e.clientY - pan.startY) <= CLICK_TOLERANCE) {
+    const target = pickAt(e)
+    if (target && !target.empty) tools.pickBlock(target)
+  }
   pan = null
   panning.value = false
   endDrag(e)
@@ -546,7 +555,7 @@ function endDrag(e: PointerEvent): void {
 
 function onPointerUp(e: PointerEvent): void {
   if (pan && pan.pointerId === e.pointerId) {
-    endPan(e)
+    endPan(e, true)
     return
   }
   if (!drag || drag.pointerId !== e.pointerId) return

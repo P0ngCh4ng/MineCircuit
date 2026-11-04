@@ -250,7 +250,11 @@ function grabSelection(e: PointerEvent): boolean {
   return true
 }
 
+/** 中ボタンを押した位置。動かさずに離したらスポイト（#227）。動かしたら拡大・縮小のドラッグ */
+let middleDownAt: { x: number; y: number; pointerId: number } | null = null
+
 function onPointerDown(e: PointerEvent): void {
+  middleDownAt = e.button === 1 ? { x: e.clientX, y: e.clientY, pointerId: e.pointerId } : null
   downAt = e.button === 0 ? { x: e.clientX, y: e.clientY } : null
   placeDrag = null
   moveDrag = null
@@ -269,6 +273,7 @@ function onPointerDown(e: PointerEvent): void {
 }
 
 function onPointerCancel(e: PointerEvent): void {
+  middleDownAt = null
   if (moveDrag) {
     dragMove.cancel()
     finishMoveDrag(e)
@@ -281,7 +286,26 @@ function onPointerCancel(e: PointerEvent): void {
   downAt = null
 }
 
+/** 中ボタンを動かさずに離したら、指したブロックを置くブロックにする（#227）。拾ったら true */
+function pickOnMiddleUp(e: PointerEvent): boolean {
+  const start = middleDownAt
+  if (e.button !== 1 || !start || start.pointerId !== e.pointerId) return false
+  middleDownAt = null
+  if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > CLICK_TOLERANCE) return true
+  const target = pickAt(e)
+  if (target && !target.empty) tools.pickBlock(target)
+  // 置くブロックが変わると、置くツールの見本も変わるので、マウスの下を渡し直す
+  tools.hover(target)
+  return true
+}
+
+/** 中ボタンを押したときの、ブラウザの自動スクロールを止める（#227） */
+function onMouseDown(e: MouseEvent): void {
+  if (e.button === 1) e.preventDefault()
+}
+
 function onPointerUp(e: PointerEvent): void {
+  if (pickOnMiddleUp(e)) return
   const grabbed = moveDrag
   if (grabbed && grabbed.pointerId === e.pointerId) {
     finishMoveDrag(e)
@@ -529,6 +553,7 @@ defineExpose({ scene, calcOverlay, rotationOverlay, portOverlay, selectionOverla
       @pointerdown="onPointerDown"
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
+      @mousedown="onMouseDown"
       @dblclick="onDoubleClick"
       @contextmenu.prevent
     ></canvas>
