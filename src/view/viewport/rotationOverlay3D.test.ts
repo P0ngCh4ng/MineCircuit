@@ -5,7 +5,7 @@ import type { FlowTrace } from '../../calc/flowTrace'
 import type { LayerDisplay } from '../layers/layerDisplay'
 import { rotationLabel } from './layerRenderer2D'
 import { ringMatrix, RotationOverlay3D } from './rotationOverlay3D'
-import { rotationColorKey, showsDirection } from './rotationColors'
+import { ROTATION_COLORS, rotationColorKey, showsDirection } from './rotationColors'
 
 const rot = (over: Partial<CalcRotation>): CalcRotation => ({
   pos: [0, 0, 0],
@@ -43,15 +43,30 @@ describe('ringMatrix', () => {
 })
 
 describe('RotationOverlay3D', () => {
-  it('回転ごとに色の箱を出し、隠した段のものは出さない。空にすると消える', () => {
+  it('回転ごとに色の枠線を出し、隠した段のものは出さない。空にすると消える', () => {
     const overlay = new RotationOverlay3D()
     overlay.update([rot({ pos: [0, 0, 0] }), rot({ pos: [0, 1, 0], rpm: 0, level: 'stopped' }), rot({ pos: [0, 2, 0] })])
-    expect(overlay.count().boxes).toBe(3)
+    expect(overlay.count().outlines).toBe(3)
     const only2: LayerDisplay = { layer: 2, mode: 'only', hidden: new Set() }
     overlay.update([rot({ pos: [0, 0, 0] }), rot({ pos: [0, 2, 0] })], only2)
-    expect(overlay.count().boxes).toBe(1)
+    expect(overlay.count().outlines).toBe(1)
     overlay.update([])
-    expect(overlay.count()).toEqual({ boxes: 0, rings: 0, arrows: 0 })
+    expect(overlay.count()).toEqual({ outlines: 0, rings: 0, arrows: 0 })
+    overlay.dispose()
+  })
+
+  it('面は塗らず、線だけで囲む。線の色は速さの段階の色（#229）', () => {
+    const overlay = new RotationOverlay3D()
+    overlay.update([rot({ pos: [0, 0, 0], level: 'slow' }), rot({ pos: [3, 0, 0], overloaded: true })])
+    expect(overlay.group.children.filter((o) => o instanceof THREE.Mesh)).toEqual([])
+    const lines = overlay.group.getObjectByName('rotation-outlines') as THREE.LineSegments
+    expect(lines).toBeInstanceOf(THREE.LineSegments)
+    const colors = lines.geometry.getAttribute('color')
+    const at = (i: number) => new THREE.Color(colors.getX(i), colors.getY(i), colors.getZ(i)).getHex()
+    expect(at(0)).toBe(new THREE.Color(ROTATION_COLORS.slow).getHex())
+    expect(at(24)).toBe(new THREE.Color(ROTATION_COLORS.overloaded).getHex())
+    // 2 つ目の枠線は x=3 のブロックを囲む
+    expect(lines.geometry.getAttribute('position').getX(24)).toBeCloseTo(2.98)
     overlay.dispose()
   })
 

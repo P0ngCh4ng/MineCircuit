@@ -1,5 +1,5 @@
 // 3D表示の「回転」（docs/ui.md「回転の表示」）。
-// - 箱：計算で回るとしたブロックを、速さの段階の色の半透明の箱で包む
+// - 枠線：計算で回るとしたブロックを、速さの段階の色の線で囲む。面は塗らず、ブロックの見た目を隠さない（#229）
 // - 輪：力の流れ（#207）を出したブロックのうち回っているものに、回る向きを示す輪の矢印を軸に垂直に付ける。
 //   輪はブロックより少し大きく、軸の正の向きから見て、正の回転数なら反時計回りに見える（Create と同じ向き）。裏から見れば逆回りに見える
 // - 流れ：選んだブロックからの力の流れの矢印（#207）。ブロックの中心どうしを結ぶ棒と、真ん中の矢じり。ブロックに隠れないよう手前に描く
@@ -9,6 +9,7 @@ import * as THREE from 'three'
 import type { CalcRotation } from '../../calc/calcPlugin'
 import type { FlowTrace } from '../../calc/flowTrace'
 import { layerVisibility, SHOW_ALL_LAYERS, type LayerDisplay } from '../layers/layerDisplay'
+import { pushBoxEdges } from './analysisOverlay3D'
 import { FLOW_COLORS } from './layerRenderer2D'
 import { ROTATION_COLORS, rotationColorKey, showsDirection } from './rotationColors'
 
@@ -70,18 +71,22 @@ export function ringMatrix(r: CalcRotation, out = new THREE.Matrix4()): THREE.Ma
   return out.makeTranslation(r.pos[0] + 0.5, r.pos[1] + 0.5, r.pos[2] + 0.5).multiply(rotate).multiply(mirror)
 }
 
+/** 枠線の大きさ。ブロックの面と重なってちらつかないよう少し大きくする */
+const OUTLINE_SIZE = 1.04
+/** 立方体の辺 12 本の端の点の数 */
+const OUTLINE_VERTICES = 24
+
 export class RotationOverlay3D {
   readonly group = new THREE.Group()
 
-  private readonly boxGeometry = new THREE.BoxGeometry(1.04, 1.04, 1.04)
-  private readonly boxMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.3, depthWrite: false })
+  private readonly outlineMaterial = new THREE.LineBasicMaterial({ vertexColors: true })
   private readonly ringGeometry = new THREE.PlaneGeometry(1.7, 1.7)
   private readonly ringTexture = ringTexture()
   private readonly ringMaterial: THREE.MeshBasicMaterial | null
   private readonly shaftGeometry = new THREE.CylinderGeometry(0.06, 0.06, 1, 8)
   private readonly headGeometry = new THREE.ConeGeometry(0.2, 0.42, 12)
   private readonly flowMaterial = new THREE.MeshBasicMaterial({ depthTest: false, depthWrite: false })
-  private boxes: THREE.InstancedMesh | null = null
+  private outlines: THREE.LineSegments | null = null
   private rings: THREE.InstancedMesh | null = null
   private shafts: THREE.InstancedMesh | null = null
   private heads: THREE.InstancedMesh | null = null
@@ -108,19 +113,22 @@ export class RotationOverlay3D {
 
     const m = new THREE.Matrix4()
     const color = new THREE.Color()
-    const boxes = new THREE.InstancedMesh(this.boxGeometry, this.boxMaterial, shown.length)
-    boxes.name = 'rotation-boxes'
-    boxes.renderOrder = 5
-    boxes.raycast = () => {}
-    shown.forEach((r, i) => {
-      m.makeTranslation(r.pos[0] + 0.5, r.pos[1] + 0.5, r.pos[2] + 0.5)
-      boxes.setMatrixAt(i, m)
-      boxes.setColorAt(i, color.set(ROTATION_COLORS[rotationColorKey(r)]))
-    })
-    boxes.instanceMatrix.needsUpdate = true
-    if (boxes.instanceColor) boxes.instanceColor.needsUpdate = true
-    this.group.add(boxes)
-    this.boxes = boxes
+    const points: number[] = []
+    const colors: number[] = []
+    for (const r of shown) {
+      pushBoxEdges(points, [r.pos[0] + 0.5, r.pos[1] + 0.5, r.pos[2] + 0.5], OUTLINE_SIZE)
+      color.set(ROTATION_COLORS[rotationColorKey(r)])
+      for (let i = 0; i < OUTLINE_VERTICES; i++) colors.push(color.r, color.g, color.b)
+    }
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3))
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
+    const outlines = new THREE.LineSegments(geometry, this.outlineMaterial)
+    outlines.name = 'rotation-outlines'
+    outlines.renderOrder = 5
+    outlines.raycast = () => {}
+    this.group.add(outlines)
+    this.outlines = outlines
 
     const traced = new Set(flow?.blocks.map((p) => p.join(',')) ?? [])
     const turning = shown.filter((r) => showsDirection(r) && traced.has(r.pos.join(',')))
@@ -139,9 +147,10 @@ export class RotationOverlay3D {
     this.rings = rings
   }
 
-  /** 出している箱・輪・流れの矢印の数（テストと状態の確認用） */
-  count(): { boxes: number; rings: number; arrows: number } {
-    return { boxes: this.boxes?.count ?? 0, rings: this.rings?.count ?? 0, arrows: this.heads?.count ?? 0 }
+  /** 出している枠線（ブロックの数）・輪・流れの矢印の数（テストと状態の確認用） */
+  count(): { outlines: number; rings: number; arrows: number } {
+    const outlineVertices = this.outlines?.geometry.getAttribute('position').count ?? 0
+    return { outlines: outlineVertices / OUTLINE_VERTICES, rings: this.rings?.count ?? 0, arrows: this.heads?.count ?? 0 }
   }
 
   /** 力の流れの矢印。どちらかの端が見えている段にあれば描く */
@@ -188,8 +197,7 @@ export class RotationOverlay3D {
 
   dispose(): void {
     this.clear()
-    this.boxGeometry.dispose()
-    this.boxMaterial.dispose()
+    this.outlineMaterial.dispose()
     this.ringGeometry.dispose()
     this.ringMaterial?.dispose()
     this.ringTexture?.dispose()
@@ -200,11 +208,13 @@ export class RotationOverlay3D {
   }
 
   private clear(): void {
-    for (const mesh of [this.boxes, this.rings, this.shafts, this.heads]) {
+    this.outlines?.removeFromParent()
+    this.outlines?.geometry.dispose()
+    for (const mesh of [this.rings, this.shafts, this.heads]) {
       mesh?.removeFromParent()
       mesh?.dispose()
     }
-    this.boxes = null
+    this.outlines = null
     this.rings = null
     this.shafts = null
     this.heads = null
