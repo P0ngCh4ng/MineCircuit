@@ -14,7 +14,7 @@ export const ANALYSIS_COLORS_3D: Readonly<Record<ThemeName, { readonly measure: 
 }
 
 /** 大きさ s の立方体の 12 本の辺（中心 c）を points に足す */
-function pushBoxEdges(points: number[], c: readonly [number, number, number], s: number): void {
+export function pushBoxEdges(points: number[], c: readonly [number, number, number], s: number): void {
   const h = s / 2
   const [x0, y0, z0] = [c[0] - h, c[1] - h, c[2] - h]
   const [x1, y1, z1] = [c[0] + h, c[1] + h, c[2] + h]
