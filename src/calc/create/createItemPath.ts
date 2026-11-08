@@ -9,11 +9,11 @@ import { directionVector, isDirection, oppositeDirection, type Direction } from 
 import { addVec3, equalsVec3, type Vec3 } from '../../domain/vec3'
 import type { ProcessingRecipeType, RecipeBook } from '../../io/modpack/recipes'
 import type { AssumptionLog } from '../assumptionLog'
-import type { CalcIssue, CalcSummaryItem } from '../calcPlugin'
+import type { CalcIssue, CalcItemMove, CalcSummaryItem } from '../calcPlugin'
 import { nbtPos, nbtString } from '../nbtValues'
 import { resolved, type Provenance } from '../provenance'
 import type { VirtualPort } from '../virtualPort'
-import { chooseRecipe, formatRate, machineCapacityPerMinute, RECIPE_MACHINE_NAMES, type RecipeChoice } from './createThroughput'
+import { beltSpeed, chooseRecipe, formatRate, machineCapacityPerMinute, RECIPE_MACHINE_NAMES, type RecipeChoice } from './createThroughput'
 import { axisDirections, directionAxis } from './kineticBlocks'
 import { ITEM_INPUT_PORT_KIND, nextBeltSegment, weakerSource } from './kineticGraph'
 
@@ -122,6 +122,8 @@ export interface LineFlow {
 
 export interface ItemPathResult {
   readonly records: readonly ItemPathRecord[]
+  /** 物の動き（docs/ui.md「物の流れ」） */
+  readonly moves: readonly CalcItemMove[]
   /** 「処理が追いつかない」 */
   readonly issues: readonly CalcIssue[]
   readonly line: LineFlow | null
@@ -228,8 +230,12 @@ export function bottleneckValue(line: LineFlow): CalcSummaryItem | null {
   }
 }
 
+/** ベルトの外（ファンネル・シュート・機械アームなど）の、見た目の速さ（ブロック/秒）。移動の時間は計算していない */
+const HOP_SPEED = 2
+
 class ItemTracer {
   private readonly records = new Map<string, ItemPathRecord>()
+  private readonly moves = new Map<string, CalcItemMove>()
   private readonly arms: ArmInfo[]
   /** いまたどっている道の上の「位置|物」。同じものにまた届いたら輪になっている */
   private readonly ancestors = new Set<string>()
@@ -269,6 +275,7 @@ class ItemTracer {
     const byKey = this.records
     return {
       records,
+      moves: [...this.moves.values()],
       issues,
       line: lineFlow(records, this.inputRate),
       itemsAt(pos: Vec3): string[] {
@@ -364,17 +371,30 @@ class ItemTracer {
         this.handOff(funnel.from, funnel.to, flow, null, funnel.via)
         return
       }
-      if ((this.env.bp.get(seg)?.properties.slope ?? 'horizontal') !== 'horizontal') continue
-      const result = this.processAbove(seg, flow)
-      if (result === null) return
-      if (result !== 'pass') {
-        for (const out of result) this.walkBelt(segments, i + 1, out, move)
-        return
+      if ((this.env.bp.get(seg)?.properties.slope ?? 'horizontal') === 'horizontal') {
+        const result = this.processAbove(seg, flow)
+        if (result === null) return
+        if (result !== 'pass') {
+          for (const out of result) {
+            this.beltStep(segments, i, out)
+            this.walkBelt(segments, i + 1, out, move)
+          }
+          return
+        }
       }
+      this.beltStep(segments, i, flow)
     }
     // 端の1つ先（高さは端の区間と同じ）
     const end = segments[segments.length - 1]!
     this.handOff(end, addVec3(end, directionVector(move)), flow, oppositeDirection(move), null)
+  }
+
+  /** ベルトの区間 i から次の区間へ進む物の動きを記録する。端なら何もしない */
+  private beltStep(segments: readonly Vec3[], i: number, flow: Flow): void {
+    const seg = segments[i]!
+    const next = segments[i + 1]
+    const rpm = this.env.rpmAt(seg) ?? 0
+    if (next && rpm !== 0) this.addMove(seg, next, flow, beltSpeed(rpm))
   }
 
   /** entry から move の向きに、つながったベルトの区間（entry を含む） */
@@ -452,7 +472,8 @@ class ItemTracer {
       this.note(mpos, '止まっているので、下を通る物を処理しない')
       return 'pass'
     }
-    this.arrive(mpos, flow, base)
+    // 物はベルトやデポの上を通るので、機械へ動く物としては記録しない
+    this.recordArrival(mpos, flow, base)
     if (isDeployer) {
       // デプロイヤーは物を変えず、通ったことだけ出す（手の物のレシピは扱わない）
       this.record(mpos).capacityPerMinute = machineCapacityPerMinute('deployer', rpm, 0, this.env.bulkPressing)
@@ -770,7 +791,19 @@ class ItemTracer {
     return r
   }
 
+  /** 届いた物を記録し、どこかから来たなら、そこからの物の動きも記録する */
   private arrive(pos: Vec3, flow: Flow, from: Vec3 | null): void {
+    this.recordArrival(pos, flow, from)
+    if (from && !equalsVec3(from, pos)) this.addMove(from, pos, flow, HOP_SPEED)
+  }
+
+  private addMove(from: Vec3, to: Vec3, flow: Flow, speed: number): void {
+    const key = `${posKey(from)}>${posKey(to)}|${flow.item}`
+    const move = this.moves.get(key)
+    this.moves.set(key, move ? { ...move, rate: move.rate + flow.rate } : { from: [from[0], from[1], from[2]], to: [to[0], to[1], to[2]], item: flow.item, rate: flow.rate, speed })
+  }
+
+  private recordArrival(pos: Vec3, flow: Flow, from: Vec3 | null): void {
     const list = this.record(pos).arrivals
     const i = list.findIndex(
       (a) => a.item === flow.item && (a.from === null ? from === null : from !== null && equalsVec3(a.from, from)),

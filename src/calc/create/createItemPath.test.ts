@@ -161,6 +161,31 @@ describe('物の通り道', () => {
     expect(sinkOf(trace(south, [port([0, 0, 0], 'minecraft:stone')], { '0,0,0': 8, '0,0,1': 8 }).result, '0,0,2', 'minecraft:stone')).toBe(1)
   })
 
+  it('物の動き：ベルトは区間ごとに回転数 ÷ 24 の速さで、ベルトの外へは見た目の速さで動く（#231）', () => {
+    const fx = belt(blueprintFixture().place([4, 0, 0], 'minecraft:chest', chest), 0, 0, [1, 2, 3], 'east')
+    const { result } = trace(fx, [port([1, 0, 0], 'minecraft:stone', 2)], { '1,0,0': -48, '2,0,0': -48, '3,0,0': -48 })
+    expect(result.moves).toEqual([
+      { from: [1, 0, 0], to: [2, 0, 0], item: 'minecraft:stone', rate: 2, speed: 2 },
+      { from: [2, 0, 0], to: [3, 0, 0], item: 'minecraft:stone', rate: 2, speed: 2 },
+      { from: [3, 0, 0], to: [4, 0, 0], item: 'minecraft:stone', rate: 2, speed: 2 },
+    ])
+  })
+
+  it('物の動き：上のプレスで変わった物が先へ進み、機械へ向かう動きは出さない（#231）', () => {
+    const fx = belt(blueprintFixture().place([1, 2, 0], 'create:mechanical_press', { facing: 'north' }), 0, 0, [0, 1, 2], 'east')
+    const speeds = { '0,0,0': -24, '1,0,0': -24, '2,0,0': -24, '1,2,0': 64 }
+    const { result } = trace(fx, [port([0, 0, 0], 'minecraft:iron_ingot')], speeds)
+    expect(result.moves.map((m) => [m.from.join(','), m.to.join(','), m.item])).toEqual([
+      ['0,0,0', '1,0,0', 'minecraft:iron_ingot'],
+      ['1,0,0', '2,0,0', 'create:iron_sheet'],
+    ])
+  })
+
+  it('物の動き：物の入口がなければ何も出さない（#231）', () => {
+    const fx = belt(blueprintFixture(), 0, 0, [0, 1], 'east')
+    expect(trace(fx, [], { '0,0,0': -24, '1,0,0': -24 }).result.moves).toEqual([])
+  })
+
   it('ベルト：坂をたどり、端の先が空気なら下に落ちるとして仮定に載せる', () => {
     const fx = blueprintFixture({ size: [5, 3, 1] })
       .place([1, 0, 0], 'create:belt', { facing: 'east', slope: 'horizontal', part: 'start' })

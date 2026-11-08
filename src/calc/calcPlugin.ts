@@ -114,6 +114,17 @@ export interface CalcLink {
   readonly kind: 'power' | 'item'
 }
 
+/** 物の動き1本。表示部分の「物の流れ」に使う（docs/ui.md「物の流れ」） */
+export interface CalcItemMove {
+  readonly from: Vec3
+  readonly to: Vec3
+  readonly item: string
+  /** 個/秒 */
+  readonly rate: number
+  /** ブロック/秒。0 より大きい */
+  readonly speed: number
+}
+
 export interface CalcResult {
   readonly summary: readonly CalcSummaryItem[]
   readonly issues: readonly CalcIssue[]
@@ -124,6 +135,8 @@ export interface CalcResult {
   readonly rotations?: readonly CalcRotation[]
   /** 力や物が伝わるつながり。なければ省略 */
   readonly links?: readonly CalcLink[]
+  /** 物の動き。なければ省略 */
+  readonly itemMoves?: readonly CalcItemMove[]
   /** 動力源の位置（仮の動力源を付けたブロックを含む）。なければ省略 */
   readonly sources?: readonly Vec3[]
 }

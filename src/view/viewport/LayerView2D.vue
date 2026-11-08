@@ -22,6 +22,7 @@ import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
 import { useFlowTrace } from '../calc/useFlowTrace'
+import { useItemFlow } from '../calc/useItemFlow'
 import SelectionToolbar from '../selection/SelectionToolbar.vue'
 import type { ScreenRect } from '../selection/toolbarPosition'
 import { pick2D, type GridLayout2D, type PickScene2D } from '../tools/picker'
@@ -34,6 +35,7 @@ import { drawPortOverlay2D } from './portOverlay2D'
 import {
   DARK_THEME_2D,
   drawGrowMargin2D,
+  drawItemDots2D,
   drawLayer2D,
   drawPastePreview2D,
   drawSelectionBox2D,
@@ -50,6 +52,7 @@ const layers = useLayerStore()
 const tools = useToolStore()
 const viewMode = useViewStore()
 const flow = useFlowTrace()
+const itemDots = useItemFlow()
 /** 検索で強調するブロックの位置（#15） */
 const highlight = useSearchHighlight()
 const calc = useCalcStore()
@@ -181,6 +184,8 @@ function draw(): void {
     flow: flow.value,
     cellPainter: cellPainter.value,
   })
+  // 物の流れ（#231）
+  drawItemDots2D(ctx, grid, layer.value, itemDots.value)
   // 置くツールのとき、枠のすぐ外に置ける余白（#191）
   if (tools.activeToolId === 'place') drawGrowMargin2D(ctx, grid, bp.size, GROW_MARGIN_2D, theme)
   // 選択範囲の長方形。範囲の外の段では点線（#130）
@@ -260,7 +265,7 @@ watch(
 
 // 計算結果の印（ネットワークの強調と問題の位置。#31）と回転の表示（#117）が変わったら描き直す
 watch(
-  () => [probe.networkPositions, calc.issuePositions, viewMode.showRotation, calc.rotations, flow.value],
+  () => [probe.networkPositions, calc.issuePositions, viewMode.showRotation, calc.rotations, flow.value, itemDots.value],
   () => draw(),
   { flush: 'post' },
 )

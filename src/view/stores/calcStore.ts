@@ -4,7 +4,7 @@
 import { defineStore } from 'pinia'
 import { computed, markRaw, ref, shallowRef } from 'vue'
 import { createBuiltinRegistry } from '../../calc/builtinPlugins'
-import { issueSeverity, type CalcModpack, type CalcRotation, type IssueSeverity } from '../../calc/calcPlugin'
+import { issueSeverity, type CalcItemMove, type CalcModpack, type CalcRotation, type IssueSeverity } from '../../calc/calcPlugin'
 import {
   CalcScheduler,
   InlineCalcBackend,
@@ -122,6 +122,11 @@ export const useCalcStore = defineStore('calc', () => {
     (outcomes.value ?? []).flatMap((o) => (o.status === 'ok' ? (o.result.rotations ?? []) : [])),
   )
 
+  /** 物の動き（すべてのプラグインの分）。表示部分の「物の流れ」で使う */
+  const itemMoves = computed<readonly CalcItemMove[]>(() =>
+    (outcomes.value ?? []).flatMap((o) => (o.status === 'ok' ? (o.result.itemMoves ?? []) : [])),
+  )
+
   return {
     status,
     outcomes,
@@ -131,6 +136,7 @@ export const useCalcStore = defineStore('calc', () => {
     issuePositions,
     issueCounts,
     rotations,
+    itemMoves,
     setBackend,
     attach,
     setPack,

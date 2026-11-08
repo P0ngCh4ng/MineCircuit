@@ -118,6 +118,7 @@ export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<
     probes: allProbes,
     rotations: rotations(graph, evaluation, values),
     links: withItemPathLinks(flow.links, path.records),
+    itemMoves: path.moves,
     sources: flow.sources,
   }
 }

@@ -6,6 +6,7 @@ import { useDocumentSession } from '../document/documentSession'
 import { useFileDrop } from '../document/useFileDrop'
 import { confirmDiscard } from '../document/unsavedChanges'
 import QuickBar from '../edit/QuickBar.vue'
+import { useCalcStore } from '../stores/calcStore'
 import { useViewStore } from '../stores/viewStore'
 import ToolBar from '../tools/ToolBar.vue'
 import LayerView2D from './LayerView2D.vue'
@@ -15,6 +16,7 @@ import Viewport3D from './Viewport3D.vue'
 const session = useDocumentSession()
 const { current, opening, error } = session
 const view = useViewStore()
+const calc = useCalcStore()
 const drop = useFileDrop((file) => {
   void confirmDiscard(session).then((ok) => {
     if (ok) void session.openFile(file)
@@ -63,6 +65,9 @@ const drop = useFileDrop((file) => {
     <!-- 回転の表示の凡例（#117） -->
     <RotationLegend v-if="current && view.showRotation" class="rotation-legend" />
 
+    <!-- 物の流れ（#231）。物の入口がなければ流せない -->
+    <p v-if="current && view.showItemFlow && calc.itemMoves.length === 0" class="item-flow-hint">物の入口を置くと、物が流れます</p>
+
     <div v-if="drop.dragging.value" class="drop" aria-hidden="true">ここに落として設計図を開く</div>
   </section>
 </template>
@@ -77,6 +82,18 @@ const drop = useFileDrop((file) => {
 
 .viewport-3d {
   z-index: 0;
+}
+
+.item-flow-hint {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: Canvas;
+  font-size: 12px;
 }
 
 .rotation-legend {
