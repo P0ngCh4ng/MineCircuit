@@ -21,12 +21,14 @@ import { usePortStore } from '../stores/portStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
 import { useFlowTrace } from '../calc/useFlowTrace'
+import { useItemFlow } from '../calc/useItemFlow'
 import type { PickModifiers, PickTarget } from '../tools/tool'
 import SelectionToolbar from '../selection/SelectionToolbar.vue'
 import { boundingRect, sameRect, type ScreenRect } from '../selection/toolbarPosition'
 import { blockColor } from './blockColor'
 import { BlueprintScene } from './blueprintScene'
 import { CalcOverlay3D } from './calcOverlay3D'
+import { ItemFlowOverlay3D } from './itemFlowOverlay3D'
 import { RotationOverlay3D } from './rotationOverlay3D'
 import { PortOverlay3D } from './portOverlay3D'
 import { PasteOverlay3D } from './pasteOverlay3D'
@@ -50,6 +52,7 @@ const session = useDocumentSession()
 const tools = useToolStore()
 const view = useViewStore()
 const flow = useFlowTrace()
+const itemDots = useItemFlow()
 const brush = useBrushStore()
 /** 検索で強調するブロックの位置（#15） */
 const highlight = useSearchHighlight()
@@ -82,6 +85,8 @@ scene.scene.add(calcOverlay.group)
 // 回転の表示（#117）
 const rotationOverlay = new RotationOverlay3D()
 scene.scene.add(rotationOverlay.group)
+const itemFlowOverlay = new ItemFlowOverlay3D()
+scene.scene.add(itemFlowOverlay.group)
 // 仮の入出力の印（#70）
 const portOverlay = new PortOverlay3D()
 scene.scene.add(portOverlay.group)
@@ -501,6 +506,15 @@ onMounted(() => {
       },
       { immediate: true },
     ),
+    // 物の流れ（#231）
+    watch(
+      () => [itemDots.value, view.layerDisplay] as const,
+      ([dots, display]) => {
+        itemFlowOverlay.update(dots, display)
+        render()
+      },
+      { immediate: true },
+    ),
     // 仮の入出力の印（#70）
     watch(
       () => [ports.ports, ports.selectedId, view.layerDisplay] as const,
@@ -532,6 +546,7 @@ onBeforeUnmount(() => {
   scene.dispose()
   calcOverlay.dispose()
   rotationOverlay.dispose()
+  itemFlowOverlay.dispose()
   portOverlay.dispose()
   selectionOverlay.dispose()
   pasteOverlay.dispose()

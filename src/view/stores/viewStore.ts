@@ -36,6 +36,8 @@ export const useViewStore = defineStore('view', () => {
   const showAxes = ref(false)
   /** 計算で回るとしたブロックを、速さの段階で色分けする（docs/ui.md「回転の表示」） */
   const showRotation = ref(false)
+  /** 物の入口からの通り道の上を、物の印が流れる（docs/ui.md「物の流れ」） */
+  const showItemFlow = ref(false)
 
   const layers = useLayerStore()
   const layerMode = ref<LayerMode>('all')
@@ -105,6 +107,10 @@ export const useViewStore = defineStore('view', () => {
     showRotation.value = visible
   }
 
+  function setItemFlow(visible: boolean): void {
+    showItemFlow.value = visible
+  }
+
   function setLayerMode(mode: LayerMode): void {
     layerMode.value = mode
   }
@@ -132,7 +138,9 @@ export const useViewStore = defineStore('view', () => {
     showGrid,
     showAxes,
     showRotation,
+    showItemFlow,
     setRotation,
+    setItemFlow,
     layerMode,
     hiddenLayers,
     layerDisplay,

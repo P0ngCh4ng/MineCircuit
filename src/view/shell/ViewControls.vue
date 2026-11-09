@@ -96,6 +96,15 @@ function onModeChange(e: Event): void {
       >
         回転
       </button>
+      <button
+        type="button"
+        data-toggle="item-flow"
+        title="物の入口から届く物を、実際の速さと間隔で流して見せる"
+        :aria-pressed="view.showItemFlow"
+        @click="view.setItemFlow(!view.showItemFlow)"
+      >
+        物の流れ
+      </button>
     </div>
     <!-- 選択の解除（#12） -->
     <div class="bar-group" role="group" aria-label="強調">

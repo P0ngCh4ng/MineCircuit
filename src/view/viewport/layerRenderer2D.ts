@@ -2,12 +2,14 @@
 // 1つ下の段を薄く出し、マスが大きいときはブロックの略称を出す。上が北（−Z）。
 
 import type { CalcRotation } from '../../calc/calcPlugin'
+import type { ItemDot } from '../../calc/itemFlowDots'
 import type { FlowArrow, FlowTrace } from '../../calc/flowTrace'
 import type { Blueprint } from '../../domain/blueprint'
 import { isSingleCell, type Box } from '../../domain/box'
 import type { Vec3 } from '../../domain/vec3'
 import type { GridLayout2D } from '../tools/picker'
 import { blockColor, blockColorCss } from './blockColor'
+import { itemDotColor } from './itemDotColor'
 import { ROTATION_COLORS, rotationColorKey } from './rotationColors'
 import type { CellPainter2D, TextureCanvasLike } from './textureCellPainter2D'
 import { drawOrientation2D, ORIENTATION_MIN_CELL_SIZE, orientationMark2D } from './orientation2D'
@@ -120,6 +122,29 @@ export function rotationLabel(r: CalcRotation, turnMark = false): string {
 }
 /** 力の流れの矢印の色（#207）。回転は白、物は橙 */
 export const FLOW_COLORS: Readonly<Record<FlowArrow['kind'], string>> = { power: '#ffffff', item: '#ff9a1f' }
+
+/**
+ * 物の流れの印を描く（#231）。今の段の印だけ、物の色の丸で描く
+ */
+export function drawItemDots2D(
+  ctx: Pick<CanvasRenderingContext2D, 'fillStyle' | 'strokeStyle' | 'lineWidth' | 'beginPath' | 'arc' | 'fill' | 'stroke'>,
+  layout: Pick<GridLayout2D, 'originX' | 'originY' | 'cellSize'>,
+  layer: number,
+  dots: readonly ItemDot[],
+): void {
+  const { originX: ox, originY: oy, cellSize: cs } = layout
+  const radius = Math.max(2.5, cs * 0.16)
+  ctx.lineWidth = 1.5
+  ctx.strokeStyle = 'rgb(0 0 0 / 70%)'
+  for (const dot of dots) {
+    if (Math.floor(dot.pos[1]) !== layer) continue
+    ctx.fillStyle = itemDotColor(dot.item)
+    ctx.beginPath()
+    ctx.arc(ox + dot.pos[0] * cs, oy + dot.pos[2] * cs, radius, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+  }
+}
 
 /**
  * 力の流れの矢印を描く（#207）。今の段の中の矢印は、マスの中心どうしを結ぶ線と、真ん中の矢じり。
