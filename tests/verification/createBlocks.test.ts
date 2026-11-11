@@ -13,10 +13,7 @@ const source = (file: string) => readFileSync(join(CREATE_DIR, file), 'utf8')
 const path = (id: string) => id.slice('create:'.length)
 
 /** 分かっている抜け：回るブロックなのに、回転のつながりで扱わないもの */
-const KNOWN_KINETIC_GAPS: Readonly<Record<string, string>> = {
-  'create:fluid_valve': '液体のバルブは軸で回る。回転のつながりにない（#237 の 2）',
-  'create:gantry_carriage': 'ガントリーの台車は軸のピニオンで回る。回転のつながりにない（#237 の 2）',
-}
+const KNOWN_KINETIC_GAPS: Readonly<Record<string, string>> = {}
 
 describe('ブロックの一覧', () => {
   it('どの版も、ID とブロックエンティティの出典を持つ', () => {
@@ -72,7 +69,7 @@ describe('回転のつながり', () => {
 
 describe('応力の初期値', () => {
   for (const c of CATALOGS) {
-    it(`${c.name}：すべてのブロックで、Create のソースの値と一致する`, () => {
+    it(`[ST-IMPACT][ST-CAPACITY] ${c.name}：すべてのブロックで、Create のソースの値と一致する`, () => {
       const wrong: string[] = []
       for (const [id, b] of Object.entries(c.blocks)) {
         const impact = DEFAULT_IMPACT[path(id)] ?? 0

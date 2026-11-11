@@ -16,7 +16,7 @@ export default mergeConfig(
         exclude: ['src/calc/create/**/*.test.ts'],
         reporter: ['text-summary', 'json-summary', 'html'],
         // 下がらないようにする下限。目標は分岐 100%（#237）。上がったら、この値も上げる
-        thresholds: { statements: 90, branches: 83, functions: 97, lines: 92 },
+        thresholds: { statements: 94, branches: 90, functions: 97, lines: 95 },
       },
     },
   }),
