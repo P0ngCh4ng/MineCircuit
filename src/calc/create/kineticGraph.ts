@@ -64,7 +64,7 @@ export interface KineticNode {
   readonly portId: string | null
 }
 
-export type KineticEdgeKind = 'shaft' | 'cog' | 'large-small' | 'large-large' | 'chain' | 'belt' | 'chain-conveyor'
+export type KineticEdgeKind = 'shaft' | 'cog' | 'large-small' | 'large-large' | 'chain' | 'belt' | 'chain-conveyor' | 'gantry'
 
 export interface KineticEdge {
   readonly a: number
@@ -638,7 +638,24 @@ function connection(
   if (d && A.cog === 'small' && B.cog === 'small' && A.axis === B.axis && directionAxis(d) !== A.axis) {
     return { ratio: -1, kind: 'cog' }
   }
+  // 9. 信号を受けたガントリーのシャフトと、その上の台車
+  const shaft = A.shape.gantry
+  const carriage = B.shape.gantry
+  if (d && shaft?.part === 'shaft' && shaft.powered && carriage?.part === 'carriage' && carriage.facing === d) {
+    return { ratio: gantryPinionModifier(shaft.facing, carriage.facing), kind: 'gantry' }
+  }
   return null
+}
+
+/** ガントリーのシャフトと台車の速度比（GantryCarriageBlockEntity.getGantryPinionModifier）。どちら向きにも同じ値 */
+function gantryPinionModifier(shaft: Direction, pinion: Direction): number {
+  const step = isPositive(shaft) ? 1 : -1
+  const flipped: Record<Axis, readonly Direction[]> = {
+    y: ['north', 'east'],
+    x: ['down', 'south'],
+    z: ['up', 'west'],
+  }
+  return flipped[directionAxis(shaft)].includes(pinion) ? -step : step
 }
 
 function chainConnects(a: ChainInfo, b: ChainInfo, d: Direction): boolean {
@@ -691,10 +708,6 @@ function makeNode(
   if (ns !== 'create') {
     // Create の追加 Mod（createaddition、create_enchantment_industry など）は自分の設定で値を持つ。対象外
     if (ns.startsWith('create')) log.add(`${state.id.toString()} は Create の追加 Mod のブロックなので、計算に入れていない`, pos)
-    return null
-  }
-  if (path === 'gantry_carriage') {
-    log.add('ガントリーのキャリッジは計算に入れていない', pos)
     return null
   }
   const shape = kineticShape(path, state)

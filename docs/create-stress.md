@@ -182,7 +182,7 @@ Create には「個体の設定値の初期値」を変える設定がない。�
 | `hand_crank`, `*_valve_handle`, `encased_fan`, `mechanical_drill` | `f` の軸 | `f'` の面だけ | なし |
 | `windmill_bearing`, `mechanical_bearing`, `clockwork_bearing` | `f` の軸 | `f'` の面だけ | なし |
 | `mechanical_saw` | 水平向きなら `f` の軸、上下向きなら下の「向きと軸」 | 水平向きなら `f'`、上下向きなら軸の両側 | なし |
-| `deployer`, `mechanical_piston`, `sticky_mechanical_piston`, `speedometer`, `stressometer` | 下の「向きと軸」 | 軸の両側 | なし |
+| `deployer`, `mechanical_piston`, `sticky_mechanical_piston`, `speedometer`, `stressometer`, `fluid_valve`, `gantry_carriage` | 下の「向きと軸」 | 軸の両側 | なし（`gantry_carriage` は下の規則 9 でもつながる） |
 | `mechanical_press` | `f` の軸 | 軸の両側 | なし |
 | `cuckoo_clock`, `mysterious_cuckoo_clock` | `f` の軸 | `f'` の面だけ | なし |
 | `weighted_ejector`, `elevator_pulley` | `cw(f)` の軸 | 軸の両側 | なし |
@@ -270,7 +270,17 @@ nbt の `Connections`（相手への相対位置の集合）に入っている�
 
 ### 9. ガントリー
 
-`gantry_shaft` が `powered=true` で、隣の `gantry_carriage` の `facing` がこちらを向いているとき。キャリッジは仕掛け（contraption）を動かす部品で、応力は 0。最初の版では扱わず、仮定に載せる。
+`gantry_shaft`（A）が `powered=true` で、隣の `gantry_carriage`（B）が A から見て B の `facing` の向きにあるとき（台車はシャフトから外へ向く）。台車の歯車がシャフトとかみ合う。出典は `GantryShaftBlockEntity.propagateRotationTo`・`isCustomConnection` と `GantryCarriageBlockEntity.propagateRotationTo`（0.5.1 と 6.0 で同じ）。
+
+`r(A→B)` = `getGantryPinionModifier(A の facing, B の facing)`。逆向き（台車からシャフト）も同じ値（±1 なので `1 / r` と一致する）。
+
+- s = A の `facing` が軸の正の向き（east・up・south）なら 1、負なら −1。
+- A の `facing` の軸が y で、B の `facing` が north か east なら `r = −s`。
+- 軸が x で、B の `facing` が down か south なら `r = −s`。
+- 軸が z で、B の `facing` が up か west なら `r = −s`。
+- それ以外は `r = s`。
+
+`powered=false` のシャフトは、回ると台車を仕掛けとして動かす。台車の歯車とはつながらない（`r = 0`）。台車の応力は 0（`AllBlocks` に `setImpact` がない）。台車は軸の口（上の表）でも、ほかのシャフトとつながる。
 
 ## 面の係数（ギアボックス・ギアシフト・クラッチ）
 

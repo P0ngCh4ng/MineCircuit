@@ -247,6 +247,76 @@ describe('KineticGraph：つながりの規則', () => {
     expect(r.speed([2, 0, 2])).toBe(32)
   })
 
+  it('液体のバルブは軸でつながる（DirectionalAxisKineticBlock。#237）', () => {
+    // facing=north（z）、axis_along_first=true → 回転軸 x
+    const bp = blueprintFixture()
+      .place([0, 0, 0], 'create:creative_motor', { facing: 'east' }, scroll(16))
+      .place([1, 0, 0], 'create:fluid_valve', { facing: 'north', axis_along_first: 'true', enabled: 'false', waterlogged: 'false' })
+      .place([2, 0, 0], 'create:shaft', { axis: 'x' })
+      .toBlueprint()
+    const r = evaluate(bp)
+    expect(r.speed([1, 0, 0])).toBe(16)
+    expect(r.speed([2, 0, 0])).toBe(16)
+  })
+
+  describe('ガントリー：信号を受けたシャフトと、その上の台車（規則 9。#237）', () => {
+    const vec: Record<string, Vec3> = {
+      up: [0, 1, 0],
+      down: [0, -1, 0],
+      east: [1, 0, 0],
+      west: [-1, 0, 0],
+      south: [0, 0, 1],
+      north: [0, 0, -1],
+    }
+    const at = (base: Vec3, d: string, n: number): Vec3 => [base[0] + vec[d]![0] * n, base[1] + vec[d]![1] * n, base[2] + vec[d]![2] * n]
+    /** shaft の向きのシャフトを3つ並べ、真ん中に pinion の向きの台車を付ける */
+    const build = (shaft: string, pinion: string, alongFirst: string, powered: string) => {
+      const motor: Vec3 = [4, 4, 4]
+      const middle = at(motor, shaft, 2)
+      const carriage = at(middle, pinion, 1)
+      const bp = blueprintFixture()
+        .place(motor, 'create:creative_motor', { facing: shaft }, scroll(16))
+        .place(at(motor, shaft, 1), 'create:gantry_shaft', { facing: shaft, part: 'start', powered })
+        .place(middle, 'create:gantry_shaft', { facing: shaft, part: 'middle', powered })
+        .place(at(motor, shaft, 3), 'create:gantry_shaft', { facing: shaft, part: 'end', powered })
+        .place(carriage, 'create:gantry_carriage', { facing: pinion, axis_along_first: alongFirst })
+        .toBlueprint()
+      return { r: evaluate(bp), middle, carriage }
+    }
+
+    // 期待する比は GantryCarriageBlockEntity.getGantryPinionModifier の表
+    it.each([
+      ['up', 'east', 'false', -1],
+      ['up', 'west', 'false', 1],
+      ['down', 'east', 'false', 1],
+      ['east', 'south', 'false', -1],
+      ['east', 'north', 'false', 1],
+      ['south', 'up', 'true', -1],
+      ['south', 'down', 'true', 1],
+      ['north', 'down', 'true', -1],
+    ])('シャフト %s・台車 %s：比 %s', (shaft, pinion, alongFirst, ratio) => {
+      const { r, middle, carriage } = build(shaft, pinion, alongFirst, 'true')
+      expect(Math.abs(r.speed(middle))).toBe(16)
+      expect(r.speed(carriage)).toBe(r.speed(middle) * (ratio as number))
+    })
+
+    it('シャフトが信号を受けていなければ、台車はつながらない', () => {
+      const { r, middle, carriage } = build('up', 'east', 'false', 'false')
+      expect(r.speed(middle)).toBe(16)
+      expect(r.speed(carriage)).toBe(0)
+    })
+
+    it('台車の軸の口は、ほかのシャフトとつながる', () => {
+      // 台車 facing=east・axis_along_first=false → 回転軸 z
+      const bp = blueprintFixture()
+        .place([0, 0, 0], 'create:creative_motor', { facing: 'south' }, scroll(16))
+        .place([0, 0, 1], 'create:gantry_carriage', { facing: 'east', axis_along_first: 'false' })
+        .place([0, 0, 2], 'create:shaft', { axis: 'z' })
+        .toBlueprint()
+      expect(evaluate(bp).speed([0, 0, 2])).toBe(16)
+    })
+  })
+
   it('ミキサーは中速（30 RPM）未満なら「回転数が足りない」', () => {
     const bp = blueprintFixture()
       .place([0, 0, 0], 'create:creative_motor', { facing: 'up' }, scroll(16))

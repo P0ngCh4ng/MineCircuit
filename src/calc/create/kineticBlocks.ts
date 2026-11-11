@@ -56,6 +56,15 @@ export interface KineticShape {
   readonly chain: ChainInfo | null
   /** 仮定に載せること（シーケンスギアシフトを待機中とみなした、など） */
   readonly note?: string
+  /** ガントリーのシャフト・台車なら、その向きと信号（docs/create-stress.md の規則 9） */
+  readonly gantry?: GantryInfo
+}
+
+export interface GantryInfo {
+  readonly part: 'shaft' | 'carriage'
+  readonly facing: Direction
+  /** シャフトが赤石の信号を受けている。台車では false */
+  readonly powered: boolean
 }
 
 export interface ChainInfo {
@@ -139,7 +148,15 @@ const BACK_SHAFT = new Set([
   'mysterious_cuckoo_clock',
 ])
 
-const DIRECTIONAL_AXIS = new Set(['deployer', 'mechanical_piston', 'sticky_mechanical_piston', 'speedometer', 'stressometer'])
+const DIRECTIONAL_AXIS = new Set([
+  'deployer',
+  'mechanical_piston',
+  'sticky_mechanical_piston',
+  'speedometer',
+  'stressometer',
+  'fluid_valve',
+  'gantry_carriage',
+])
 
 /** ハンドル（hand_crank と色付きのバルブハンドル） */
 export function isCrank(path: string): boolean {
@@ -218,7 +235,12 @@ function shapeFromProperties(path: string, props: Props): KineticShape | null {
   }
   if (path === 'rotation_speed_controller') return axis ? shape(axis, bothSides(axis)) : null
   if (path === 'creative_motor') return facing ? shape(directionAxis(facing), [facing]) : null
-  if (path === 'water_wheel' || path === 'mechanical_press' || path === 'gantry_shaft') {
+  if (path === 'gantry_shaft') {
+    if (!facing) return null
+    const gantry: GantryInfo = { part: 'shaft', facing, powered: props.powered === 'true' }
+    return shape(directionAxis(facing), bothSides(directionAxis(facing)), 'none', { gantry })
+  }
+  if (path === 'water_wheel' || path === 'mechanical_press') {
     return facing ? shape(directionAxis(facing), bothSides(directionAxis(facing))) : null
   }
   if (BACK_SHAFT.has(path) || isCrank(path)) {
@@ -233,6 +255,7 @@ function shapeFromProperties(path: string, props: Props): KineticShape | null {
   if (DIRECTIONAL_AXIS.has(path)) {
     if (!facing) return null
     const a = directionalAxis(facing, props.axis_along_first === 'true')
+    if (path === 'gantry_carriage') return shape(a, bothSides(a), 'none', { gantry: { part: 'carriage', facing, powered: false } })
     return shape(a, bothSides(a))
   }
   if (path === 'weighted_ejector' || path === 'elevator_pulley') {
