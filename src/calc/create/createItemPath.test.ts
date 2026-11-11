@@ -8,7 +8,7 @@ import type { CalcModpack } from '../calcPlugin'
 import type { VirtualPort } from '../virtualPort'
 import { bottleneckValue, itemPathValues, lineSummary, traceItemPaths, type ItemPathResult } from './createItemPath'
 import { runCreateStress } from './createStressPlugin'
-import { chooseRecipe } from './createThroughput'
+import { chooseRecipe, millstoneTicks, pressCycleTicks } from './createThroughput'
 
 const recipe = (
   id: string,
@@ -161,17 +161,17 @@ describe('物の通り道', () => {
     expect(sinkOf(trace(south, [port([0, 0, 0], 'minecraft:stone')], { '0,0,0': 8, '0,0,1': 8 }).result, '0,0,2', 'minecraft:stone')).toBe(1)
   })
 
-  it('物の動き：ベルトは区間ごとに回転数 ÷ 24 の速さで、ベルトの外へは見た目の速さで動く（#231）', () => {
+  it('物の動き：ベルトは区間ごとに回転数 ÷ 24 の速さで、端の先へもベルトの速さで動く（#231、#233）', () => {
     const fx = belt(blueprintFixture().place([4, 0, 0], 'minecraft:chest', chest), 0, 0, [1, 2, 3], 'east')
     const { result } = trace(fx, [port([1, 0, 0], 'minecraft:stone', 2)], { '1,0,0': -48, '2,0,0': -48, '3,0,0': -48 })
     expect(result.moves).toEqual([
-      { from: [1, 0, 0], to: [2, 0, 0], item: 'minecraft:stone', rate: 2, speed: 2 },
-      { from: [2, 0, 0], to: [3, 0, 0], item: 'minecraft:stone', rate: 2, speed: 2 },
-      { from: [3, 0, 0], to: [4, 0, 0], item: 'minecraft:stone', rate: 2, speed: 2 },
+      { from: [1, 0, 0], to: [2, 0, 0], item: 'minecraft:stone', rate: 2, seconds: 0.5, hold: 0 },
+      { from: [2, 0, 0], to: [3, 0, 0], item: 'minecraft:stone', rate: 2, seconds: 0.5, hold: 0 },
+      { from: [3, 0, 0], to: [4, 0, 0], item: 'minecraft:stone', rate: 2, seconds: 0.5, hold: 0 },
     ])
   })
 
-  it('物の動き：上のプレスで変わった物が先へ進み、機械へ向かう動きは出さない（#231）', () => {
+  it('物の動き：上のプレスで変わった物が先へ進み、機械へ向かう動きは出さない。プレスの下で1回分止まる（#231、#233）', () => {
     const fx = belt(blueprintFixture().place([1, 2, 0], 'create:mechanical_press', { facing: 'north' }), 0, 0, [0, 1, 2], 'east')
     const speeds = { '0,0,0': -24, '1,0,0': -24, '2,0,0': -24, '1,2,0': 64 }
     const { result } = trace(fx, [port([0, 0, 0], 'minecraft:iron_ingot')], speeds)
@@ -179,6 +179,166 @@ describe('物の通り道', () => {
       ['0,0,0', '1,0,0', 'minecraft:iron_ingot'],
       ['1,0,0', '2,0,0', 'create:iron_sheet'],
     ])
+    expect(result.moves[0]!.hold).toBe(pressCycleTicks(64)! / 20)
+    expect(result.moves[1]!.hold).toBe(0)
+  })
+
+  it('物の動き：石臼は物の入口から入った所で止まり、シュートは 4 マス/秒、ベルトの先のデポへはベルトの速さ（#233）', () => {
+    const fx = blueprintFixture()
+      .place([1, 3, 0], 'create:millstone')
+      .place([1, 2, 0], 'create:chute', { facing: 'down' })
+      .place([3, 1, 0], 'create:depot')
+    belt(fx, 1, 0, [1, 2], 'east')
+    const { result } = trace(fx, [port([1, 3, 0], 'minecraft:wheat', 1)], { '1,3,0': 256, '1,1,0': -32, '2,1,0': -32 })
+    const flour = (from: string, to: string) =>
+      result.moves.find((m) => m.from.join(',') === from && m.to.join(',') === to && m.item === 'create:wheat_flour')
+    expect(result.moves.find((m) => m.item === 'minecraft:wheat')).toMatchObject({ from: [1, 3, 0], to: [1, 3, 0], seconds: 0, hold: millstoneTicks(256, 150)! / 20 })
+    expect(flour('1,3,0', '1,2,0')?.seconds).toBe(0)
+    expect(flour('1,2,0', '1,1,0')?.seconds).toBe(0.25)
+    expect(flour('1,1,0', '2,1,0')?.seconds).toBe(0.75)
+    expect(flour('2,1,0', '3,1,0')?.seconds).toBe(0.75)
+  })
+
+  it('物の動き：機械アームは取る点から置く点へ、移動1回分で弧を描いて運ぶ（#233）', () => {
+    const points = nbt.list('compound', [
+      nbt.compound({ Pos: nbt.intArray([-1, 0, 0]), Mode: nbt.string('TAKE') }),
+      nbt.compound({ Pos: nbt.intArray([1, 0, 0]), Mode: nbt.string('DEPOSIT') }),
+    ])
+    const fx = blueprintFixture()
+      .place([1, 0, 0], 'create:mechanical_arm', nbt.compound({ InteractionPoints: points }))
+      .place([0, 0, 0], 'minecraft:chest', chest)
+      .place([2, 0, 0], 'create:depot')
+    const { result } = trace(fx, [port([0, 0, 0], 'minecraft:stone')], { '1,0,0': 64 })
+    expect(result.moves).toHaveLength(1)
+    const move = result.moves[0]!
+    expect(move).toMatchObject({ from: [0, 0, 0], to: [2, 0, 0], seconds: 16 / 20 })
+    expect(move.path![0]!.pos).toEqual([0.5, 0.5, 0.5])
+    expect(move.path![move.path!.length - 1]!.pos).toEqual([2.5, 0.5, 0.5])
+    // 真ん中ではアームの上を通る
+    expect(Math.max(...move.path!.map((p) => p.pos[1]))).toBeGreaterThan(1)
+    // 届く物の「どこから」はアームのまま
+    expect(at(result, '2,0,0')?.arrivals[0]?.from).toEqual([1, 0, 0])
+  })
+
+  it('物の動き：取り出すファンネルの前が空気なら、口の前から放物線で落ちる（#233）', () => {
+    const fx = blueprintFixture({ size: [4, 3, 3] })
+      .place([3, 2, 0], 'minecraft:chest', chest)
+      .place([3, 2, 1], 'create:andesite_funnel', { facing: 'south', extracting: 'true', powered: 'false' })
+      .place([3, 0, 2], 'create:depot')
+    const { result } = trace(fx, [port([3, 2, 0], 'minecraft:stone')])
+    const drop = result.moves.find((m) => m.to.join(',') === '3,0,2')!
+    expect(drop.from).toEqual([3, 2, 1])
+    expect(drop.path![0]!.pos).toEqual([3.5, 2.5, 1.5])
+    expect(drop.path![1]!.pos).toEqual([3.5, 2.5, 2.5])
+    expect(drop.path![drop.path!.length - 1]!.pos).toEqual([3.5, 0.5, 2.5])
+    // 2 ブロック落ちるのに、速さ 0 から 1 tick に 0.04 ずつ加速して（0.98 を掛けながら）10 tick
+    expect(drop.seconds).toBeCloseTo(10 / 20)
+    // 入れ物から取り出すファンネルへは、移動しない受け渡し
+    expect(result.moves.find((m) => m.to.join(',') === '3,2,1')?.seconds).toBe(0)
+  })
+
+  it('イジェクター：生データの距離のマスへ放物線で投げる。距離がなければ横 1 と仮定、止まっていれば投げない（#233）', () => {
+    const fx = blueprintFixture({ size: [5, 4, 2] })
+      .place([0, 0, 0], 'create:weighted_ejector', { facing: 'east' }, nbt.compound({ HorizontalDistance: nbt.int(3), VerticalDistance: nbt.int(1) }))
+      .place([3, 1, 0], 'minecraft:chest', chest)
+      .place([0, 0, 1], 'create:weighted_ejector', { facing: 'east' })
+      .place([1, 0, 1], 'create:depot')
+    const { result, log } = trace(fx, [port([0, 0, 0], 'minecraft:stone'), port([0, 0, 1], 'minecraft:dirt')], { '0,0,0': 32, '0,0,1': 32 })
+    expect(sinkOf(result, '3,1,0', 'minecraft:stone')).toBe(1)
+    const thrown = result.moves.find((m) => m.to.join(',') === '3,1,0')!
+    expect(thrown.from).toEqual([0, 0, 0])
+    expect(thrown.path![0]!.pos).toEqual([0.5, 1, 0.5])
+    const end = thrown.path![thrown.path!.length - 1]!.pos
+    expect(end[0]).toBeCloseTo(3.5)
+    expect(end[1]).toBeCloseTo(1.5)
+    expect(Math.max(...thrown.path!.map((p) => p.pos[1]))).toBeGreaterThan(2.5)
+    expect(thrown.seconds).toBeGreaterThan(0.5)
+    expect(sinkOf(result, '1,0,1', 'minecraft:dirt')).toBe(1)
+    expect(messages(log)).toContain('イジェクターの投げる距離が分からないので、横に 1 ブロック先へ投げるとした')
+
+    const stopped = trace(fx, [port([0, 0, 0], 'minecraft:stone')], { '0,0,0': 0 }).result
+    expect(at(stopped, '0,0,0')?.notes).toContain('止まっているので、物を投げない')
+    expect(at(stopped, '3,1,0')).toBeUndefined()
+  })
+
+  it('真鍮のトンネル：組の出口へ 10 tick 待って等しく分ける。「近い方」なら自分の先へ全部。端の横の口にも分ける（#233）', () => {
+    const fx = () => {
+      const f = blueprintFixture({ size: [4, 2, 3] })
+      belt(f, 0, 1, [0, 1, 2], 'east')
+      belt(f, 0, 2, [0, 1, 2], 'east')
+      return f
+        .place([3, 0, 1], 'minecraft:chest', chest)
+        .place([3, 0, 2], 'minecraft:chest', chest)
+        .place([1, 1, 2], 'create:brass_tunnel')
+    }
+    const speeds = { '0,0,1': -24, '1,0,1': -24, '2,0,1': -24, '0,0,2': -24, '1,0,2': -24, '2,0,2': -24 }
+    const split = trace(fx().place([1, 1, 1], 'create:brass_tunnel'), [port([0, 0, 1], 'minecraft:stone')], speeds).result
+    expect(sinkOf(split, '3,0,1', 'minecraft:stone')).toBe(0.5)
+    expect(sinkOf(split, '3,0,2', 'minecraft:stone')).toBe(0.5)
+    expect(split.moves.find((m) => m.to.join(',') === '1,0,1')?.hold).toBe(0.5)
+    // 隣のベルトへは、トンネルの区間から隣のベルトの次の区間へ動く
+    expect(split.moves.some((m) => m.from.join(',') === '1,0,1' && m.to.join(',') === '2,0,2')).toBe(true)
+
+    const nearest = trace(
+      fx().place([1, 1, 1], 'create:brass_tunnel', nbt.compound({ ScrollValue: nbt.int(4) })),
+      [port([0, 0, 1], 'minecraft:stone')],
+      speeds,
+    ).result
+    expect(sinkOf(nearest, '3,0,1', 'minecraft:stone')).toBe(1)
+    expect(sinkOf(nearest, '3,0,2', 'minecraft:stone')).toBe(0)
+
+    // 組の端（北）の横に入れ物があれば、そこにも分ける
+    const side = trace(fx().place([1, 1, 1], 'create:brass_tunnel').place([1, 0, 0], 'create:depot'), [port([0, 0, 1], 'minecraft:stone', 3)], speeds).result
+    expect(sinkOf(side, '3,0,1', 'minecraft:stone')).toBe(1)
+    expect(sinkOf(side, '3,0,2', 'minecraft:stone')).toBe(1)
+    expect(sinkOf(side, '1,0,0', 'minecraft:stone')).toBe(1)
+  })
+
+  it('安山岩のトンネル：1個ずつ流れるとして、横へは分けずに素通りし、横に口があれば仮定に載せる（#233）', () => {
+    const fx = belt(blueprintFixture({ size: [4, 2, 2] }), 0, 1, [0, 1, 2], 'east')
+      .place([3, 0, 1], 'minecraft:chest', chest)
+      .place([1, 1, 1], 'create:andesite_tunnel')
+      .place([1, 0, 0], 'create:depot')
+    const { result, log } = trace(fx, [port([0, 0, 1], 'minecraft:stone')], { '0,0,1': -24, '1,0,1': -24, '2,0,1': -24 })
+    expect(sinkOf(result, '3,0,1', 'minecraft:stone')).toBe(1)
+    expect(at(result, '1,0,0')).toBeUndefined()
+    expect(messages(log)).toContain('物は1個ずつ流れるとしたので、安山岩のトンネルは横へ分けずに素通りする')
+  })
+
+  it('ホッパー：上の入れ物から吸い込み、8 tick 止まって facing の先へ。止まっていれば溜まる。2.5 個/秒を超えたら出す（#233）', () => {
+    const fx = (enabled: string) =>
+      blueprintFixture({ size: [2, 2, 1] })
+        .place([0, 1, 0], 'minecraft:chest', chest)
+        .place([0, 0, 0], 'minecraft:hopper', { facing: 'east', enabled })
+        .place([1, 0, 0], 'minecraft:chest', chest)
+    const { result } = trace(fx('true'), [port([0, 1, 0], 'minecraft:stone', 3)])
+    expect(sinkOf(result, '1,0,0', 'minecraft:stone')).toBe(3)
+    expect(result.moves.find((m) => m.to.join(',') === '0,0,0')).toMatchObject({ from: [0, 1, 0], seconds: 0, hold: 0.4 })
+    expect(at(result, '0,0,0')?.notes).toContain('ホッパーが送れるのは 2.5 個/秒まで。届く数はこれより多い')
+
+    const off = trace(fx('false'), [port([0, 1, 0], 'minecraft:stone')]).result
+    expect(sinkOf(off, '0,0,0', 'minecraft:stone')).toBe(1)
+    expect(at(off, '1,0,0')).toBeUndefined()
+  })
+
+  it('アイテムドレイン：入った面から反対の面へ 2.5 ブロック/秒で通り抜ける。レシピは読まないので物は変わらない（#233）', () => {
+    const fx = belt(blueprintFixture({ size: [4, 1, 1] }), 0, 0, [0, 1], 'east')
+      .place([2, 0, 0], 'create:item_drain')
+      .place([3, 0, 0], 'minecraft:chest', chest)
+    const { result, log } = trace(fx, [port([0, 0, 0], 'minecraft:water_bucket')], { '0,0,0': -24, '1,0,0': -24 })
+    expect(sinkOf(result, '3,0,0', 'minecraft:water_bucket')).toBe(1)
+    expect(result.moves.find((m) => m.to.join(',') === '3,0,0')?.seconds).toBe(0.4)
+    expect(messages(log)).toContain('アイテムドレインのレシピ（液体を抜く）は読まないので、物は変わらずに通るとした')
+  })
+
+  it('スパウト：2段上のスパウトの下で 20 tick 止まり、物は変わらずに進む（#233）', () => {
+    const fx = belt(blueprintFixture({ size: [4, 3, 1] }), 0, 0, [0, 1, 2], 'east')
+      .place([1, 2, 0], 'create:spout')
+      .place([3, 0, 0], 'minecraft:chest', chest)
+    const { result } = trace(fx, [port([0, 0, 0], 'minecraft:glass_bottle')], { '0,0,0': -24, '1,0,0': -24, '2,0,0': -24 })
+    expect(sinkOf(result, '3,0,0', 'minecraft:glass_bottle')).toBe(1)
+    expect(result.moves.find((m) => m.to.join(',') === '1,0,0')?.hold).toBe(1)
+    expect(rateOf(result, '1,2,0', 'minecraft:glass_bottle')).toBe(1)
   })
 
   it('物の動き：物の入口がなければ何も出さない（#231）', () => {
@@ -377,6 +537,26 @@ describe('物の通り道', () => {
     const stopped = trace(fx, [port([0, 0, 0], 'minecraft:stone', 3)], { '1,0,0': 0 }).result
     expect(sinkOf(stopped, '0,0,0', 'minecraft:stone')).toBe(3)
     expect(at(stopped, '1,0,0')?.notes).toContain('止まっているので、物を運ばない')
+  })
+
+  it('ブレイズバーナー：届いた物は燃料として燃え、溜まらず、仮定にも載せない', () => {
+    const points = nbt.list('compound', [
+      nbt.compound({ Pos: nbt.compound({ X: nbt.int(-1), Y: nbt.int(0), Z: nbt.int(0) }), Mode: nbt.string('TAKE') }),
+      nbt.compound({ Pos: nbt.compound({ X: nbt.int(1), Y: nbt.int(0), Z: nbt.int(0) }), Mode: nbt.string('DEPOSIT') }),
+      nbt.compound({ Pos: nbt.compound({ X: nbt.int(0), Y: nbt.int(0), Z: nbt.int(1) }), Mode: nbt.string('DEPOSIT') }),
+    ])
+    const fx = blueprintFixture()
+      .place([1, 0, 0], 'create:mechanical_arm', nbt.compound({ InteractionPoints: points }))
+      .place([0, 0, 0], 'create:depot')
+      .place([2, 0, 0], 'create:blaze_burner', { blaze: 'smouldering', facing: 'east' })
+      .place([1, 0, 1], 'create:blaze_burner', { blaze: 'smouldering', facing: 'east' })
+    const { result, log } = trace(fx, [port([0, 0, 0], 'minecraft:charcoal', 2)], { '1,0,0': 64 })
+    expect(rateOf(result, '2,0,0', 'minecraft:charcoal')).toBe(1)
+    expect(rateOf(result, '1,0,1', 'minecraft:charcoal')).toBe(1)
+    expect(sinkOf(result, '2,0,0', 'minecraft:charcoal')).toBe(0)
+    expect(at(result, '2,0,0')?.notes).toContain('燃料として燃やすので、物はここでなくなる')
+    expect(messages(log).some((m) => m.includes('blaze_burner'))).toBe(false)
+    expect(result.moves.filter((m) => m.to.join(',') === '2,0,0')).toHaveLength(1)
   })
 
   it('輪になった通り道は、同じ物が2回目に届いた所で止める', () => {
