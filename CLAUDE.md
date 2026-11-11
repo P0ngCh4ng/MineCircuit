@@ -11,6 +11,7 @@
 | [docs/ui.md](docs/ui.md) | 画面構成。配置、ツール、キー操作 |
 | [docs/create-stress.md](docs/create-stress.md) | Createの応力計算の規則と数値。回転のつながり、速度比、初期値、計算の手順 |
 | [docs/create-throughput.md](docs/create-throughput.md) | Createの輸送量と処理時間の規則。ベルト・アーム・ファンネル・機械、レシピの読み方 |
+| [docs/verification.md](docs/verification.md) | 計算の確かめ方。網羅の意味、ブロック・状態・規則・分岐・数値の一覧、確かめる段階 |
 | [prototype/index.html](prototype/index.html) | UIプロトタイプ。1ファイルの参考実装 |
 
 作業は GitHub の Issue 単位で進める。マイルストーン M0〜M6 が仕様書の「開発の順番」に対応する（M6 はデスクトップ版）。
@@ -44,9 +45,17 @@ npm run build      # 本番ビルド（型チェックのあと vite build。出
 npm run preview    # ビルド結果の確認
 npm run test       # テスト（Vitest）。src/**/*.test.ts と tests/**/*.test.ts
 npm run lint       # Lint（ESLint）。層と依存の向きも調べる（eslint-rules/layer-dependency.js）
+npm run coverage   # テストと、計算（src/calc/create/）の分岐の網羅率。下限を割ると失敗する（CI はこれでテストする）
 ```
 
 作業を終える前に `test`・`typecheck`・`lint` を通すこと。
+
+計算の確かめ方は docs/verification.md。ブロックの一覧（`tests/verification/blocks/`）は、jar と Create のソースから作り直せる。Create の版を足すときや、計算で扱うブロックを変えたときに作り直す。
+
+```
+node scripts/extractBlockIds.mjs <Create の jar> create tests/verification/blocks/<名前>.json
+node scripts/extractCreateSource.mjs <Create のソースの src/main/java> tests/verification/blocks/<名前>.json "<リポジトリ> <コミット>"
+```
 
 デスクトップ版（Tauri）のコマンド。動かすには Rust（rustup。版は `src-tauri/rust-toolchain.toml` で固定）と Visual Studio の C++ ビルドツール（「C++ によるデスクトップ開発」）が要る。ブラウザ版の作業には要らない。
 

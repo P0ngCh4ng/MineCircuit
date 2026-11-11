@@ -15,7 +15,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test
+      # テストを動かし、計算の分岐の網羅率が下限を割っていないかも調べる（docs/verification.md）
+      - run: npm run coverage
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build

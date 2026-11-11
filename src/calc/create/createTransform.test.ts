@@ -25,6 +25,23 @@ describe('transformCreateState', () => {
     })
   })
 
+  it('コントローラーレールは、押す向きが一緒に回るように backwards を変える（坂も。#237）', () => {
+    // 押す向き：north_south は北、east_west は西、ascending_X は X の向き。ascending_south・ascending_east は backwards が逆
+    const rail = (shape: string, backwards: string, t: BlockTransform) => props('create:controller_rail', { shape, backwards }, t)
+    // 北へ押す → 右回りで東へ押す
+    expect(rail('north_south', 'false', turn(1))).toEqual({ shape: 'east_west', backwards: 'true' })
+    expect(rail('ascending_north', 'false', turn(1))).toEqual({ shape: 'ascending_east', backwards: 'true' })
+    // 西へ押す → 右回りで北へ押す
+    expect(rail('east_west', 'false', turn(1))).toEqual({ shape: 'north_south', backwards: 'false' })
+    // 北へ押す → 左回りで西へ押す
+    expect(rail('ascending_north', 'false', turn(3))).toEqual({ shape: 'ascending_west', backwards: 'false' })
+    // 180° はいつも逆
+    expect(rail('ascending_south', 'false', turn(2))).toEqual({ shape: 'ascending_north', backwards: 'true' })
+    // 北へ押す → z の反転で南へ押す。東へ押す（ascending_east）→ x の反転で西へ押す
+    expect(rail('north_south', 'false', mirror('z'))).toEqual({ shape: 'north_south', backwards: 'true' })
+    expect(rail('ascending_east', 'false', mirror('x'))).toEqual({ shape: 'ascending_west', backwards: 'true' })
+  })
+
   it('axis_along_first は 90° の奇数回で入れ替わり、反転では変わらない', () => {
     expect(props('create:deployer', { facing: 'up', axis_along_first: 'true' }, turn(1))).toEqual({ facing: 'up', axis_along_first: 'false' })
     expect(props('create:deployer', { facing: 'east', axis_along_first: 'true' }, turn(2))).toEqual({ facing: 'west', axis_along_first: 'true' })

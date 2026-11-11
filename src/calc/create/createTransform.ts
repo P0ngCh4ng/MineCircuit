@@ -59,11 +59,8 @@ function mirrorCreate(id: string, before: Props, props: Props, m: Exclude<Mirror
         : { window_ne: 'window_se', window_se: 'window_ne', window_nw: 'window_sw', window_sw: 'window_nw' }
     props.shape = table[window] ?? window
   }
-  // コントローラーレールの backwards（向きが逆になるなら）
-  if (id === 'controller_rail') {
-    const alongZ = before.shape === 'north_south'
-    if ((m === 'z') === alongZ) flip(props, 'backwards')
-  }
+  // コントローラーレールの backwards（ControllerRailBlock.mirror。z の反転は Mirror.LEFT_RIGHT）
+  if (id === 'controller_rail' && (m === 'z') === railPointsAlongZ(props.shape)) flip(props, 'backwards')
 }
 
 // 右回り1回分の窓の向き（FluidTankBlock.rotateOnce）
@@ -105,11 +102,13 @@ function rotateCreate(id: string, before: Props, props: Props, turns: QuarterTur
     for (let i = 0; i < turns; i++) shape = WINDOW_TURN[shape] ?? shape
     props.shape = shape
   }
-  // コントローラーレールの backwards
-  if (id === 'controller_rail') {
-    const alongZ = before.shape === 'north_south'
-    if (turns === 2 || (odd && alongZ === (turns === 3))) flip(props, 'backwards')
-  }
+  // コントローラーレールの backwards（ControllerRailBlock.rotate。回したあとの向きで決める。3 は COUNTERCLOCKWISE_90）
+  if (id === 'controller_rail' && (turns === 2 || (odd && railPointsAlongZ(props.shape) === (turns === 3)))) flip(props, 'backwards')
+}
+
+// コントローラーレールが向く軸が z か（ControllerRailBlock.getPointingTowards。東西と東西の坂のほかは north）
+function railPointsAlongZ(shape: string | undefined): boolean {
+  return shape !== 'east_west' && shape !== 'ascending_east' && shape !== 'ascending_west'
 }
 
 function isChainDrive(id: string): boolean {

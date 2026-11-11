@@ -1,0 +1,9470 @@
+{
+  "source": "create-fabric-0.5.1-f-build.1415+mc1.18.2.jar",
+  "namespace": "create",
+  "blocks": {
+    "create:acacia_window": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:acacia_window_pane": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:adjustable_chain_gearshift": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ],
+        "axis_along_first": [
+          "false",
+          "true"
+        ],
+        "part": [
+          "end",
+          "middle",
+          "none",
+          "start"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "adjustable_chain_gearshift",
+          "class": "ChainGearshiftBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:analog_lever": {
+      "kind": "variants",
+      "properties": {
+        "face": [
+          "ceiling",
+          "floor",
+          "wall"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "analog_lever",
+          "class": "AnalogLeverBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:andesite_alloy_block": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:andesite_bars": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:andesite_belt_funnel": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "shape": [
+          "extended",
+          "pulling",
+          "pushing",
+          "retracted"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "funnel",
+          "class": "FunnelBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:andesite_casing": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:andesite_door": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "lower",
+          "upper"
+        ],
+        "hinge": [
+          "left",
+          "right"
+        ],
+        "open": [
+          "false",
+          "true"
+        ],
+        "visible": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "sliding_door",
+          "class": "SlidingDoorBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:andesite_encased_cogwheel": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ],
+        "bottom_shaft": [
+          "false",
+          "true"
+        ],
+        "top_shaft": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "encased_cogwheel",
+          "class": "SimpleKineticBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:andesite_encased_large_cogwheel": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ],
+        "bottom_shaft": [
+          "false",
+          "true"
+        ],
+        "top_shaft": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "encased_large_cogwheel",
+          "class": "SimpleKineticBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:andesite_encased_shaft": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "encased_shaft",
+          "class": "KineticBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:andesite_funnel": {
+      "kind": "variants",
+      "properties": {
+        "extracting": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "funnel",
+          "class": "FunnelBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:andesite_ladder": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:andesite_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:andesite_scaffolding": {
+      "kind": "variants",
+      "properties": {
+        "bottom": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:andesite_tunnel": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "z"
+        ],
+        "shape": [
+          "closed",
+          "cross",
+          "straight",
+          "t_left",
+          "t_right",
+          "window"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "andesite_tunnel",
+          "class": "BeltTunnelBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:asurine": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:asurine_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:basin": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "basin",
+          "class": "BasinBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:belt": {
+      "kind": "variants",
+      "properties": {
+        "casing": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "part": [
+          "end",
+          "middle",
+          "pulley",
+          "start"
+        ],
+        "slope": [
+          "downward",
+          "horizontal",
+          "sideways",
+          "upward",
+          "vertical"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "belt",
+          "class": "BeltBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:birch_window": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:birch_window_pane": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:black_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:black_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:black_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:black_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:black_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:blaze_burner": {
+      "kind": "variants",
+      "properties": {},
+      "blockEntity": [
+        {
+          "type": "blaze_heater",
+          "class": "BlazeBurnerBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:blue_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:blue_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:blue_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:blue_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:blue_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:brass_bars": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:brass_belt_funnel": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "shape": [
+          "extended",
+          "pulling",
+          "pushing",
+          "retracted"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "funnel",
+          "class": "FunnelBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:brass_block": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:brass_casing": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:brass_door": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "lower",
+          "upper"
+        ],
+        "hinge": [
+          "left",
+          "right"
+        ],
+        "open": [
+          "false",
+          "true"
+        ],
+        "visible": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "sliding_door",
+          "class": "SlidingDoorBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:brass_encased_cogwheel": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ],
+        "bottom_shaft": [
+          "false",
+          "true"
+        ],
+        "top_shaft": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "encased_cogwheel",
+          "class": "SimpleKineticBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:brass_encased_large_cogwheel": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ],
+        "bottom_shaft": [
+          "false",
+          "true"
+        ],
+        "top_shaft": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "encased_large_cogwheel",
+          "class": "SimpleKineticBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:brass_encased_shaft": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "encased_shaft",
+          "class": "KineticBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:brass_funnel": {
+      "kind": "variants",
+      "properties": {
+        "extracting": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "funnel",
+          "class": "FunnelBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:brass_ladder": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:brass_scaffolding": {
+      "kind": "variants",
+      "properties": {
+        "bottom": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:brass_tunnel": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "z"
+        ],
+        "shape": [
+          "closed",
+          "cross",
+          "straight",
+          "t_left",
+          "t_right",
+          "window"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "brass_tunnel",
+          "class": "BrassTunnelBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:brown_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:brown_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:brown_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:brown_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:brown_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:calcite_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:cart_assembler": {
+      "kind": "variants",
+      "properties": {
+        "backwards": [
+          "false",
+          "true"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "rail_type": [
+          "activator_rail",
+          "controller_rail",
+          "detector_rail",
+          "powered_rail",
+          "regular"
+        ],
+        "shape": [
+          "east_west",
+          "north_south"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "cart_assembler",
+          "class": "CartAssemblerBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:chocolate": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:chute": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "shape": [
+          "encased",
+          "intersection",
+          "normal",
+          "window"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "chute",
+          "class": "ChuteBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:clipboard": {
+      "kind": "variants",
+      "properties": {
+        "face": [
+          "ceiling",
+          "floor",
+          "wall"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ],
+        "written": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "clipboard",
+          "class": "ClipboardBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:clockwork_bearing": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "clockwork_bearing",
+          "class": "ClockworkBearingBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:clutch": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "clutch",
+          "class": "ClutchBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:cogwheel": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "simple_kinetic",
+          "class": "BracketedKineticBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:content_observer": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "target": [
+          "ceiling",
+          "floor",
+          "wall"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "content_observer",
+          "class": "SmartObserverBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:contraption_controls": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "open": [
+          "false",
+          "true"
+        ],
+        "virtual": [
+          "false",
+          "true"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "contraption_controls",
+          "class": "ContraptionControlsBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:controller_rail": {
+      "kind": "variants",
+      "properties": {
+        "backwards": [
+          "false",
+          "true"
+        ],
+        "shape": [
+          "ascending_east",
+          "ascending_north",
+          "ascending_south",
+          "ascending_west",
+          "east_west",
+          "north_south"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:controls": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "open": [
+          "false",
+          "true"
+        ],
+        "virtual": [
+          "false",
+          "true"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:copper_backtank": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "backtank",
+          "class": "BacktankBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:copper_bars": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:copper_casing": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:copper_door": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "lower",
+          "upper"
+        ],
+        "hinge": [
+          "left",
+          "right"
+        ],
+        "open": [
+          "false",
+          "true"
+        ],
+        "visible": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "sliding_door",
+          "class": "SlidingDoorBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:copper_ladder": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:copper_scaffolding": {
+      "kind": "variants",
+      "properties": {
+        "bottom": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:copper_shingle_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:copper_shingle_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:copper_shingles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:copper_tile_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:copper_tile_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:copper_tiles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:copper_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "capacity": 8
+      }
+    },
+    "create:copycat_bars": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:copycat_base": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:copycat_panel": {
+      "kind": "variants",
+      "properties": {},
+      "blockEntity": [
+        {
+          "type": "copycat",
+          "class": "CopycatBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:copycat_step": {
+      "kind": "variants",
+      "properties": {},
+      "blockEntity": [
+        {
+          "type": "copycat",
+          "class": "CopycatBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:creative_crate": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "creative_crate",
+          "class": "CreativeCrateBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:creative_fluid_tank": {
+      "kind": "variants",
+      "properties": {
+        "bottom": [
+          "false",
+          "true"
+        ],
+        "light_level": [
+          "0",
+          "1",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ],
+        "shape": [
+          "plain",
+          "window",
+          "window_ne",
+          "window_nw",
+          "window_se",
+          "window_sw"
+        ],
+        "top": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "creative_fluid_tank",
+          "class": "CreativeFluidTankBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:creative_motor": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "motor",
+          "class": "CreativeMotorBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "capacity": 16384
+      }
+    },
+    "create:crimsite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:crimsite_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:crimson_window": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:crimson_window_pane": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:crushing_wheel": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "crushing_wheel",
+          "class": "CrushingWheelBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 8
+      }
+    },
+    "create:crushing_wheel_controller": {
+      "kind": "variants",
+      "properties": {
+        "valid": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "crushing_wheel_controller",
+          "class": "CrushingWheelControllerBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:cuckoo_clock": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "cuckoo_clock",
+          "class": "CuckooClockBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 1
+      }
+    },
+    "create:cut_andesite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_andesite_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_andesite_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_andesite_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_andesite_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_andesite_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_andesite_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_andesite_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_asurine": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_asurine_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_asurine_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_asurine_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_asurine_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_asurine_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_asurine_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_asurine_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_calcite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_calcite_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_calcite_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_calcite_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_calcite_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_calcite_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_calcite_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_calcite_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_crimsite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_crimsite_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_crimsite_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_crimsite_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_crimsite_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_crimsite_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_crimsite_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_crimsite_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_deepslate": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_deepslate_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_deepslate_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_deepslate_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_deepslate_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_deepslate_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_deepslate_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_deepslate_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_diorite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_diorite_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_diorite_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_diorite_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_diorite_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_diorite_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_diorite_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_diorite_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_dripstone": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_dripstone_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_dripstone_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_dripstone_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_dripstone_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_dripstone_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_dripstone_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_dripstone_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_granite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_granite_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_granite_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_granite_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_granite_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_granite_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_granite_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_granite_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_limestone": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_limestone_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_limestone_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_limestone_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_limestone_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_limestone_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_limestone_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_limestone_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_ochrum": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_ochrum_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_ochrum_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_ochrum_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_ochrum_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_ochrum_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_ochrum_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_ochrum_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_scorchia": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_scorchia_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_scorchia_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_scorchia_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_scorchia_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_scorchia_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_scorchia_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_scorchia_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_scoria": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_scoria_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_scoria_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_scoria_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_scoria_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_scoria_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_scoria_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_scoria_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_tuff": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_tuff_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_tuff_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_tuff_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_tuff_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_tuff_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_tuff_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_tuff_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_veridium": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_veridium_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_veridium_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_veridium_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cut_veridium_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cut_veridium_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:cut_veridium_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:cut_veridium_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:cyan_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:cyan_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:cyan_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:cyan_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:cyan_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:dark_oak_window": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:dark_oak_window_pane": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:deepslate_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:deepslate_zinc_ore": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:deployer": {
+      "kind": "variants",
+      "properties": {
+        "axis_along_first": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "deployer",
+          "class": "DeployerBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:depot": {
+      "kind": "variants",
+      "properties": {},
+      "blockEntity": [
+        {
+          "type": "depot",
+          "class": "DepotBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:diorite_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:display_board": {
+      "kind": "variants",
+      "properties": {
+        "down": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "up": [
+          "false",
+          "true"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "flap_display",
+          "class": "FlapDisplayBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:display_link": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "display_link",
+          "class": "DisplayLinkBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:dripstone_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:elevator_contact": {
+      "kind": "variants",
+      "properties": {
+        "calling": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "powering": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "elevator_contact",
+          "class": "ElevatorContactBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:elevator_pulley": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "elevator_pulley",
+          "class": "ElevatorPulleyBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:encased_chain_drive": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ],
+        "axis_along_first": [
+          "false",
+          "true"
+        ],
+        "part": [
+          "end",
+          "middle",
+          "none",
+          "start"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "encased_shaft",
+          "class": "KineticBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:encased_fan": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "encased_fan",
+          "class": "EncasedFanBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 2
+      }
+    },
+    "create:encased_fluid_pipe": {
+      "kind": "multipart",
+      "properties": {
+        "down": [
+          "false",
+          "true"
+        ],
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "up": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "encased_fluid_pipe",
+          "class": "FluidPipeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:experience_block": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:exposed_copper_shingle_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:exposed_copper_shingle_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:exposed_copper_shingles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:exposed_copper_tile_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:exposed_copper_tile_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:exposed_copper_tiles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:fake_track": {
+      "kind": "variants",
+      "properties": {},
+      "blockEntity": [
+        {
+          "type": "fake_track",
+          "class": "FakeTrackBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:fluid_pipe": {
+      "kind": "multipart",
+      "properties": {
+        "down": [
+          "false",
+          "true"
+        ],
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "up": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "fluid_pipe",
+          "class": "FluidPipeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:fluid_tank": {
+      "kind": "variants",
+      "properties": {
+        "bottom": [
+          "false",
+          "true"
+        ],
+        "light_level": [
+          "0",
+          "1",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ],
+        "shape": [
+          "plain",
+          "window",
+          "window_ne",
+          "window_nw",
+          "window_se",
+          "window_sw"
+        ],
+        "top": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "fluid_tank",
+          "class": "FluidTankBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:fluid_valve": {
+      "kind": "variants",
+      "properties": {
+        "axis_along_first": [
+          "false",
+          "true"
+        ],
+        "enabled": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "fluid_valve",
+          "class": "FluidValveBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:flywheel": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "flywheel",
+          "class": "FlywheelBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:framed_glass": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:framed_glass_door": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "lower",
+          "upper"
+        ],
+        "hinge": [
+          "left",
+          "right"
+        ],
+        "open": [
+          "false",
+          "true"
+        ],
+        "visible": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "sliding_door",
+          "class": "SlidingDoorBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:framed_glass_pane": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:framed_glass_trapdoor": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "open": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:gantry_carriage": {
+      "kind": "variants",
+      "properties": {
+        "axis_along_first": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "gantry_pinion",
+          "class": "GantryCarriageBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:gantry_shaft": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "part": [
+          "end",
+          "middle",
+          "single",
+          "start"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "gantry_shaft",
+          "class": "GantryShaftBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:gearbox": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "gearbox",
+          "class": "GearboxBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:gearshift": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "gearshift",
+          "class": "GearshiftBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:glass_fluid_pipe": {
+      "kind": "variants",
+      "properties": {
+        "alt": [
+          "false",
+          "true"
+        ],
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "glass_fluid_pipe",
+          "class": "StraightPipeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:granite_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:gray_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:gray_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:gray_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:gray_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:gray_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:green_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:green_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:green_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:green_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:green_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:hand_crank": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "hand_crank",
+          "class": "HandCrankBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "capacity": 8
+      }
+    },
+    "create:haunted_bell": {
+      "kind": "variants",
+      "properties": {
+        "attachment": [
+          "ceiling",
+          "double_wall",
+          "floor",
+          "single_wall"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "cursed_bell",
+          "class": "HauntedBellBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:honey": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:horizontal_framed_glass": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:horizontal_framed_glass_pane": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:hose_pulley": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "hose_pulley",
+          "class": "HosePulleyBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:industrial_iron_block": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:item_drain": {
+      "kind": "variants",
+      "properties": {},
+      "blockEntity": [
+        {
+          "type": "item_drain",
+          "class": "ItemDrainBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:item_vault": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "z"
+        ],
+        "large": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "item_vault",
+          "class": "ItemVaultBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:jungle_window": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:jungle_window_pane": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:large_bogey": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "z"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "bogey",
+          "class": "StandardBogeyBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:large_cogwheel": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "simple_kinetic",
+          "class": "BracketedKineticBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:large_water_wheel": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ],
+        "extension": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "large_water_wheel",
+          "class": "LargeWaterWheelBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "capacity": 128
+      }
+    },
+    "create:layered_andesite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:layered_asurine": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:layered_calcite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:layered_crimsite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:layered_deepslate": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:layered_diorite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:layered_dripstone": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:layered_granite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:layered_limestone": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:layered_ochrum": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:layered_scorchia": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:layered_scoria": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:layered_tuff": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:layered_veridium": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:lectern_controller": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "has_book": [
+          "false",
+          "true"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "lectern_controller",
+          "class": "LecternControllerBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:light_blue_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:light_blue_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:light_blue_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:light_blue_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:light_blue_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:light_gray_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:light_gray_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:light_gray_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:light_gray_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:light_gray_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:lime_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:lime_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:lime_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:lime_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:lime_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:limestone": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:limestone_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:linear_chassis": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ],
+        "sticky_bottom": [
+          "false",
+          "true"
+        ],
+        "sticky_top": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "chassis",
+          "class": "ChassisBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:lit_blaze_burner": {
+      "kind": "variants",
+      "properties": {
+        "flame_type": [
+          "regular",
+          "soul"
+        ]
+      }
+    },
+    "create:magenta_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:magenta_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:magenta_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:magenta_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:magenta_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:mechanical_arm": {
+      "kind": "variants",
+      "properties": {
+        "ceiling": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "mechanical_arm",
+          "class": "ArmBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 2
+      }
+    },
+    "create:mechanical_bearing": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "mechanical_bearing",
+          "class": "MechanicalBearingBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:mechanical_crafter": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "pointing": [
+          "down",
+          "left",
+          "right",
+          "up"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "mechanical_crafter",
+          "class": "MechanicalCrafterBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 2
+      }
+    },
+    "create:mechanical_drill": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "drill",
+          "class": "DrillBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:mechanical_harvester": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "harvester",
+          "class": "HarvesterBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:mechanical_mixer": {
+      "kind": "variants",
+      "properties": {},
+      "blockEntity": [
+        {
+          "type": "mechanical_mixer",
+          "class": "MechanicalMixerBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:mechanical_piston": {
+      "kind": "variants",
+      "properties": {
+        "axis_along_first": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "state": [
+          "extended",
+          "moving",
+          "retracted"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "mechanical_piston",
+          "class": "MechanicalPistonBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:mechanical_piston_head": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "type": [
+          "normal",
+          "sticky"
+        ]
+      }
+    },
+    "create:mechanical_plough": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:mechanical_press": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "mechanical_press",
+          "class": "MechanicalPressBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 8
+      }
+    },
+    "create:mechanical_pump": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "mechanical_pump",
+          "class": "PumpBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:mechanical_roller": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "mechanical_roller",
+          "class": "RollerBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:mechanical_saw": {
+      "kind": "variants",
+      "properties": {
+        "axis_along_first": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "flipped": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "saw",
+          "class": "SawBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:metal_bracket": {
+      "kind": "variants",
+      "properties": {
+        "axis_along_first": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "type": [
+          "cog",
+          "pipe",
+          "shaft"
+        ]
+      }
+    },
+    "create:metal_girder": {
+      "kind": "multipart",
+      "properties": {
+        "bottom": [
+          "true"
+        ],
+        "top": [
+          "true"
+        ],
+        "x": [
+          "false",
+          "true"
+        ],
+        "z": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:metal_girder_encased_shaft": {
+      "kind": "multipart",
+      "properties": {
+        "axis": [
+          "x",
+          "z"
+        ],
+        "bottom": [
+          "true"
+        ],
+        "top": [
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "encased_shaft",
+          "class": "KineticBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:millstone": {
+      "kind": "variants",
+      "properties": {},
+      "blockEntity": [
+        {
+          "type": "millstone",
+          "class": "MillstoneBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:minecart_anchor": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:mysterious_cuckoo_clock": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "cuckoo_clock",
+          "class": "CuckooClockBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 1
+      }
+    },
+    "create:netherite_backtank": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "backtank",
+          "class": "BacktankBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:nozzle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nozzle",
+          "class": "NozzleBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:oak_window": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:oak_window_pane": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:ochrum": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:ochrum_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:orange_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:orange_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:orange_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:orange_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:ornate_iron_window": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:ornate_iron_window_pane": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:oxidized_copper_shingle_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:oxidized_copper_shingle_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:oxidized_copper_shingles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:oxidized_copper_tile_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:oxidized_copper_tile_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:oxidized_copper_tiles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:peculiar_bell": {
+      "kind": "variants",
+      "properties": {
+        "attachment": [
+          "ceiling",
+          "double_wall",
+          "floor",
+          "single_wall"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "peculiar_bell",
+          "class": "PeculiarBellBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:pink_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:pink_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:pink_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:pink_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:pink_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:piston_extension_pole": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:placard": {
+      "kind": "variants",
+      "properties": {
+        "face": [
+          "ceiling",
+          "floor",
+          "wall"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "placard",
+          "class": "PlacardBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:polished_cut_andesite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_andesite_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_andesite_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_andesite_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:polished_cut_asurine": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_asurine_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_asurine_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_asurine_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:polished_cut_calcite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_calcite_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_calcite_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_calcite_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:polished_cut_crimsite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_crimsite_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_crimsite_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_crimsite_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:polished_cut_deepslate": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_deepslate_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_deepslate_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_deepslate_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:polished_cut_diorite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_diorite_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_diorite_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_diorite_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:polished_cut_dripstone": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_dripstone_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_dripstone_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_dripstone_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:polished_cut_granite": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_granite_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_granite_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_granite_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:polished_cut_limestone": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_limestone_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_limestone_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_limestone_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:polished_cut_ochrum": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_ochrum_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_ochrum_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_ochrum_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:polished_cut_scorchia": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_scorchia_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_scorchia_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_scorchia_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:polished_cut_scoria": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_scoria_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_scoria_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_scoria_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:polished_cut_tuff": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_tuff_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_tuff_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_tuff_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:polished_cut_veridium": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:polished_cut_veridium_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:polished_cut_veridium_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:polished_cut_veridium_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:portable_fluid_interface": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "portable_fluid_interface",
+          "class": "PortableFluidInterfaceBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:portable_storage_interface": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "portable_storage_interface",
+          "class": "PortableItemInterfaceBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:powered_latch": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "powered_side": [
+          "false",
+          "true"
+        ],
+        "powering": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:powered_shaft": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "powered_shaft",
+          "class": "PoweredShaftBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:powered_toggle_latch": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "powering": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:pulley_magnet": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:pulse_extender": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "inverted": [
+          "false",
+          "true"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "powering": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "pulse_extender",
+          "class": "PulseExtenderBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:pulse_repeater": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "inverted": [
+          "false",
+          "true"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "powering": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "pulse_repeater",
+          "class": "PulseRepeaterBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:purple_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:purple_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:purple_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:purple_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:purple_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:radial_chassis": {
+      "kind": "multipart",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ],
+        "sticky_east": [
+          "false",
+          "true"
+        ],
+        "sticky_north": [
+          "false",
+          "true"
+        ],
+        "sticky_south": [
+          "false",
+          "true"
+        ],
+        "sticky_west": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "chassis",
+          "class": "ChassisBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:railway_casing": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:raw_zinc_block": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:red_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:red_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:red_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:red_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:red_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:redstone_contact": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:redstone_link": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "receiver": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "redstone_link",
+          "class": "RedstoneLinkBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:refined_radiance_casing": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:rope": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:rope_pulley": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "z"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "rope_pulley",
+          "class": "PulleyBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:rose_quartz_block": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:rose_quartz_lamp": {
+      "kind": "variants",
+      "properties": {
+        "activate": [
+          "false",
+          "true"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "powering": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:rose_quartz_tiles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:rotation_speed_controller": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "z"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "rotation_speed_controller",
+          "class": "SpeedControllerBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:sail_frame": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:schematic_table": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "schematic_table",
+          "class": "SchematicTableBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:schematicannon": {
+      "kind": "variants",
+      "properties": {},
+      "blockEntity": [
+        {
+          "type": "schematicannon",
+          "class": "SchematicannonBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:scorchia": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:scorchia_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:scoria": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:scoria_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:secondary_linear_chassis": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ],
+        "sticky_bottom": [
+          "false",
+          "true"
+        ],
+        "sticky_top": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "chassis",
+          "class": "ChassisBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:sequenced_gearshift": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "z"
+        ],
+        "state": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ],
+        "vertical": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "sequenced_gearshift",
+          "class": "SequencedGearshiftBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:shadow_steel_casing": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:shaft": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "simple_kinetic",
+          "class": "BracketedKineticBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:small_andesite_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_andesite_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_andesite_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_andesite_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_asurine_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_asurine_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_asurine_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_asurine_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_bogey": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "z"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "bogey",
+          "class": "StandardBogeyBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:small_calcite_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_calcite_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_calcite_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_calcite_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_crimsite_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_crimsite_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_crimsite_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_crimsite_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_deepslate_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_deepslate_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_deepslate_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_deepslate_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_diorite_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_diorite_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_diorite_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_diorite_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_dripstone_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_dripstone_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_dripstone_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_dripstone_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_granite_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_granite_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_granite_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_granite_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_limestone_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_limestone_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_limestone_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_limestone_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_ochrum_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_ochrum_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_ochrum_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_ochrum_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_rose_quartz_tiles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_scorchia_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_scorchia_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_scorchia_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_scorchia_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_scoria_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_scoria_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_scoria_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_scoria_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_tuff_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_tuff_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_tuff_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_tuff_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:small_veridium_brick_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:small_veridium_brick_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:small_veridium_brick_wall": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "low",
+          "tall"
+        ],
+        "north": [
+          "low",
+          "tall"
+        ],
+        "south": [
+          "low",
+          "tall"
+        ],
+        "up": [
+          "true"
+        ],
+        "west": [
+          "low",
+          "tall"
+        ]
+      }
+    },
+    "create:small_veridium_bricks": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:smart_chute": {
+      "kind": "variants",
+      "properties": {
+        "powered": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "smart_chute",
+          "class": "SmartChuteBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:smart_fluid_pipe": {
+      "kind": "variants",
+      "properties": {
+        "face": [
+          "ceiling",
+          "floor",
+          "wall"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "smart_fluid_pipe",
+          "class": "SmartFluidPipeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:speedometer": {
+      "kind": "variants",
+      "properties": {
+        "axis_along_first": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "speedometer",
+          "class": "SpeedGaugeBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:spout": {
+      "kind": "variants",
+      "properties": {},
+      "blockEntity": [
+        {
+          "type": "spout",
+          "class": "SpoutBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:spruce_window": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:spruce_window_pane": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:steam_engine": {
+      "kind": "variants",
+      "properties": {
+        "face": [
+          "ceiling",
+          "floor",
+          "wall"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "steam_engine",
+          "class": "SteamEngineBlockEntity",
+          "kinetic": false
+        }
+      ],
+      "stress": {
+        "capacity": 1024
+      }
+    },
+    "create:steam_whistle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ],
+        "size": [
+          "large",
+          "medium",
+          "small"
+        ],
+        "wall": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "steam_whistle",
+          "class": "WhistleBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:steam_whistle_extension": {
+      "kind": "multipart",
+      "properties": {
+        "shape": [
+          "double",
+          "double_connected",
+          "single"
+        ],
+        "size": [
+          "large",
+          "medium",
+          "small"
+        ]
+      }
+    },
+    "create:sticker": {
+      "kind": "variants",
+      "properties": {
+        "extended": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "powered": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "sticker",
+          "class": "StickerBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:sticky_mechanical_piston": {
+      "kind": "variants",
+      "properties": {
+        "axis_along_first": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "state": [
+          "extended",
+          "moving",
+          "retracted"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "mechanical_piston",
+          "class": "MechanicalPistonBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:stockpile_switch": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "level": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ],
+        "target": [
+          "ceiling",
+          "floor",
+          "wall"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "stockpile_switch",
+          "class": "ThresholdSwitchBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:stressometer": {
+      "kind": "variants",
+      "properties": {
+        "axis_along_first": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "stressometer",
+          "class": "StressGaugeBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 0
+      }
+    },
+    "create:tiled_glass": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:tiled_glass_pane": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:track": {
+      "kind": "variants",
+      "properties": {
+        "shape": [
+          "ae",
+          "an",
+          "as",
+          "aw",
+          "cr_d",
+          "cr_ndx",
+          "cr_ndz",
+          "cr_o",
+          "cr_pdx",
+          "cr_pdz",
+          "nd",
+          "none",
+          "pd",
+          "te",
+          "tn",
+          "ts",
+          "tw",
+          "xo",
+          "zo"
+        ],
+        "turn": [
+          "false",
+          "true"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:track_observer": {
+      "kind": "variants",
+      "properties": {
+        "powered": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "track_observer",
+          "class": "TrackObserverBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:track_signal": {
+      "kind": "variants",
+      "properties": {
+        "powered": [
+          "false",
+          "true"
+        ],
+        "type": [
+          "cross_signal",
+          "entry_signal"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "track_signal",
+          "class": "SignalBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:track_station": {
+      "kind": "variants",
+      "properties": {},
+      "blockEntity": [
+        {
+          "type": "track_station",
+          "class": "StationBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:train_door": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "lower",
+          "upper"
+        ],
+        "hinge": [
+          "left",
+          "right"
+        ],
+        "open": [
+          "false",
+          "true"
+        ],
+        "visible": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "sliding_door",
+          "class": "SlidingDoorBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:train_trapdoor": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "open": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:tuff_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:turntable": {
+      "kind": "variants",
+      "properties": {},
+      "blockEntity": [
+        {
+          "type": "turntable",
+          "class": "TurntableBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 4
+      }
+    },
+    "create:veridium": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:veridium_pillar": {
+      "kind": "variants",
+      "properties": {
+        "axis": [
+          "x",
+          "y",
+          "z"
+        ]
+      }
+    },
+    "create:vertical_framed_glass": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:vertical_framed_glass_pane": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:warped_window": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:warped_window_pane": {
+      "kind": "multipart",
+      "properties": {
+        "east": [
+          "false",
+          "true"
+        ],
+        "north": [
+          "false",
+          "true"
+        ],
+        "south": [
+          "false",
+          "true"
+        ],
+        "west": [
+          "false",
+          "true"
+        ]
+      }
+    },
+    "create:water_wheel": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "water_wheel",
+          "class": "WaterWheelBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "capacity": 32
+      }
+    },
+    "create:water_wheel_structure": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:waxed_copper_shingle_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:waxed_copper_shingle_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:waxed_copper_shingles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:waxed_copper_tile_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:waxed_copper_tile_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:waxed_copper_tiles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:waxed_exposed_copper_shingle_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:waxed_exposed_copper_shingle_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:waxed_exposed_copper_shingles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:waxed_exposed_copper_tile_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:waxed_exposed_copper_tile_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:waxed_exposed_copper_tiles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:waxed_oxidized_copper_shingle_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:waxed_oxidized_copper_shingle_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:waxed_oxidized_copper_shingles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:waxed_oxidized_copper_tile_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:waxed_oxidized_copper_tile_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:waxed_oxidized_copper_tiles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:waxed_weathered_copper_shingle_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:waxed_weathered_copper_shingle_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:waxed_weathered_copper_shingles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:waxed_weathered_copper_tile_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:waxed_weathered_copper_tile_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:waxed_weathered_copper_tiles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:weathered_copper_shingle_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:weathered_copper_shingle_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:weathered_copper_shingles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:weathered_copper_tile_slab": {
+      "kind": "variants",
+      "properties": {
+        "type": [
+          "bottom",
+          "double",
+          "top"
+        ]
+      }
+    },
+    "create:weathered_copper_tile_stairs": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "half": [
+          "bottom",
+          "top"
+        ],
+        "shape": [
+          "inner_left",
+          "inner_right",
+          "outer_left",
+          "outer_right",
+          "straight"
+        ]
+      }
+    },
+    "create:weathered_copper_tiles": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:weighted_ejector": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "weighted_ejector",
+          "class": "EjectorBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "impact": 2
+      }
+    },
+    "create:white_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:white_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:white_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:white_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:white_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:windmill_bearing": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "windmill_bearing",
+          "class": "WindmillBearingBlockEntity",
+          "kinetic": true
+        }
+      ],
+      "stress": {
+        "capacity": 512
+      }
+    },
+    "create:wooden_bracket": {
+      "kind": "variants",
+      "properties": {
+        "axis_along_first": [
+          "false",
+          "true"
+        ],
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "type": [
+          "cog",
+          "pipe",
+          "shaft"
+        ]
+      }
+    },
+    "create:yellow_nixie_tube": {
+      "kind": "variants",
+      "properties": {
+        "double_face": [
+          "ceiling",
+          "floor",
+          "wall",
+          "wall_reversed"
+        ],
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "nixie_tube",
+          "class": "NixieTubeBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:yellow_sail": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ]
+      }
+    },
+    "create:yellow_seat": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:yellow_toolbox": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "east",
+          "north",
+          "south",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "toolbox",
+          "class": "ToolboxBlockEntity",
+          "kinetic": false
+        }
+      ]
+    },
+    "create:yellow_valve_handle": {
+      "kind": "variants",
+      "properties": {
+        "facing": [
+          "down",
+          "east",
+          "north",
+          "south",
+          "up",
+          "west"
+        ],
+        "waterlogged": [
+          "false",
+          "true"
+        ]
+      },
+      "blockEntity": [
+        {
+          "type": "valve_handle",
+          "class": "ValveHandleBlockEntity",
+          "kinetic": true
+        }
+      ]
+    },
+    "create:zinc_block": {
+      "kind": "variants",
+      "properties": {}
+    },
+    "create:zinc_ore": {
+      "kind": "variants",
+      "properties": {}
+    }
+  },
+  "createSource": "Fabricators-of-Create/create 80ecefb（AllBlocks.java・BuilderTransformers.java・AllBlockEntityTypes.java。kinetic は KineticBlockEntity を継ぐクラス）"
+}

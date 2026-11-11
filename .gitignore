@@ -4,3 +4,4 @@ dist/
 *.local
 .agents/
 .DS_Store
+coverage/
