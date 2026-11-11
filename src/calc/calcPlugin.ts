@@ -114,15 +114,30 @@ export interface CalcLink {
   readonly kind: 'power' | 'item'
 }
 
-/** 物の動き1本。表示部分の「物の流れ」に使う（docs/ui.md「物の流れ」） */
+/** 物の動きの途中の位置1つ */
+export interface CalcItemMovePoint {
+  /** 動きの始めからの秒数 */
+  readonly t: number
+  /** ブロック座標の連続値（ブロック p の中心は p + 0.5） */
+  readonly pos: Vec3
+}
+
+/**
+ * 物の動き1本。表示部分の「物の流れ」に使う（docs/ui.md「物の流れ」、docs/create-throughput.md「物の動き」）。
+ * from から to へ seconds 秒かけて動き、着いてから hold 秒止まる
+ */
 export interface CalcItemMove {
   readonly from: Vec3
   readonly to: Vec3
   readonly item: string
   /** 個/秒 */
   readonly rate: number
-  /** ブロック/秒。0 より大きい */
-  readonly speed: number
+  /** 移動にかかる秒数。0 は移動しない受け渡し（ファンネルが入れ物に入れるなど） */
+  readonly seconds: number
+  /** 着いてから止まる秒数（機械で処理する間など） */
+  readonly hold: number
+  /** 道の形（弧・放物線）。t の順に並ぶ。なければ from の中心から to の中心へまっすぐ */
+  readonly path?: readonly CalcItemMovePoint[]
 }
 
 export interface CalcResult {

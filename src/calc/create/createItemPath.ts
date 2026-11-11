@@ -10,10 +10,23 @@ import { addVec3, equalsVec3, type Vec3 } from '../../domain/vec3'
 import type { ProcessingRecipeType, RecipeBook } from '../../io/modpack/recipes'
 import type { AssumptionLog } from '../assumptionLog'
 import type { CalcIssue, CalcItemMove, CalcSummaryItem } from '../calcPlugin'
-import { nbtPos, nbtString } from '../nbtValues'
+import { nbtNumber, nbtPos, nbtString } from '../nbtValues'
 import { resolved, type Provenance } from '../provenance'
 import type { VirtualPort } from '../virtualPort'
-import { beltSpeed, chooseRecipe, formatRate, machineCapacityPerMinute, RECIPE_MACHINE_NAMES, type RecipeChoice } from './createThroughput'
+import {
+  armMoveTicks,
+  beltSpeed,
+  CHUTE_GRAVITY_SPEED,
+  chooseRecipe,
+  deployerCycleTicks,
+  formatRate,
+  machineCapacityPerMinute,
+  machineCycleTicks,
+  RECIPE_MACHINE_NAMES,
+  TICKS_PER_SECOND,
+  type RecipeChoice,
+} from './createThroughput'
+import { arcPath, blockCenter, ejectorPath, throwPath, type MotionPath } from './itemMotion'
 import { axisDirections, directionAxis } from './kineticBlocks'
 import { ITEM_INPUT_PORT_KIND, nextBeltSegment, weakerSource } from './kineticGraph'
 
@@ -138,6 +151,21 @@ interface ArmInfo {
   readonly deposit: readonly Vec3[]
 }
 
+/** 渡すときの物の動き（docs/create-throughput.md「物の動き（#233）」） */
+interface Carry {
+  /** まっすぐ渡すときの秒数。0 は移動しない受け渡し */
+  readonly seconds: number
+  /** 渡す先が空気で下に落ちるとき、出たときの上下の速さ（ブロック/tick、上が正） */
+  readonly dropVy?: number
+  /** 決まった道（機械アームの弧、ソーが放り出す物）。あれば seconds より優先 */
+  readonly motion?: MotionPath
+  /** 物の動きの始めの位置。なければ渡す元（機械アームは、届く物の「どこから」はアーム、動きは取る点から） */
+  readonly moveFrom?: Vec3
+}
+
+/** 移動しない受け渡し */
+const INSTANT: Carry = { seconds: 0 }
+
 /** 物を出す先1つ分 */
 interface Destination {
   /** 渡す先 */
@@ -148,6 +176,7 @@ interface Destination {
   readonly via: Vec3 | null
   /** 出す元 */
   readonly from: Vec3
+  readonly carry: Carry
 }
 
 /** 物の入口からたどる。docs/create-throughput.md「物の通り道」 */
@@ -230,9 +259,6 @@ export function bottleneckValue(line: LineFlow): CalcSummaryItem | null {
   }
 }
 
-/** ベルトの外（ファンネル・シュート・機械アームなど）の、見た目の速さ（ブロック/秒）。移動の時間は計算していない */
-const HOP_SPEED = 2
-
 class ItemTracer {
   private readonly records = new Map<string, ItemPathRecord>()
   private readonly moves = new Map<string, CalcItemMove>()
@@ -288,7 +314,7 @@ class ItemTracer {
   // ---- 受け取る ----
 
   /** pos のブロックに物が届く。face は受け取る面（null は入れ物に直接入れる） */
-  private deliver(pos: Vec3, flow: Flow, from: Vec3 | null, face: Direction | null): void {
+  private deliver(pos: Vec3, flow: Flow, from: Vec3 | null, face: Direction | null, carry: Carry = INSTANT): void {
     if (flow.rate <= EPSILON) return
     const state = this.env.bp.get(pos)
     if (!state) return
@@ -303,47 +329,53 @@ class ItemTracer {
     }
     this.ancestors.add(key)
     try {
-      this.receive(pos, state, flow, from, face)
+      this.receive(pos, state, flow, from, face, carry)
     } finally {
       this.ancestors.delete(key)
     }
   }
 
-  private receive(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, face: Direction | null): void {
+  private receive(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, face: Direction | null, carry: Carry): void {
     const id = state.id.toString()
     switch (id) {
       case 'create:belt':
-        return this.belt(pos, state, flow, from)
+        return this.belt(pos, state, flow, from, carry)
       case 'create:depot':
-        return this.depot(pos, flow, from)
+        return this.depot(pos, flow, from, carry)
       case 'create:chute':
       case 'create:smart_chute':
-        return this.chute(pos, state, flow, from, face)
+        return this.chute(pos, state, flow, from, face, carry)
       case 'create:millstone':
-        return this.millstone(pos, flow, from)
+        return this.millstone(pos, flow, from, carry)
       case 'create:crushing_wheel_controller':
-        return this.crusher(pos, state, flow, from, face)
+        return this.crusher(pos, state, flow, from, face, carry)
       case 'create:mechanical_saw':
-        return this.saw(pos, state, flow, from)
+        return this.saw(pos, state, flow, from, carry)
       case 'create:basin':
-        return this.basin(pos, state, flow, from)
+        return this.basin(pos, state, flow, from, carry)
       case 'create:andesite_funnel':
       case 'create:brass_funnel':
-        return this.funnel(pos, state, flow, from, face)
+        return this.funnel(pos, state, flow, from, face, carry)
+      case 'create:weighted_ejector':
+        return this.ejector(pos, state, flow, from, carry)
+      case 'create:item_drain':
+        return this.drain(pos, flow, from, face, carry)
+      case 'minecraft:hopper':
+        return this.hopper(pos, state, flow, from, carry)
       default:
         if (state.id.namespace === 'create' && !CREATE_INVENTORIES.has(id)) {
-          // トンネル・イジェクター・扇風機など、この版で扱わないブロック（「扱わないもの」）
-          this.arrive(pos, flow, from)
+          // 扇風機・メカニカルクラフターなど、この版で扱わないブロック（「扱わないもの」）
+          this.arrive(pos, flow, from, carry)
           this.stop(pos, `${id} に届いた物の行き先は扱わないので、物はここで止まるとした`, true)
           return
         }
-        return this.inventory(pos, id, flow, from)
+        return this.inventory(pos, id, flow, from, carry)
     }
   }
 
   /** ベルト。進む向きに、つながったベルトの端まで進む */
-  private belt(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null): void {
-    this.arrive(pos, flow, from)
+  private belt(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, carry: Carry): void {
+    this.arrive(pos, flow, from, carry)
     const slope = state.properties.slope ?? 'horizontal'
     const facing = horizontalFacing(state)
     if (!facing || !BELT_SLOPES.has(slope)) {
@@ -359,42 +391,56 @@ class ItemTracer {
     const axis = directionAxis(facing)
     const [positive, negative] = axisDirections(axis)
     const move = rpm < 0 !== (axis === 'x') ? negative : positive
-    this.walkBelt(this.beltSegments(pos, state, move), 0, flow, move)
+    this.walkBelt(this.beltSegments(pos, state, move), 0, flow, move, from)
   }
 
-  /** ベルトの区間 start から先を進む。ベルトのファンネル・2段上の機械・端の先 */
-  private walkBelt(segments: readonly Vec3[], start: number, flow: Flow, move: Direction): void {
+  /**
+   * ベルトの区間 start から先を進む。ベルトのファンネル・2段上の機械・端の先。
+   * entryFrom は区間 start に物が来た元（2段上の機械で止まる時間を、その動きに付ける）
+   */
+  private walkBelt(segments: readonly Vec3[], start: number, flow: Flow, move: Direction, entryFrom: Vec3 | null): void {
     for (let i = start; i < segments.length; i++) {
       const seg = segments[i]!
+      const prev = i === start ? entryFrom : segments[i - 1]!
       const funnel = this.beltFunnelTaking(seg, move)
       if (funnel) {
         this.handOff(funnel.from, funnel.to, flow, null, funnel.via)
         return
       }
       if ((this.env.bp.get(seg)?.properties.slope ?? 'horizontal') === 'horizontal') {
-        const result = this.processAbove(seg, flow)
+        const tunnel = this.env.bp.get(addVec3(seg, [0, 1, 0]))?.id.toString()
+        if (tunnel === 'create:brass_tunnel') {
+          this.brassTunnel(segments, i, flow, move, prev)
+          return
+        }
+        if (tunnel === 'create:andesite_tunnel') this.andesiteTunnel(seg, flow, move)
+        const result = this.processAbove(seg, flow, prev)
         if (result === null) return
         if (result !== 'pass') {
           for (const out of result) {
             this.beltStep(segments, i, out)
-            this.walkBelt(segments, i + 1, out, move)
+            this.walkBelt(segments, i + 1, out, move, seg)
           }
           return
         }
       }
       this.beltStep(segments, i, flow)
     }
-    // 端の1つ先（高さは端の区間と同じ）
+    // 端の1つ先（高さは端の区間と同じ）。ベルトの速さのまま進み、空気なら落ちる
     const end = segments[segments.length - 1]!
-    this.handOff(end, addVec3(end, directionVector(move)), flow, oppositeDirection(move), null)
+    const speed = beltSpeed(this.env.rpmAt(end) ?? 0)
+    this.handOff(end, addVec3(end, directionVector(move)), flow, oppositeDirection(move), null, {
+      seconds: speed > 0 ? 1 / speed : 0,
+      dropVy: 0,
+    })
   }
 
   /** ベルトの区間 i から次の区間へ進む物の動きを記録する。端なら何もしない */
   private beltStep(segments: readonly Vec3[], i: number, flow: Flow): void {
     const seg = segments[i]!
     const next = segments[i + 1]
-    const rpm = this.env.rpmAt(seg) ?? 0
-    if (next && rpm !== 0) this.addMove(seg, next, flow, beltSpeed(rpm))
+    const speed = beltSpeed(this.env.rpmAt(seg) ?? 0)
+    if (next && speed > 0) this.addMove(seg, next, flow, { seconds: distance(seg, next) / speed })
   }
 
   /** entry から move の向きに、つながったベルトの区間（entry を含む） */
@@ -449,7 +495,132 @@ class ItemTracer {
     if (!facing) return null
     const shape = s.properties.shape
     if (shape !== 'pulling' && !(facing === oppositeDirection(move) && shape !== 'pushing')) return null
-    return { to: addVec3(f, directionVector(oppositeDirection(facing))), face: null, via: f, from: seg }
+    // 区間の真ん中を過ぎたときに取り込み、後ろの入れ物に入れる（移動しない受け渡し）
+    return { to: addVec3(f, directionVector(oppositeDirection(facing))), face: null, via: f, from: seg, carry: INSTANT }
+  }
+
+  /**
+   * ベルトの区間 i の上の真鍮のトンネル。横に並んでつながった真鍮のトンネルの組の出口（各トンネルの先のベルトと、
+   * 組の端の横の口）へ、brassTunnelTimer（10 tick）待ってから分ける。生データの ScrollValue が 4（近い方）なら、
+   * 受け取れる限り一番近い出口（このトンネルの先）へ全部、ほかは出口の数で等しく分ける
+   */
+  private brassTunnel(segments: readonly Vec3[], i: number, flow: Flow, move: Direction, prev: Vec3 | null): void {
+    const seg = segments[i]!
+    const tpos = addVec3(seg, [0, 1, 0])
+    this.recordArrival(tpos, flow, seg)
+    this.hold(seg, prev, flow, BRASS_TUNNEL_TICKS)
+    const speed = beltSpeed(this.env.rpmAt(seg) ?? 0)
+    const carry = (to: Vec3): Carry => ({ seconds: speed > 0 ? distance(seg, to) / speed : 0, dropVy: 0, moveFrom: seg })
+    // ほかの出口：組のほかのトンネルの先のベルトと、組の端の横の口
+    const others: { from: Vec3; to: Vec3; face: Direction }[] = []
+    for (const side of sideDirections(move)) {
+      let cur = seg
+      for (let k = 0; k < MAX_TUNNEL_GROUP; k++) {
+        const next = addVec3(cur, directionVector(side))
+        if (this.isTunnelBelt(next, move)) {
+          others.push({ from: next, to: addVec3(next, directionVector(move)), face: oppositeDirection(move) })
+          cur = next
+          continue
+        }
+        if (this.env.bp.get(next)) others.push({ from: cur, to: next, face: oppositeDirection(side) })
+        break
+      }
+    }
+    const mode = nbtNumber(this.env.bp.blockEntityAt(tpos), 'ScrollValue') ?? 0
+    const outputs = mode === PREFER_NEAREST ? 0 : others.length
+    const share: Flow = { ...flow, rate: flow.rate / (outputs + 1) }
+    this.beltStep(segments, i, share)
+    this.walkBelt(segments, i + 1, share, move, seg)
+    if (outputs === 0) return
+    for (const o of others) this.handOff(o.from, o.to, share, o.face, null, carry(o.to))
+  }
+
+  /** p が、上に真鍮のトンネルがある、move と同じ向きに進む水平のベルトか */
+  private isTunnelBelt(p: Vec3, move: Direction): boolean {
+    const s = this.env.bp.get(p)
+    if (!s || s.id.toString() !== 'create:belt' || (s.properties.slope ?? 'horizontal') !== 'horizontal') return false
+    const facing = horizontalFacing(s)
+    if (!facing || directionAxis(facing) !== directionAxis(move)) return false
+    return this.env.bp.get(addVec3(p, [0, 1, 0]))?.id.toString() === 'create:brass_tunnel'
+  }
+
+  /**
+   * ベルトの区間 seg の上の安山岩のトンネル。2個以上の山から横の口へ1個ずつ分けるが、物の入口の物は1個ずつ流れるとするので、
+   * 横へは分けずに素通りする（横に口があれば仮定に載せる）
+   */
+  private andesiteTunnel(seg: Vec3, flow: Flow, move: Direction): void {
+    const tpos = addVec3(seg, [0, 1, 0])
+    this.recordArrival(tpos, flow, seg)
+    if (sideDirections(move).some((d) => this.env.bp.get(addVec3(seg, directionVector(d))))) {
+      this.stop(tpos, '物は1個ずつ流れるとしたので、安山岩のトンネルは横へ分けずに素通りする', true)
+    }
+  }
+
+  /**
+   * 重さ付きイジェクター。載った物を、`facing`（水平）の向きに HorizontalDistance（0 なら 1）、上に VerticalDistance の
+   * マスへ放物線で投げる（生データ。なければ横 1 として仮定に載せる）
+   */
+  private ejector(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, carry: Carry): void {
+    this.arrive(pos, flow, from, carry)
+    const facing = state.properties.facing
+    if (!facing || !isDirection(facing) || directionAxis(facing) === 'y') {
+      this.stop(pos, 'イジェクターの向きが分からないので、物はここで止まる', true)
+      return
+    }
+    if ((this.env.rpmAt(pos) ?? 0) === 0) {
+      this.stop(pos, '止まっているので、物を投げない')
+      return
+    }
+    const be = this.env.bp.blockEntityAt(pos)
+    const hRaw = nbtNumber(be, 'HorizontalDistance')
+    const v = nbtNumber(be, 'VerticalDistance') ?? 0
+    if (hRaw === null) this.env.log.add('イジェクターの投げる距離が分からないので、横に 1 ブロック先へ投げるとした', pos)
+    const h = hRaw ?? 1
+    const dir = directionVector(facing)
+    const target = addVec3(addVec3(pos, [0, v, 0]), [dir[0] * Math.max(1, h), 0, dir[2] * Math.max(1, h)])
+    const top = blockCenter(pos)
+    const motion = ejectorPath([top[0], top[1] + 0.5, top[2]], dir, h, v, blockCenter(target))
+    this.handOff(pos, target, flow, 'up', null, { seconds: motion.seconds, dropVy: 0, motion })
+  }
+
+  /**
+   * アイテムドレイン。入った面から反対の面へ、1 tick に 1/8 ブロックで通り抜け、反対の面の先へ渡す。
+   * 上や入れ物として入れた物は、ドレインの中に置かれ、取り出すファンネル・機械アームで先へ。
+   * 液体を抜くレシピは読まないので、物は変わらず、止まらずに通るとする
+   */
+  private drain(pos: Vec3, flow: Flow, from: Vec3 | null, face: Direction | null, carry: Carry): void {
+    this.arrive(pos, flow, from, carry)
+    this.stop(pos, 'アイテムドレインのレシピ（液体を抜く）は読まないので、物は変わらずに通るとした', true)
+    if (!face || directionAxis(face) === 'y') {
+      this.emit(pos, flow, {})
+      return
+    }
+    const exit = oppositeDirection(face)
+    this.handOff(pos, addVec3(pos, directionVector(exit)), flow, face, null, { seconds: 1 / DRAIN_SPEED, dropVy: 0 })
+  }
+
+  /**
+   * ホッパー。8 tick ごとに1個、`facing`（下か横）の先の入れ物へ送る。`enabled=false` なら止まる。
+   * 先がなければ、ただの入れ物（取り出すファンネル・機械アーム・下のホッパーで先へ）
+   */
+  private hopper(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, carry: Carry): void {
+    this.arrive(pos, flow, from, carry)
+    this.hold(pos, from, flow, HOPPER_TICKS)
+    if (state.properties.enabled === 'false') {
+      this.stop(pos, 'レッドストーンの信号で止まっているので、物はここに溜まる')
+      this.sink(pos, flow)
+      return
+    }
+    if (flow.rate > TICKS_PER_SECOND / HOPPER_TICKS + EPSILON) {
+      this.note(pos, `ホッパーが送れるのは ${formatRate(TICKS_PER_SECOND / HOPPER_TICKS)} 個/秒まで。届く数はこれより多い`)
+    }
+    const facing = state.properties.facing
+    const target = facing && isDirection(facing) && facing !== 'up' ? addVec3(pos, directionVector(facing)) : null
+    if (target && this.env.bp.get(target)) {
+      this.deliver(target, flow, pos, null, INSTANT)
+      return
+    }
+    this.emit(pos, flow, {})
   }
 
   /**
@@ -458,12 +629,19 @@ class ItemTracer {
    * プレスなら、できる物（レシピがなければ null）。デプロイヤー・機械なし・止まっているなら 'pass'（物は変わらない。
    * ゲームでも、止まっている機械はベルトの上の物を処理せず通す）
    */
-  private processAbove(base: Vec3, flow: Flow): Flow[] | null | 'pass' {
+  private processAbove(base: Vec3, flow: Flow, baseFrom: Vec3 | null): Flow[] | null | 'pass' {
     const between = this.env.bp.get(addVec3(base, [0, 1, 0]))
     if (between && !BELT_FUNNELS.has(between.id.toString())) return 'pass'
     const mpos = addVec3(base, [0, 2, 0])
     const m = this.env.bp.get(mpos)
     const id = m?.id.toString()
+    if (id === 'create:spout') {
+      // スパウトは液体を入れる間（20 tick）止める。液体を入れるレシピは読まないので、物は変わらないとする
+      this.recordArrival(mpos, flow, base)
+      this.hold(base, baseFrom, flow, SPOUT_FILL_TICKS)
+      this.stop(mpos, 'スパウトのレシピ（液体を入れる）は読まないので、物は変わらずに通るとした', true)
+      return 'pass'
+    }
     const isPress = id === 'create:mechanical_press'
     const isDeployer = id === 'create:deployer' && m?.properties.facing === 'down'
     if (!isPress && !isDeployer) return 'pass'
@@ -477,26 +655,27 @@ class ItemTracer {
     if (isDeployer) {
       // デプロイヤーは物を変えず、通ったことだけ出す（手の物のレシピは扱わない）
       this.record(mpos).capacityPerMinute = machineCapacityPerMinute('deployer', rpm, 0, this.env.bulkPressing)
+      this.hold(base, baseFrom, flow, deployerCycleTicks(rpm))
       return 'pass'
     }
-    return this.process(mpos, 'pressing', flow, 'mechanical_press', rpm)
+    return this.process(mpos, 'pressing', flow, 'mechanical_press', rpm, { pos: base, from: baseFrom })
   }
 
   /** デポ。2段上のプレス・デプロイヤーで処理し、1段上の pulling のベルトのファンネル・取り出すファンネル・機械アームで先へ */
-  private depot(pos: Vec3, flow: Flow, from: Vec3 | null): void {
-    this.arrive(pos, flow, from)
-    const result = this.processAbove(pos, flow)
+  private depot(pos: Vec3, flow: Flow, from: Vec3 | null, carry: Carry): void {
+    this.arrive(pos, flow, from, carry)
+    const result = this.processAbove(pos, flow, from)
     if (result === null) return
     for (const out of result === 'pass' ? [flow] : result) this.emit(pos, out, { beltFunnelAbove: true })
   }
 
   /** シュート。上から受け取り、真下（斜めなら pos.below().relative(facing の反対)）へ */
-  private chute(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, face: Direction | null): void {
+  private chute(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, face: Direction | null, carry: Carry): void {
     if (face !== null && face !== 'up') {
       this.refuse(pos, 'シュートは上からしか受け取らないので、物はここで止まる')
       return
     }
-    this.arrive(pos, flow, from)
+    this.arrive(pos, flow, from, carry)
     const fan = [1, -1].some((dy) => this.env.bp.get(addVec3(pos, [0, dy, 0]))?.id.toString() === 'create:encased_fan')
     if (fan) this.env.log.add('シュートに扇風機がつながっているが、物は下へ流れるとした', pos)
     const below = addVec3(pos, [0, -1, 0])
@@ -505,25 +684,29 @@ class ItemTracer {
       facing && isDirection(facing) && directionAxis(facing) !== 'y'
         ? addVec3(below, directionVector(oppositeDirection(facing)))
         : below
-    this.handOff(pos, target, fan ? { ...flow, source: 'assumed' } : flow, 'up', null)
+    // 重力で 4 マス/秒。下が空気なら、下向き 0.25 ブロック/tick で放り出す
+    this.handOff(pos, target, fan ? { ...flow, source: 'assumed' } : flow, 'up', null, {
+      seconds: distance(pos, target) / CHUTE_GRAVITY_SPEED,
+      dropVy: CHUTE_DROP_VY,
+    })
   }
 
   /** 石臼。できた物は下のシュート・取り出すファンネル・機械アームで先へ */
-  private millstone(pos: Vec3, flow: Flow, from: Vec3 | null): void {
-    this.arrive(pos, flow, from)
+  private millstone(pos: Vec3, flow: Flow, from: Vec3 | null, carry: Carry): void {
+    this.arrive(pos, flow, from, carry)
     const rpm = this.env.rpmAt(pos) ?? 0
     if (rpm === 0) {
       this.stop(pos, '止まっているので、物はここで止まる')
       return
     }
-    const outs = this.process(pos, 'milling', flow, 'millstone', rpm)
+    const outs = this.process(pos, 'milling', flow, 'millstone', rpm, { pos, from })
     for (const out of outs ?? []) this.emit(pos, out, { chuteBelow: true })
   }
 
   /** 粉砕ホイールの中心（facing=down）。上から受け取り、できた物は真下へ */
-  private crusher(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, face: Direction | null): void {
+  private crusher(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, face: Direction | null, carry: Carry): void {
     if (state.properties.facing !== undefined && state.properties.facing !== 'down') {
-      this.arrive(pos, flow, from)
+      this.arrive(pos, flow, from, carry)
       this.stop(pos, '横向きの粉砕ホイール（ベルトの上の粉砕）は扱わないので、物はここで止まるとした', true)
       return
     }
@@ -531,7 +714,7 @@ class ItemTracer {
       this.refuse(pos, '粉砕ホイールは上からしか受け取らないので、物はここで止まる')
       return
     }
-    this.arrive(pos, flow, from)
+    this.arrive(pos, flow, from, carry)
     // 回転数は、隣の粉砕ホイールのもの。どれかが止まっていれば処理しない
     const wheels = HORIZONTAL_OFFSETS.map((d) => addVec3(pos, d)).filter(
       (p) => this.env.bp.get(p)?.id.toString() === 'create:crushing_wheel',
@@ -542,16 +725,19 @@ class ItemTracer {
       this.stop(pos, '粉砕ホイールが止まっているので、物はここで止まる')
       return
     }
-    const outs = this.process(pos, 'crushing', flow, 'crushing_wheel', rpm)
-    for (const out of outs ?? []) this.handOff(pos, addVec3(pos, [0, -1, 0]), out, 'up', null)
+    const outs = this.process(pos, 'crushing', flow, 'crushing_wheel', rpm, { pos, from })
+    // できた物は下へ放り出す
+    const below = addVec3(pos, [0, -1, 0])
+    const fall = throwPath(blockCenter(pos), blockCenter(below), 0)
+    for (const out of outs ?? []) this.handOff(pos, below, out, 'up', null, { seconds: fall.seconds, dropVy: 0, motion: fall })
   }
 
   /**
    * ソー（facing=up）。できた物は、回転軸が Z（axis_along_first=false）なら回転数 > 0 で +X、
    * 軸が X なら回転数 > 0 で −Z の隣へ。プロパティの名前は Create のコードの `axis_along_first`
    */
-  private saw(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null): void {
-    this.arrive(pos, flow, from)
+  private saw(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, carry: Carry): void {
+    this.arrive(pos, flow, from, carry)
     if (state.properties.facing !== 'up') {
       this.stop(pos, '上向きでないソーは扱わないので、物はここで止まるとした', true)
       return
@@ -561,15 +747,19 @@ class ItemTracer {
       this.stop(pos, '止まっているので、物はここで止まる')
       return
     }
-    const outs = this.process(pos, 'cutting', flow, 'mechanical_saw', rpm)
+    const outs = this.process(pos, 'cutting', flow, 'mechanical_saw', rpm, { pos, from })
     const alongX = state.properties.axis_along_first === 'true'
     const dir: Direction = alongX ? (rpm > 0 ? 'north' : 'south') : rpm > 0 ? 'east' : 'west'
-    for (const out of outs ?? []) this.handOff(pos, addVec3(pos, directionVector(dir)), out, oppositeDirection(dir), null)
+    // できた物は、ソーの上から回転の向きへ、上向き 1/8 ブロック/tick で放り出す
+    const side = addVec3(pos, directionVector(dir))
+    const top = blockCenter(pos)
+    const thrown = throwPath([top[0], top[1] + 0.5, top[2]], blockCenter(side), SAW_THROW_VY)
+    for (const out of outs ?? []) this.handOff(pos, side, out, oppositeDirection(dir), null, { seconds: thrown.seconds, dropVy: 0, motion: thrown })
   }
 
   /** ベイスン。2段上がミキサーなら mixing、プレスなら compacting */
-  private basin(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null): void {
-    this.arrive(pos, flow, from)
+  private basin(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, carry: Carry): void {
+    this.arrive(pos, flow, from, carry)
     const mpos = addVec3(pos, [0, 2, 0])
     const mid = this.env.bp.get(mpos)?.id.toString()
     const type: ProcessingRecipeType | null =
@@ -584,7 +774,7 @@ class ItemTracer {
       this.stop(pos, '上の機械が止まっているので、物はここで止まる')
       return
     }
-    const outs = this.process(pos, type, flow, type === 'mixing' ? 'mechanical_mixer' : 'mechanical_press', rpm)
+    const outs = this.process(pos, type, flow, type === 'mixing' ? 'mechanical_mixer' : 'mechanical_press', rpm, { pos, from })
     for (const out of outs ?? []) this.basinOutput(pos, state, out)
   }
 
@@ -608,7 +798,7 @@ class ItemTracer {
   }
 
   /** ファンネル。入れるファンネルは口の前から受け取り、facing の反対側の入れ物に入れる */
-  private funnel(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, face: Direction | null): void {
+  private funnel(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, face: Direction | null, carry: Carry): void {
     const facing = state.properties.facing
     if (!facing || !isDirection(facing)) {
       this.refuse(pos, 'ファンネルの向きが分からないので、物はここで止まる')
@@ -626,7 +816,7 @@ class ItemTracer {
       this.refuse(pos, 'ファンネルにレッドストーンの信号が入っていて動かないので、物はここで止まる')
       return
     }
-    this.arrive(pos, flow, from)
+    this.arrive(pos, flow, from, carry)
     const container = addVec3(pos, directionVector(oppositeDirection(facing)))
     if (!this.env.bp.get(container)) {
       this.stop(pos, 'ファンネルの後ろに入れ物がないので、物はここで止まる')
@@ -636,8 +826,8 @@ class ItemTracer {
   }
 
   /** ほかのブロック（チェストなど）。入れ物とみなし、取り出すファンネルと機械アームで先へ */
-  private inventory(pos: Vec3, id: string, flow: Flow, from: Vec3 | null): void {
-    this.arrive(pos, flow, from)
+  private inventory(pos: Vec3, id: string, flow: Flow, from: Vec3 | null, carry: Carry): void {
+    this.arrive(pos, flow, from, carry)
     if (!this.env.bp.blockEntityAt(pos)) this.env.log.add(`${id} を物の入れ物とみなした`, pos)
     this.emit(pos, flow, {})
   }
@@ -655,16 +845,19 @@ class ItemTracer {
     if (opts.chuteBelow) {
       const below = addVec3(pos, [0, -1, 0])
       const id = bp.get(below)?.id.toString()
-      if (id === 'create:chute' || id === 'create:smart_chute') dests.push({ to: below, face: 'up', via: null, from: pos })
+      if (id === 'create:chute' || id === 'create:smart_chute') dests.push({ to: below, face: 'up', via: null, from: pos, carry: INSTANT })
     }
     if (opts.beltFunnelAbove) {
       const f = addVec3(pos, [0, 1, 0])
       const s = bp.get(f)
       const facing = s ? horizontalFacing(s) : null
       if (s && facing && BELT_FUNNELS.has(s.id.toString()) && s.properties.shape === 'pulling' && s.properties.powered !== 'true') {
-        dests.push({ to: addVec3(f, directionVector(oppositeDirection(facing))), face: null, via: f, from: f })
+        dests.push({ to: addVec3(f, directionVector(oppositeDirection(facing))), face: null, via: f, from: f, carry: INSTANT })
       }
     }
+    // 下のホッパーは、上の入れ物から吸い込む
+    const below = addVec3(pos, [0, -1, 0])
+    if (bp.get(below)?.id.toString() === 'minecraft:hopper') dests.push({ to: below, face: null, via: null, from: pos, carry: INSTANT })
     // 取り出すファンネル（facing の反対側がここ。powered=false）
     for (const d of ALL_OFFSETS) {
       const n = addVec3(pos, d)
@@ -673,16 +866,23 @@ class ItemTracer {
       const facing = s.properties.facing
       if (!facing || !isDirection(facing)) continue
       if (!equalsVec3(addVec3(n, directionVector(oppositeDirection(facing))), pos)) continue
-      dests.push({ to: addVec3(n, directionVector(facing)), face: oppositeDirection(facing), via: n, from: n })
+      // 口の前に置く。前が空気なら放り出す
+      dests.push({ to: addVec3(n, directionVector(facing)), face: oppositeDirection(facing), via: n, from: n, carry: { seconds: 0, dropVy: 0 } })
     }
     // 機械アーム：TAKE の点がここなら、すべての DEPOSIT の点へ
     for (const arm of this.arms) {
       if (!arm.take.some((t) => equalsVec3(t, pos)) || arm.deposit.length === 0) continue
-      if ((this.env.rpmAt(arm.pos) ?? 0) === 0) {
+      const ticks = armMoveTicks(this.env.rpmAt(arm.pos) ?? 0)
+      if (ticks === null) {
         this.note(arm.pos, '止まっているので、物を運ばない')
         continue
       }
-      for (const dep of arm.deposit) dests.push({ to: dep, face: null, via: arm.pos, from: arm.pos })
+      // 取る点から置く点へ、アームの上を通る弧を描いて、移動1回分で運ぶ
+      const over = addVec3(blockCenter(arm.pos), [0, ARM_ARC_HEIGHT, 0])
+      for (const dep of arm.deposit) {
+        const motion = arcPath(blockCenter(pos), over, blockCenter(dep), ticks / TICKS_PER_SECOND)
+        dests.push({ to: dep, face: null, via: arm.pos, from: arm.pos, carry: { seconds: motion.seconds, motion, moveFrom: pos } })
+      }
     }
     if (dests.length === 0) {
       this.sink(pos, flow)
@@ -690,8 +890,12 @@ class ItemTracer {
     }
     const share: Flow = { ...flow, rate: flow.rate / dests.length }
     for (const d of dests) {
-      if (d.via) this.arrive(d.via, share, pos)
-      this.handOff(d.from, d.to, share, d.face, null)
+      if (d.via) {
+        // 機械アームへは物の動きを記録しない（動きは取る点から置く点へ）
+        if (d.carry.moveFrom) this.recordArrival(d.via, share, pos)
+        else this.arrive(d.via, share, pos)
+      }
+      this.handOff(d.from, d.to, share, d.face, null, d.carry)
     }
   }
 
@@ -699,7 +903,7 @@ class ItemTracer {
    * from から target へ渡す。target が空気なら、その下（3段まで）の最初のブロックに落ちるとして仮定に載せる。
    * via は間のファンネル（届く物として記録する）
    */
-  private handOff(from: Vec3, target: Vec3, flow: Flow, face: Direction | null, via: Vec3 | null): void {
+  private handOff(from: Vec3, target: Vec3, flow: Flow, face: Direction | null, via: Vec3 | null, carry: Carry = INSTANT): void {
     const bp = this.env.bp
     if (via) this.arrive(via, flow, from)
     const src = via ?? from
@@ -708,7 +912,7 @@ class ItemTracer {
       return
     }
     if (bp.get(target)) {
-      this.deliver(target, flow, src, face)
+      this.deliver(target, flow, src, face, carry)
       return
     }
     for (let dy = 1; dy <= FALL_DEPTH; dy++) {
@@ -716,7 +920,7 @@ class ItemTracer {
       if (!bp.locate(below)) break
       if (bp.get(below)) {
         this.env.log.add(`出す先（${posText(target)}）が空気なので、物は下の ${posText(below)} に落ちるとした`, src)
-        this.deliver(below, { ...flow, source: 'assumed' }, src, 'up')
+        this.deliver(below, { ...flow, source: 'assumed' }, src, 'up', fallCarry(carry.moveFrom ?? src, target, below, carry))
         return
       }
     }
@@ -729,7 +933,14 @@ class ItemTracer {
    * 機械でレシピを当てて、できる物を返す（数は 個数 × 確率 を掛ける）。レシピがなければ null（そこで止める）。
    * 材料が2つ以上のレシピは、届いた物の1個ごとに1回とし、ほかの材料はあるものとして仮定に載せる
    */
-  private process(pos: Vec3, type: ProcessingRecipeType, flow: Flow, machine: string, rpm: number): Flow[] | null {
+  private process(
+    pos: Vec3,
+    type: ProcessingRecipeType,
+    flow: Flow,
+    machine: string,
+    rpm: number,
+    holdAt: { readonly pos: Vec3; readonly from: Vec3 | null },
+  ): Flow[] | null {
     const book = this.env.recipes
     const choice = chooseRecipe(type, [flow.item], book)
     const rec = this.record(pos)
@@ -762,6 +973,8 @@ class ItemTracer {
     const processed = Math.max(0, Math.min(flow.rate, capacityPerSecond - rec.processedRate))
     rec.processedRate += processed
     if (processed <= EPSILON) return null
+    // 物の流れの表示で、処理する1回分だけ止まる
+    this.hold(holdAt.pos, holdAt.from, flow, machineCycleTicks(machine, rpm, choice.duration.value))
     // 同じ物が2つの結果に出るレシピ（小麦 → 小麦粉 と 小麦粉（25%））は、まとめて1つの流れにする
     const outs: ItemOutput[] = []
     for (const r of recipe.results) addOutput(outs, { item: r.item, rate: processed * r.count * r.chance, source })
@@ -792,15 +1005,48 @@ class ItemTracer {
   }
 
   /** 届いた物を記録し、どこかから来たなら、そこからの物の動きも記録する */
-  private arrive(pos: Vec3, flow: Flow, from: Vec3 | null): void {
+  private arrive(pos: Vec3, flow: Flow, from: Vec3 | null, carry: Carry = INSTANT): void {
     this.recordArrival(pos, flow, from)
-    if (from && !equalsVec3(from, pos)) this.addMove(from, pos, flow, HOP_SPEED)
+    const start = carry.moveFrom ?? from
+    if (start && !equalsVec3(start, pos)) this.addMove(start, pos, flow, carry)
   }
 
-  private addMove(from: Vec3, to: Vec3, flow: Flow, speed: number): void {
-    const key = `${posKey(from)}>${posKey(to)}|${flow.item}`
+  private addMove(from: Vec3, to: Vec3, flow: Flow, carry: Carry): void {
+    const key = moveKey(from, to, flow.item)
     const move = this.moves.get(key)
-    this.moves.set(key, move ? { ...move, rate: move.rate + flow.rate } : { from: [from[0], from[1], from[2]], to: [to[0], to[1], to[2]], item: flow.item, rate: flow.rate, speed })
+    if (move) {
+      this.moves.set(key, { ...move, rate: move.rate + flow.rate })
+      return
+    }
+    const motion = carry.motion
+    this.moves.set(key, {
+      from: [from[0], from[1], from[2]],
+      to: [to[0], to[1], to[2]],
+      item: flow.item,
+      rate: flow.rate,
+      seconds: motion ? motion.seconds : carry.seconds,
+      hold: 0,
+      ...(motion ? { path: motion.path } : {}),
+    })
+  }
+
+  /**
+   * from から pos に届いた物が、pos で ticks だけ止まる（物の流れの表示）。物の入口から直接入った物（from が null）は、
+   * その場で止まる動きにする
+   */
+  private hold(pos: Vec3, from: Vec3 | null, flow: Flow, ticks: number | null): void {
+    if (ticks === null || ticks <= 0) return
+    const seconds = ticks / TICKS_PER_SECOND
+    const start = from ?? pos
+    const key = moveKey(start, pos, flow.item)
+    const move = this.moves.get(key)
+    if (move) {
+      if (seconds > move.hold) this.moves.set(key, { ...move, hold: seconds })
+      return
+    }
+    if (equalsVec3(start, pos)) {
+      this.moves.set(key, { from: [pos[0], pos[1], pos[2]], to: [pos[0], pos[1], pos[2]], item: flow.item, rate: flow.rate, seconds: 0, hold: seconds })
+    }
   }
 
   private recordArrival(pos: Vec3, flow: Flow, from: Vec3 | null): void {
@@ -957,6 +1203,54 @@ function horizontalFacing(state: BlockState): Direction | null {
 
 function posKey(p: Vec3): string {
   return `${p[0]},${p[1]},${p[2]}`
+}
+
+function moveKey(from: Vec3, to: Vec3, item: string): string {
+  return `${posKey(from)}>${posKey(to)}|${item}`
+}
+
+function distance(a: Vec3, b: Vec3): number {
+  return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+}
+
+/** スパウトが液体を入れる間の tick（FILLING_TIME） */
+const SPOUT_FILL_TICKS = 20
+/** 真鍮のトンネルが分けるまで待つ tick（設定の brassTunnelTimer の初期値） */
+const BRASS_TUNNEL_TICKS = 10
+/** 真鍮のトンネルの組を探す、横の数の上限 */
+const MAX_TUNNEL_GROUP = 8
+/** 真鍮のトンネルの分け方「近い方」（ScrollValue） */
+const PREFER_NEAREST = 4
+/** アイテムドレインを通り抜ける速さ（ブロック/秒。1 tick に 1/8） */
+const DRAIN_SPEED = TICKS_PER_SECOND / 8
+/** ホッパーが1個送る間隔（tick） */
+const HOPPER_TICKS = 8
+
+/** move に直角な、水平の2つの向き */
+function sideDirections(move: Direction): Direction[] {
+  return directionAxis(move) === 'x' ? ['north', 'south'] : ['west', 'east']
+}
+
+/** シュートの下が空気のとき、放り出す下向きの速さ（ブロック/tick） */
+const CHUTE_DROP_VY = -0.25
+/** ソーが放り出す上向きの速さ（ブロック/tick） */
+const SAW_THROW_VY = 0.125
+/** 機械アームが運ぶ弧の、アームの中心からの高さ（見た目） */
+const ARM_ARC_HEIGHT = 1.5
+
+/** 出す先 target が空気で、下の below に落ちるときの動き。target までは carry のとおり進み、そこから落ちる */
+function fallCarry(start: Vec3, target: Vec3, below: Vec3, carry: Carry): Carry {
+  const head: MotionPath = carry.motion ?? {
+    seconds: carry.seconds,
+    path: [
+      { t: 0, pos: blockCenter(start) },
+      { t: carry.seconds, pos: blockCenter(target) },
+    ],
+  }
+  const fall = throwPath(blockCenter(target), blockCenter(below), carry.dropVy ?? 0)
+  const path = [...head.path, ...fall.path.slice(1).map((p) => ({ t: p.t + head.seconds, pos: p.pos }))]
+  const seconds = head.seconds + fall.seconds
+  return { seconds, motion: { seconds, path }, ...(carry.moveFrom ? { moveFrom: carry.moveFrom } : {}) }
 }
 
 /** 「(1, 2, 3)」 */

@@ -62,9 +62,15 @@ export function beltSpeed(rpm: number): number {
  * 移動1回分（N tick）ずつかかる。置く先を探すのは、11 tick ごとの見直しで N/2 で終わることもある（短くて 3.5N）。ここでは長い方の 4N
  */
 export function armRoundTripTicks(rpm: number): number | null {
+  const n = armMoveTicks(rpm)
+  return n === null ? null : 4 * n
+}
+
+/** 機械アームの移動1回分（N）の tick。物を持って運ぶのはこの1回 */
+export function armMoveTicks(rpm: number): number | null {
   const step = Math.min(256, Math.abs(rpm))
   if (step === 0) return null
-  return 4 * ceil(ARM_MOVE / step)
+  return ceil(ARM_MOVE / step)
 }
 
 /** ファンネルの輸送量の上限（個/秒） */
@@ -282,6 +288,29 @@ export function machineCapacityPerMinute(path: string, rpm: number, duration: nu
       return per(crushingTicks(rpm, duration, STACK_SIZE), STACK_SIZE)
     case 'mechanical_saw':
       return per(sawTicks(rpm, duration, STACK_SIZE), STACK_SIZE)
+    default:
+      return null
+  }
+}
+
+/**
+ * 機械が物1つを処理する1回分の tick（物の流れの表示で、機械の所で止まる時間。docs/create-throughput.md「物の動き」）。
+ * 粉砕ホイールとソーは1個のとき。止まっている・知らない機械なら null
+ */
+export function machineCycleTicks(path: string, rpm: number, duration: number): number | null {
+  switch (path) {
+    case 'mechanical_press':
+      return pressCycleTicks(rpm)
+    case 'deployer':
+      return deployerCycleTicks(rpm)
+    case 'mechanical_mixer':
+      return mixerCycleTicks(rpm, duration)
+    case 'millstone':
+      return millstoneTicks(rpm, duration)
+    case 'crushing_wheel':
+      return crushingTicks(rpm, duration, 1)
+    case 'mechanical_saw':
+      return sawTicks(rpm, duration, 1)
     default:
       return null
   }

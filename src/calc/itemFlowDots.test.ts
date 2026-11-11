@@ -1,21 +1,40 @@
 import { describe, expect, it } from 'vitest'
 import type { CalcItemMove } from './calcPlugin'
-import { itemDotsAt, MAX_DOTS_PER_BLOCK, MAX_ITEM_DOTS, timeItemMoves } from './itemFlowDots'
+import { itemDotsAt, itemMovePosition, MAX_DOTS_PER_BLOCK, MAX_ITEM_DOTS, timeItemMoves } from './itemFlowDots'
 
 const move = (from: [number, number, number], to: [number, number, number], over: Partial<CalcItemMove> = {}): CalcItemMove => ({
   from,
   to,
   item: 'minecraft:stone',
   rate: 1,
-  speed: 1,
+  seconds: Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]),
+  hold: 0,
   ...over,
 })
 
 describe('timeItemMoves', () => {
-  it('物の入口から順に、着くまでの時間を足していく。速さが違えば時間も違う', () => {
-    const timed = timeItemMoves([move([0, 0, 0], [1, 0, 0], { speed: 2 }), move([1, 0, 0], [2, 0, 0], { speed: 4 }), move([2, 0, 0], [2, 0, 3])])
+  it('物の入口から順に、着くまでの時間を足していく。かかる時間が違えば着く時間も違う', () => {
+    const timed = timeItemMoves([move([0, 0, 0], [1, 0, 0], { seconds: 0.5 }), move([1, 0, 0], [2, 0, 0], { seconds: 0.25 }), move([2, 0, 0], [2, 0, 3])])
     expect(timed.map((t) => t.start)).toEqual([0, 0.5, 0.75])
     expect(timed.map((t) => t.duration)).toEqual([0.5, 0.25, 3])
+  })
+
+  it('着いてから止まる時間のあと、次の動きが始まる（#233）', () => {
+    const timed = timeItemMoves([move([0, 0, 0], [1, 0, 0], { hold: 2 }), move([1, 0, 0], [2, 0, 0])])
+    expect(timed.map((t) => t.start)).toEqual([0, 3])
+    expect(timed[0]!.duration).toBe(3)
+  })
+
+  it('物の入口から直接入った機械で止まる動きのあと、先へ出る（#233）', () => {
+    const timed = timeItemMoves([move([2, 0, 0], [3, 0, 0]), move([2, 0, 0], [2, 0, 0], { seconds: 0, hold: 4 })])
+    expect(timed.map((t) => t.start)).toEqual([4, 0])
+  })
+
+  it('移動しない受け渡しは時間 0 で、印を出さない（#233）', () => {
+    const timed = timeItemMoves([move([0, 0, 0], [1, 0, 0], { seconds: 0 }), move([1, 0, 0], [2, 0, 0])])
+    expect(timed.map((t) => t.start)).toEqual([0, 0])
+    expect(timed[0]!.shownRate).toBe(0)
+    expect(itemDotsAt(timed, 10.5).map((d) => d.pos[0])).toEqual([1.5 + 0.5])
   })
 
   it('輪の中だけの動きでも止まらず、時間を割り当てる', () => {
@@ -24,8 +43,29 @@ describe('timeItemMoves', () => {
   })
 
   it('1ブロックに重なりすぎるときは間引く', () => {
-    const [timed] = timeItemMoves([move([0, 0, 0], [1, 0, 0], { rate: 100, speed: 2 })])
+    const [timed] = timeItemMoves([move([0, 0, 0], [1, 0, 0], { rate: 100, seconds: 0.5 })])
     expect(timed!.shownRate).toBe(2 * MAX_DOTS_PER_BLOCK)
+  })
+})
+
+describe('itemMovePosition', () => {
+  it('途中の点があれば、その間を時間でつなぐ（#233）', () => {
+    const m = move([0, 0, 0], [2, 0, 0], {
+      seconds: 2,
+      path: [
+        { t: 0, pos: [0.5, 0.5, 0.5] },
+        { t: 1, pos: [1.5, 2.5, 0.5] },
+        { t: 2, pos: [2.5, 0.5, 0.5] },
+      ],
+    })
+    expect(itemMovePosition(m, 0.5)).toEqual([1, 1.5, 0.5])
+    expect(itemMovePosition(m, 1.5)).toEqual([2, 1.5, 0.5])
+    expect(itemMovePosition(m, 5)).toEqual([2.5, 0.5, 0.5])
+  })
+
+  it('止まる間は行き先の中心にいる（#233）', () => {
+    const m = move([0, 0, 0], [1, 0, 0], { hold: 3 })
+    expect(itemMovePosition(m, 2)).toEqual([1.5, 0.5, 0.5])
   })
 })
 
@@ -43,7 +83,7 @@ describe('itemDotsAt', () => {
   })
 
   it('つながった動きの境目で、印が飛ばない', () => {
-    const timed = timeItemMoves([move([0, 0, 0], [1, 0, 0], { speed: 2, rate: 0.5 }), move([1, 0, 0], [1, 2, 0], { speed: 4, rate: 0.5 })])
+    const timed = timeItemMoves([move([0, 0, 0], [1, 0, 0], { seconds: 0.5, rate: 0.5 }), move([1, 0, 0], [1, 2, 0], { seconds: 0.5, rate: 0.5 })])
     // k = 5 の物は時刻 10 に出て、10.5 に境目に着く
     const before = itemDotsAt(timed, 10.49)
     const after = itemDotsAt(timed, 10.51)
@@ -52,7 +92,7 @@ describe('itemDotsAt', () => {
   })
 
   it('坂は y も動く。物の ID を持つ', () => {
-    const timed = timeItemMoves([move([0, 0, 0], [1, 1, 0], { speed: Math.SQRT2, item: 'create:wheat_flour' })])
+    const timed = timeItemMoves([move([0, 0, 0], [1, 1, 0], { seconds: 1, item: 'create:wheat_flour' })])
     const [dot] = itemDotsAt(timed, 10.25)
     expect(dot!.item).toBe('create:wheat_flour')
     expect(dot!.pos[0]).toBeCloseTo(0.75)
