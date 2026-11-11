@@ -7,7 +7,7 @@ import { EditHistory } from '../edit/editHistory'
 import { blockSettingsFor, parseSettingInput, settingTag, settingValue } from './blockSettings'
 import { runCreateStress } from './create/createStressPlugin'
 
-describe('blockSettingsFor（変えられる設定の説明）', () => {
+describe('[ST-SETTING-SCROLL] blockSettingsFor（変えられる設定の説明）', () => {
   it('クリエイティブモーターと速度コントローラーは ScrollValue（−256〜256、初期値 16）', () => {
     for (const id of ['create:creative_motor', 'create:rotation_speed_controller']) {
       const s = blockSettingsFor(state(id))
@@ -44,7 +44,7 @@ describe('blockSettingsFor（変えられる設定の説明）', () => {
   })
 })
 
-describe('設定を変えると計算が変わる', () => {
+describe('[ST-SETTING-SCROLL] 設定を変えると計算が変わる', () => {
   const MOTOR: Vec3 = [0, 0, 0]
 
   async function pressProbe(bp: Parameters<typeof runCreateStress>[0]) {

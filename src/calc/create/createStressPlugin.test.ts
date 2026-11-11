@@ -50,7 +50,7 @@ const pressLine = () =>
     .toBlueprint()
 
 describe('create-server.toml', () => {
-  it('表の見出し・key = value・コメントを読む', () => {
+  it('[ST-CONFIG-TOML] 表の見出し・key = value・コメントを読む', () => {
     const toml = parseTomlSubset(TOML)
     expect(toml.get('kinetics.maxRotationSpeed')).toBe(128)
     expect(toml.get('kinetics.disableStress')).toBe(false)
@@ -58,7 +58,7 @@ describe('create-server.toml', () => {
     expect(toml.get('kinetics.stressValues.v2.impact.crushing_wheel')).toBe(2)
   })
 
-  it('stressValues は番号が一番大きい版を使い、表にないブロックは内蔵の初期値、初期値もなければ 0', () => {
+  it('[ST-CONFIG-TOML][ST-CONFIG-FALLBACK] stressValues は番号が一番大きい版を使い、表にないブロックは内蔵の初期値、初期値もなければ 0', () => {
     const config = readCreateServerConfig(TOML, 'defaultconfigs/create-server.toml')
     expect(config.stressVersion).toBe(2)
     const values = new CreateValueResolver(config)
@@ -76,7 +76,7 @@ describe('create-server.toml', () => {
     expect(values.maxRotationSpeed()).toMatchObject({ value: 128, source: 'modpack' })
   })
 
-  it('古い形の defaultconfigs（項目が足りない、中速が別の場所）だけでも、足りない値は内蔵の初期値になる', async () => {
+  it('[ST-CONFIG-FALLBACK] 古い形の defaultconfigs（項目が足りない、中速が別の場所）だけでも、足りない値は内蔵の初期値になる', async () => {
     // Create Astral の defaultconfigs/create-server.toml と同じ形
     const old = `
 [kinetics]
@@ -98,14 +98,14 @@ describe('create-server.toml', () => {
     expect(values.mediumSpeed()).toEqual({ value: 30, source: 'builtin' })
   })
 
-  it('設定がなければ内蔵の初期値', () => {
+  it('[ST-CONFIG-FALLBACK] 設定がなければ内蔵の初期値', () => {
     const values = new CreateValueResolver(null)
     expect(values.impact('mechanical_press')).toEqual({ value: 8, source: 'builtin' })
     expect(values.capacity('water_wheel')).toEqual({ value: 32, source: 'builtin' })
     expect(values.maxRotationSpeed()).toEqual({ value: 256, source: 'builtin' })
   })
 
-  it('saves/*/serverconfig を先に探し、なければ defaultconfigs を使う', async () => {
+  it('[ST-CONFIG-SEARCH] saves/*/serverconfig を先に探し、なければ defaultconfigs を使う', async () => {
     const both = fakePack({
       'defaultconfigs/create-server.toml': TOML,
       'saves/World/serverconfig/create-server.toml': TOML,
@@ -131,7 +131,7 @@ describe('create-server.toml', () => {
     expect((await loadCreateConfig(null)).config).toBeNull()
   })
 
-  it('io の Modpack（FileSource つき）から saves/*/serverconfig の設定を見つける', async () => {
+  it('[ST-CONFIG-SEARCH] io の Modpack（FileSource つき）から saves/*/serverconfig の設定を見つける', async () => {
     const source = new MemoryFileSource([
       ['saves/World 2/serverconfig/create-server.toml', new TextEncoder().encode(TOML)],
       ['saves/World 1/level.dat', new Uint8Array()],
@@ -173,7 +173,7 @@ describe('Create の応力プラグイン', () => {
     expect(structuredClone(result)).toEqual(result)
   })
 
-  it('ネット一覧は、動力源のないネットワークも出し、過負荷を合計に隠さない（#152）', async () => {
+  it('[ST-RESULT-SUMMARY] ネット一覧は、動力源のないネットワークも出し、過負荷を合計に隠さない（#152）', async () => {
     const bp = blueprintFixture()
       .place([0, 0, 0], 'create:creative_motor', { facing: 'east' }, nbt.compound({ ScrollValue: nbt.int(16) }))
       .place([1, 0, 0], 'create:shaft', { axis: 'x' })
@@ -188,7 +188,7 @@ describe('Create の応力プラグイン', () => {
     expect(idle?.pos).toEqual([0, 0, 2])
   })
 
-  it('プローブに回転のネットワークの番号を付ける（つながっていないブロックは別の番号）', async () => {
+  it('[ST-RESULT-PROBE] プローブに回転のネットワークの番号を付ける（つながっていないブロックは別の番号）', async () => {
     const bp = blueprintFixture()
       .place([0, 0, 0], 'create:creative_motor', { facing: 'east' }, nbt.compound({ ScrollValue: nbt.int(16) }))
       .place([1, 0, 0], 'create:shaft', { axis: 'x' })
@@ -204,7 +204,7 @@ describe('Create の応力プラグイン', () => {
     expect(net('0,0,2')).not.toBe(net('0,0,0'))
   })
 
-  it('回るブロックごとの回転を出す。速さの段階は中速・高速で分け、過負荷は止まる前の回転数で印を付ける', async () => {
+  it('[ST-RESULT-PROBE] 回るブロックごとの回転を出す。速さの段階は中速・高速で分け、過負荷は止まる前の回転数で印を付ける', async () => {
     const motor = (speed: number) => nbt.compound({ ScrollValue: nbt.int(speed) })
     const bp = blueprintFixture()
       .place([0, 0, 0], 'create:creative_motor', { facing: 'east' }, motor(16))
@@ -238,7 +238,7 @@ describe('Create の応力プラグイン', () => {
     expect(placement.map((i) => i.pos)).toEqual([[0, 0, 0], [1, 0, 0]])
   })
 
-  it('Modpack の設定ファイルの値を使う', async () => {
+  it('[ST-CONFIG-TOML] Modpack の設定ファイルの値を使う', async () => {
     const pack = fakePack({ 'saves/World/serverconfig/create-server.toml': TOML })
     const result = await runCreateStress(pressLine(), { pack, ports: [] })
     expect(result.summary[0].value).toEqual({ value: 'ネットワーク 1／過負荷 1／止まっている 0', source: 'modpack' })
@@ -271,5 +271,72 @@ describe('KubeJS のスクリプトの仮定（#145）', () => {
     expect(scriptAssumptions({ ...summary, failed: '20 秒で終わらなかったので打ち切った' })).toEqual([
       'KubeJS のスクリプトを使えなかった（20 秒で終わらなかったので打ち切った）。スクリプトのレシピは入っていない',
     ])
+  })
+})
+
+describe('応力の規則の分かれ道（#237）', () => {
+  it('[ST-CONFIG-TOML] 配列の表・壊れた見出し・読めない値は読み飛ばし、引用符の中の # や = はそのまま', () => {
+    const toml = parseTomlSubset(
+      [
+        '[[kinetics.list]]',
+        'skipped = 1',
+        '[kinetics',
+        '[kinetics]',
+        'noValue',
+        'bad = abc',
+        'empty = ',
+        "'broken = 1",
+        "name = \"a # b = \\\" c\"",
+        "single = 'x'",
+        'open = "x',
+        'big = 1_000',
+        'flag = true',
+      ].join('\n'),
+    )
+    expect(Object.fromEntries(toml)).toEqual({
+      'kinetics.name': 'a # b = \\" c',
+      'kinetics.single': 'x',
+      'kinetics.big': 1000,
+      'kinetics.flag': true,
+    })
+  })
+
+  it('[ST-CONFIG-SEARCH] saves/ を一覧できない Modpack は defaultconfigs を使う', async () => {
+    const pack: CalcModpack = {
+      hasNamespace: (ns) => ns === 'create',
+      config: async (path) => (path === 'defaultconfigs/create-server.toml' ? TOML : null),
+      list: async () => {
+        throw new Error('saves/ がない')
+      },
+    }
+    expect((await loadCreateConfig(pack)).config?.path).toBe('defaultconfigs/create-server.toml')
+    const noList: CalcModpack = { hasNamespace: () => true, config: pack.config }
+    expect((await loadCreateConfig(noList)).config?.path).toBe('defaultconfigs/create-server.toml')
+  })
+
+  it('[ST-CONFIG-SEARCH] 設定ファイルが複数あれば、使ったものを仮定に載せる', async () => {
+    const pack = fakePack({
+      'saves/A/serverconfig/create-server.toml': TOML,
+      'saves/B/serverconfig/create-server.toml': TOML,
+    })
+    const result = await runCreateStress(pressLine(), { pack, ports: [] })
+    expect(result.assumptions.some((a) => a.message === 'create-server.toml が 2 つあるので、saves/A/serverconfig/create-server.toml を使った')).toBe(true)
+  })
+
+  it('[ST-STEP-OVERLOAD] disableStress なら過負荷にならず、そのことを仮定に載せる', async () => {
+    const pack = fakePack({ 'saves/World/serverconfig/create-server.toml': TOML.replace('disableStress = false', 'disableStress = true') })
+    const result = await runCreateStress(pressLine(), { pack, ports: [] })
+    expect(result.summary[0].value.value).toBe('ネットワーク 1／過負荷 0／止まっている 0')
+    expect(result.assumptions.some((a) => a.message.startsWith('設定で応力が切ってある'))).toBe(true)
+  })
+
+  it('[ST-RESULT-SUMMARY] 回転数が違うブロックがあれば、範囲で出す', async () => {
+    const bp = blueprintFixture()
+      .place([0, 0, 0], 'create:creative_motor', { facing: 'up' }, nbt.compound({ ScrollValue: nbt.int(16) }))
+      .place([0, 1, 0], 'create:large_cogwheel', { axis: 'y' })
+      .place([1, 1, 1], 'create:cogwheel', { axis: 'y' })
+      .toBlueprint()
+    const result = await runCreateStress(bp, { pack: null, ports: [] })
+    expect(result.summary[1].value.value).toContain('16〜32 RPM')
   })
 })

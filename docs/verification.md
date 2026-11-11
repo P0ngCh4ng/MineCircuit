@@ -149,7 +149,7 @@ Minecraft 本体のブロックは数が多いので、ID ごとには分類し�
 
 1 で抜けが一覧になるので、2〜4 の量はそこで決まる。
 
-## 今の状態（進め方の 1 のあと）
+## 今の状態（進め方の 2 のあと）
 
 ### 仕組み
 
@@ -158,6 +158,8 @@ Minecraft 本体のブロックは数が多いので、ID ごとには分類し�
 | ブロック | `tests/verification/blocks/create-0.5.1-fabric.json`（584 個）、`create-6.0.10.json`（643 個）。ID・プロパティの値の範囲・ブロックエンティティ・応力の初期値 | `tests/verification/createBlocks.test.ts` |
 | 物の通り道での扱い | `tests/verification/itemPathRoles.ts`。ブロックエンティティの種類（113 種）ごと | 同上 |
 | 回転・反転 | ブロックの一覧のプロパティの値の範囲 | `tests/verification/createTransform.test.ts` |
+| 規則（応力） | [create-stress.md](create-stress.md) の `ST-…`（77 個）。出典と段階は `tests/verification/rules.ts` | `tests/verification/rules.test.ts`。書類・テストの名前・`rules.ts` の三つが一致し、`ST-` の規則がどれも A（Create にない規則は除く）と B を持つこと |
+| 回転軸と軸の口 | create-stress.md の表の行ごと | `tests/verification/createKineticShapes.test.ts`。表の行のブロックを合わせると、計算で回るブロックの全部になること |
 | 分岐 | `vitest.config.ts` の coverage。`npm run coverage` | 下限を割ると失敗する。CI もこれでテストする |
 
 一覧は `scripts/extractBlockIds.mjs`（jar から）と `scripts/extractCreateSource.mjs`（Create のソースから）で作り直せる。
@@ -169,6 +171,8 @@ Minecraft 本体のブロックは数が多いので、ID ごとには分類し�
 - すべてのブロックで、応力の初期値が Create のソースと一致すること。
 - すべてのブロックエンティティの種類に、物の通り道での扱いが決まっていること。たどる種類にはコードに処理があり、たどらない種類にはないこと。
 - すべてのブロックの、プロパティの値のすべての組み合わせ（多すぎるブロックは1つずつ）で、4回まわすと元に戻ること、反転2回で元に戻ること、値が範囲を出ないこと、東西南北の値が 90° で変わること。
+- 応力の規則（`ST-…`）がすべてテストの名前に出てくること。テストに出てくる ID が書類にあること。
+- 回転軸の表の行ごとに、向き・軸の値から決まる回転軸・軸の口・歯車が表のとおりであること。
 
 ### 見つかったこと
 
@@ -176,13 +180,17 @@ Minecraft 本体のブロックは数が多いので、ID ごとには分類し�
 | --- | --- |
 | コントローラーレールの坂（`ascending_*`）を回すと、押す向きが逆になる | 直した（`ControllerRailBlock.rotate`・`mirror` と同じ規則に） |
 | 液体のバルブ（`fluid_valve`）とガントリーの台車（`gantry_carriage`）は回るのに、回転のつながりにない | 進め方の 2 で直した（create-stress.md の回転軸の表と規則 9） |
-| Create 6.0 の色付きの取っ手（`*_valve_handle`）は、ソースに応力の供給の値がない（銅の取っ手だけ 8） | コードも同じ。ゲームで確かめる（D） |
+| Create 6.0 の色付きの取っ手（`*_valve_handle`）は、ソースに応力の供給の値がない（銅の取っ手だけ 8） | ゲームは色付きの取っ手でも銅の取っ手の値を使う（`HandCrankBlockEntity.getStressConfigKey`。2つの版で同じ）。コードも同じなので直すことはない。create-stress.md の未確認事項から外した（`ST-CAPACITY-VALVE-HANDLE`） |
 | 物の通り道でまだたどらない種類が 13 ある（扇風機・クラフター・6.0 の荷物の流れ・概略図砲など）。うち 4 つ（アイテムハッチ・ポータブルストレージインターフェース・ストックティッカー・ツールボックス）は、物を受け取るかをまだ確かめていない | `itemPathRoles.ts` に理由付きで載せた |
-| 分岐の網羅率は 83.7%（1729 のうち 281 が通らない）。低いのは kineticGraph.ts（75%）、createThroughput.ts（80%）、createItemPath.ts（82%） | 今の値を下限にした。進め方の 2〜4 で上げる |
+| 分岐の網羅率は 83.7%（1729 のうち 281 が通らない）。低いのは kineticGraph.ts（75%）、createThroughput.ts（80%）、createItemPath.ts（82%） | 進め方の 2 で 90.5%（1741 のうち 165）に上げ、下限も上げた。kineticBlocks.ts は 100%、kineticGraph.ts は 96.9%。残りは createThroughput.ts（80%）、createItemPath.ts（82%）、createTransform.ts（88%）で、進め方の 3・4 で上げる |
+| 応力の書類の規則のうち、テストのなかったもの（可変チェーンギアシフトの比、チェーンコンベア、シーケンスギアシフト、風車、ハンドル、蒸気エンジンの効率の段階、速度コントローラーの条件と輪、ベルトの切れ目など） | 進め方の 2 でテストを足した。コードの誤りは見つからなかった |
+| 仮の入出力のノードを作る関数に、呼ぶ前に除いている種類（物の入口）を調べる分岐があった | 通らない分岐なので消した |
 
 ### まだ仕組みがないもの
 
-- 規則の ID（3）と、数値の一覧（5）。
+- 規則の ID（3）のうち、物の通り道・輸送量（create-throughput.md）と、回転・反転・置き方（進め方の 3・4）。
+- 数値の一覧（5）。
+- 通せない分岐の一覧（4）。kineticGraph.ts に残る分岐は、複数のリージョンが重なる設計図、ゲームが残さない状態（横を向いていないベルトなど）、ノードの並び順で通らない向きの判定。
 - 状態の組み合わせ（2）のうち、回転のつながり・物の通り道を、すべての組み合わせで回すテスト。今は回転・反転だけ。
 
 ## 決めたこと

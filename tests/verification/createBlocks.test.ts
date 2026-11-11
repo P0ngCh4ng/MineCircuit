@@ -69,7 +69,7 @@ describe('回転のつながり', () => {
 
 describe('応力の初期値', () => {
   for (const c of CATALOGS) {
-    it(`${c.name}：すべてのブロックで、Create のソースの値と一致する`, () => {
+    it(`[ST-IMPACT][ST-CAPACITY] ${c.name}：すべてのブロックで、Create のソースの値と一致する`, () => {
       const wrong: string[] = []
       for (const [id, b] of Object.entries(c.blocks)) {
         const impact = DEFAULT_IMPACT[path(id)] ?? 0

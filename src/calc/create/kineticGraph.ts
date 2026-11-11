@@ -835,8 +835,7 @@ function makePortNode(port: VirtualPort, node: KineticNode, log: AssumptionLog):
       source: null,
     }
   }
-  // 物の入口（#127）は回転と関係ない。物の通り道の計算（createItemPath.ts）で使う
-  if (port.kind === ITEM_INPUT_PORT_KIND) return null
+  // 物の入口（#127）は、呼ぶ前に除いている
   log.add(`仮の入出力の種類 ${port.kind} は Create の応力では使えないので、計算に入れていない`, port.pos)
   return null
 }
