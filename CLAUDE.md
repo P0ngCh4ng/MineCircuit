@@ -45,9 +45,17 @@ npm run build      # 本番ビルド（型チェックのあと vite build。出
 npm run preview    # ビルド結果の確認
 npm run test       # テスト（Vitest）。src/**/*.test.ts と tests/**/*.test.ts
 npm run lint       # Lint（ESLint）。層と依存の向きも調べる（eslint-rules/layer-dependency.js）
+npm run coverage   # テストと、計算（src/calc/create/）の分岐の網羅率。下限を割ると失敗する（CI はこれでテストする）
 ```
 
 作業を終える前に `test`・`typecheck`・`lint` を通すこと。
+
+計算の確かめ方は docs/verification.md。ブロックの一覧（`tests/verification/blocks/`）は、jar と Create のソースから作り直せる。Create の版を足すときや、計算で扱うブロックを変えたときに作り直す。
+
+```
+node scripts/extractBlockIds.mjs <Create の jar> create tests/verification/blocks/<名前>.json
+node scripts/extractCreateSource.mjs <Create のソースの src/main/java> tests/verification/blocks/<名前>.json "<リポジトリ> <コミット>"
+```
 
 デスクトップ版（Tauri）のコマンド。動かすには Rust（rustup。版は `src-tauri/rust-toolchain.toml` で固定）と Visual Studio の C++ ビルドツール（「C++ によるデスクトップ開発」）が要る。ブラウザ版の作業には要らない。
 
