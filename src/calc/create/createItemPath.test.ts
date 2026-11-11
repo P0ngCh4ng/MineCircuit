@@ -539,6 +539,26 @@ describe('物の通り道', () => {
     expect(at(stopped, '1,0,0')?.notes).toContain('止まっているので、物を運ばない')
   })
 
+  it('ブレイズバーナー：届いた物は燃料として燃え、溜まらず、仮定にも載せない', () => {
+    const points = nbt.list('compound', [
+      nbt.compound({ Pos: nbt.compound({ X: nbt.int(-1), Y: nbt.int(0), Z: nbt.int(0) }), Mode: nbt.string('TAKE') }),
+      nbt.compound({ Pos: nbt.compound({ X: nbt.int(1), Y: nbt.int(0), Z: nbt.int(0) }), Mode: nbt.string('DEPOSIT') }),
+      nbt.compound({ Pos: nbt.compound({ X: nbt.int(0), Y: nbt.int(0), Z: nbt.int(1) }), Mode: nbt.string('DEPOSIT') }),
+    ])
+    const fx = blueprintFixture()
+      .place([1, 0, 0], 'create:mechanical_arm', nbt.compound({ InteractionPoints: points }))
+      .place([0, 0, 0], 'create:depot')
+      .place([2, 0, 0], 'create:blaze_burner', { blaze: 'smouldering', facing: 'east' })
+      .place([1, 0, 1], 'create:blaze_burner', { blaze: 'smouldering', facing: 'east' })
+    const { result, log } = trace(fx, [port([0, 0, 0], 'minecraft:charcoal', 2)], { '1,0,0': 64 })
+    expect(rateOf(result, '2,0,0', 'minecraft:charcoal')).toBe(1)
+    expect(rateOf(result, '1,0,1', 'minecraft:charcoal')).toBe(1)
+    expect(sinkOf(result, '2,0,0', 'minecraft:charcoal')).toBe(0)
+    expect(at(result, '2,0,0')?.notes).toContain('燃料として燃やすので、物はここでなくなる')
+    expect(messages(log).some((m) => m.includes('blaze_burner'))).toBe(false)
+    expect(result.moves.filter((m) => m.to.join(',') === '2,0,0')).toHaveLength(1)
+  })
+
   it('輪になった通り道は、同じ物が2回目に届いた所で止める', () => {
     const arm = (take: Vec3, deposit: Vec3) =>
       nbt.compound({

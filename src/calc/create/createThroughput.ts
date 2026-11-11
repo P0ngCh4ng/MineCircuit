@@ -40,6 +40,16 @@ export const DEFAULT_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, numb
   compacting: 0,
 }
 
+/** 処理時間にレシピの時間を使う機械か（プレス・圧縮は押す動きの速さだけで決まる） */
+const USES_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, boolean>> = {
+  milling: true,
+  crushing: true,
+  cutting: true,
+  mixing: true,
+  pressing: false,
+  compacting: false,
+}
+
 /** 機械の名前（仮定の文と、律速の機械の名前に使う） */
 export const RECIPE_MACHINE_NAMES: Readonly<Record<ProcessingRecipeType, string>> = {
   milling: '石臼',
@@ -257,6 +267,16 @@ export function chooseRecipe(type: ProcessingRecipeType, itemIds: readonly strin
     const min = Math.min(...durations)
     const max = Math.max(...durations)
     range = min === max ? `${formatNumber(min)} tick` : `${formatNumber(min)}〜${formatNumber(max)} tick`
+  }
+  if (!USES_RECIPE_DURATION[type]) {
+    // プレス・圧縮は処理時間を使わないので、時間の仮定は書かない
+    return {
+      duration: resolved(fallback, 'assumed'),
+      text: '分からない',
+      assumption: `${name}のレシピが分からない`,
+      recipe: null,
+      item: null,
+    }
   }
   const rangeText = range ? `。Modpack の${name}のレシピは ${range}` : ''
   return {

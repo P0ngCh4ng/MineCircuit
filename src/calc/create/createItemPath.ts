@@ -362,6 +362,11 @@ class ItemTracer {
         return this.drain(pos, flow, from, face, carry)
       case 'minecraft:hopper':
         return this.hopper(pos, state, flow, from, carry)
+      case 'create:blaze_burner':
+        // ブレイズバーナーは物を燃料として燃やす。先へは出さず、溜まりもしない
+        this.arrive(pos, flow, from, carry)
+        this.note(pos, '燃料として燃やすので、物はここでなくなる')
+        return
       default:
         if (state.id.namespace === 'create' && !CREATE_INVENTORIES.has(id)) {
           // 扇風機・メカニカルクラフターなど、この版で扱わないブロック（「扱わないもの」）

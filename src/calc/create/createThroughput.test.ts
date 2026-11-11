@@ -147,6 +147,16 @@ describe('どのレシピか', () => {
     expect(choice.duration).toEqual({ value: 100, source: 'assumed' })
     expect(choice.assumption).not.toContain('Modpack')
   })
+
+  it('プレス・圧縮は処理時間を使わないので、仮定に時間を書かない', () => {
+    for (const type of ['pressing', 'compacting'] as const) {
+      const choice = chooseRecipe(type, ['minecraft:stone'], BOOK)
+      expect(choice.recipe).toBeNull()
+      expect(choice.assumption).not.toContain('tick')
+      expect(choice.text).toBe('分からない')
+    }
+    expect(chooseRecipe('pressing', [], null).assumption).toBe('プレスのレシピが分からない')
+  })
 })
 
 describe('プローブ（runCreateStress）', () => {
