@@ -250,7 +250,7 @@ describe('Create の応力プラグイン', () => {
 describe('KubeJS のスクリプトの仮定（#145）', () => {
   const summary = { files: 3, added: 2, removed: 1, replaced: 0, unsupported: [], errors: [], failed: null }
 
-  it('集めた数、再現しない呼び出し、エラーを仮定にする', () => {
+  it('[TP-KJS-ASSUMPTION] 集めた数、再現しない呼び出し、エラーを仮定にする', () => {
     expect(
       scriptAssumptions({
         ...summary,
@@ -267,7 +267,7 @@ describe('KubeJS のスクリプトの仮定（#145）', () => {
     expect(scriptAssumptions({ ...summary, added: 0, removed: 0, unsupported: many })[0]).toMatch(/n7（1 回）、ほか 2 件$/)
   })
 
-  it('打ち切ったときは、スクリプトのレシピを使っていないことだけを出す', () => {
+  it('[TP-KJS-TIMEOUT] 打ち切ったときは、スクリプトのレシピを使っていないことだけを出す', () => {
     expect(scriptAssumptions({ ...summary, failed: '20 秒で終わらなかったので打ち切った' })).toEqual([
       'KubeJS のスクリプトを使えなかった（20 秒で終わらなかったので打ち切った）。スクリプトのレシピは入っていない',
     ])

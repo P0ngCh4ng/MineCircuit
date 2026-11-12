@@ -33,7 +33,7 @@ function run(scripts: Record<string, string>, over: Partial<ScriptRunInput> = {}
 const byId = (out: ReturnType<typeof run>, id: string) => out.recipes.find((r) => r.id === id)
 
 describe('runKubeJsScripts（1.18 の書き方）', () => {
-  it('onEvent の recipes で createMilling を足し、配列と forEach で並べたものも集める', () => {
+  it('[TP-KJS-EVENTS][TP-KJS-RECIPE-CALLS][TP-KJS-ITEMS] onEvent の recipes で createMilling を足し、配列と forEach で並べたものも集める', () => {
     const out = run({
       'recipes/milling.js': `
         (function () {
@@ -61,7 +61,7 @@ describe('runKubeJsScripts（1.18 の書き方）', () => {
     expect(byId(out, 'kubejs:script/recipes/milling/2')?.results).toEqual([{ item: 'minecraft:string', count: 1, chance: 0.5 }])
   })
 
-  it('remove・replaceInput（2つの引数の古い書き方も）を当てはめる', () => {
+  it('[TP-KJS-FILTERS][TP-KJS-REPLACE] remove・replaceInput（2つの引数の古い書き方も）を当てはめる', () => {
     const out = run({
       'a.js': `
         onEvent('recipes', event => {
@@ -75,7 +75,7 @@ describe('runKubeJsScripts（1.18 の書き方）', () => {
     expect(out.summary).toMatchObject({ removed: 1, replaced: 1 })
   })
 
-  it('item.tags のイベントでタグを変え、レシピの条件でもそのタグを使う', () => {
+  it('[TP-KJS-TAGS] item.tags のイベントでタグを変え、レシピの条件でもそのタグを使う', () => {
     const out = run({
       'tags.js': `onEvent('item.tags', e => { e.add('c:ores/iron', ['minecraft:raw_iron_block', '#c:ores/deep']); e.remove('c:ores/iron', 'minecraft:iron_ore') })`,
       'z.js': `onEvent('recipes', e => { e.remove({ input: 'minecraft:raw_iron_block' }) })`,
@@ -86,7 +86,7 @@ describe('runKubeJsScripts（1.18 の書き方）', () => {
 })
 
 describe('runKubeJsScripts（1.19 からの書き方）', () => {
-  it('ServerEvents.recipes で create.milling・custom を足し、id で ID を決める', () => {
+  it('[TP-KJS-EVENTS][TP-KJS-RECIPE-CALLS][TP-KJS-IDS][TP-KJS-ITEMS] ServerEvents.recipes で create.milling・custom を足し、id で ID を決める', () => {
     const out = run({
       'kubejs.js': `
         ServerEvents.recipes(event => {
@@ -117,7 +117,7 @@ describe('runKubeJsScripts（1.19 からの書き方）', () => {
     expect(out.summary).toMatchObject({ added: 2, unsupported: [], errors: [] })
   })
 
-  it('priority の大きいファイルの定数を、後のファイルから使える（大域は1つ）', () => {
+  it('[TP-KJS-ORDER] priority の大きいファイルの定数を、後のファイルから使える（大域は1つ）', () => {
     const out = run({
       'constants.js': `const mB = 81`,
       'mix.js': `ServerEvents.recipes(e => { e.recipes.create.mixing('minecraft:clay', 'minecraft:sand').processingTime(mB) })`,
@@ -125,7 +125,30 @@ describe('runKubeJsScripts（1.19 からの書き方）', () => {
     expect(out.recipes.find((r) => r.type === 'mixing')?.duration).toBe(81)
   })
 
-  it('Platform.isLoaded は Modpack の Mod の一覧で答える', () => {
+  it('[TP-KJS-FOR-EACH] forEachRecipe・findRecipes は、読む種類のレシピだけを条件で選んで渡す', () => {
+    const out = run({
+      'each.js': `
+        ServerEvents.recipes(event => {
+          event.forEachRecipe({ type: 'create:milling' }, r => {
+            event.recipes.create.milling('minecraft:stick', r.getId()).id('pack:from_' + r.getType().replace(':', '_'))
+          })
+          global.found = event.findRecipes({ mod: 'create' }).map(r => r.id).join(',')
+          global.none = event.findRecipes({ type: 'farmersdelight:cooking' }).length
+          event.custom({ type: 'create:milling', ingredients: [{ item: 'minecraft:' + global.none }], results: [{ id: 'minecraft:stone' }] }).id('pack:none')
+          event.custom({ type: 'create:milling', ingredients: [{ item: 'minecraft:x' }], results: [{ id: 'minecraft:stone' }] }).id('pack:' + global.found.split(',').length)
+        })
+      `,
+    })
+    expect(out.summary.errors).toEqual([])
+    // 石臼のレシピ（小麦）だけを渡す。粉砕は渡さない
+    expect(out.recipes.filter((r) => r.id.startsWith('pack:from_')).map((r) => r.id)).toEqual(['pack:from_create_milling'])
+    // ほかの種類のレシピは渡さないので、見つからない
+    expect(byId(out, 'pack:none')?.items).toEqual(['minecraft:0'])
+    // create のレシピは2つ（石臼と粉砕）
+    expect(byId(out, 'pack:2')).toBeDefined()
+  })
+
+  it('[TP-KJS-GLOBALS] Platform.isLoaded は Modpack の Mod の一覧で答える', () => {
     const out = run({
       'a.js': `ServerEvents.recipes(e => { if (Platform.isLoaded('mekanism')) e.remove('*'); if (Platform.isLoaded('create')) e.remove({ id: 'create:milling/wheat' }) })`,
     })
@@ -134,7 +157,7 @@ describe('runKubeJsScripts（1.19 からの書き方）', () => {
 })
 
 describe('runKubeJsScripts（うまく動かないとき）', () => {
-  it('知らない呼び出しは数えて何もしない。エラーのファイルは残りを飛ばし、次のファイルは動く', () => {
+  it('[TP-KJS-ERRORS] 知らない呼び出しは数えて何もしない。エラーのファイルは残りを飛ばし、次のファイルは動く', () => {
     const out = run({
       'a.js': `ServerEvents.recipes(e => { const C = Java.loadClass('net.minecraft.Foo'); C.bar(); e.server.runCommandSilent('x'); e.remove({ output: 'create:wheat_flour', weird: 1 }) })`,
       'b.js': `fetch('x'); onEvent('recipes', e => e.remove('create:milling/wheat'))`,
@@ -152,7 +175,7 @@ describe('runKubeJsScripts（うまく動かないとき）', () => {
     expect(out.recipes.map((r) => r.id)).toEqual(['create:milling/wheat'])
   })
 
-  it('知らない大域・Java のクラス・物の知らない項目は、何もしない値にして続ける', () => {
+  it('[TP-KJS-GLOBALS][TP-KJS-UNKNOWN-ITEM] 知らない大域・Java のクラス・物の知らない項目は、何もしない値にして続ける', () => {
     const out = run({
       'a.js': `
         const $TreeMap = Java.loadClass('java.util.TreeMap')
@@ -173,7 +196,7 @@ describe('runKubeJsScripts（うまく動かないとき）', () => {
     )
   })
 
-  it('構文の誤りのファイルもエラーにして続ける', () => {
+  it('[TP-KJS-ERRORS] 構文の誤りのファイルもエラーにして続ける', () => {
     const out = run({ 'a.js': 'onEvent(', 'b.js': `onEvent('recipes', e => e.remove('*'))` })
     expect(out.summary.errors.map((e) => e.path)).toEqual(['a.js'])
     expect(out.recipes).toEqual([])
@@ -200,7 +223,7 @@ describe('runKubeJsScripts（安全）', () => {
     return seen
   }
 
-  it('ホストの大域（fetch・process・eval・Function など）は見えない', () => {
+  it('[TP-KJS-GLOBALS] ホストの大域（fetch・process・eval・Function など）は見えない', () => {
     const seen = probe(`
       t('fetch', () => typeof fetch)
       t('xhr', () => typeof XMLHttpRequest)

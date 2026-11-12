@@ -341,7 +341,7 @@ describe('ModpackLoader（KubeJS のレシピ）', () => {
 })
 
 describe('ModpackLoader（アイテムのタグ）', () => {
-  it('jar と kubejs/data/ のアイテムのタグをまとめ、入れ子のタグを平らにして recipeBook で返す', async () => {
+  it('[TP-RECIPE-TAGS] jar と kubejs/data/ のアイテムのタグをまとめ、入れ子のタグを平らにして recipeBook で返す', async () => {
     const tagJar = fakeJar({
       forgeMods: [{ modId: 'ores', version: '1.0' }],
       files: {

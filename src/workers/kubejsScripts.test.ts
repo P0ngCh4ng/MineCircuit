@@ -62,7 +62,7 @@ describe('createWorkerScriptRunner', () => {
     expect(state.terminated).toBe(1)
   })
 
-  it('時間の上限を超えたら Worker を止め、スクリプトの結果を使わない', async () => {
+  it('[TP-KJS-TIMEOUT] 時間の上限を超えたら Worker を止め、スクリプトの結果を使わない', async () => {
     vi.useFakeTimers()
     const { worker, state } = fakeWorker(() => undefined)
     const run = createWorkerScriptRunner({ createWorker: () => worker, timeLimitMs: 1000 })!

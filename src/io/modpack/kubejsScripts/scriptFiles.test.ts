@@ -4,7 +4,7 @@ import { MemoryFileSource } from '../../memoryFileSource'
 import { orderScripts, readScriptHeader, readServerScripts } from './scriptFiles'
 
 describe('readScriptHeader', () => {
-  it('先頭の // の行から priority・ignored・requires を読み、コードの行で終わる', () => {
+  it('[TP-KJS-ORDER] 先頭の // の行から priority・ignored・requires を読み、コードの行で終わる', () => {
     expect(readScriptHeader('// priority: 10\n\n// requires: create\n// ignored: false\nconst x = 1\n// priority: 99')).toEqual({
       priority: 10,
       ignored: false,
@@ -16,7 +16,7 @@ describe('readScriptHeader', () => {
 })
 
 describe('orderScripts', () => {
-  it('priority の大きいものから、同じなら大文字小文字を区別せずにパスの名前順。ignored と、Mod がないものは除く', () => {
+  it('[TP-KJS-ORDER] priority の大きいものから、同じなら大文字小文字を区別せずにパスの名前順。ignored と、Mod がないものは除く', () => {
     const files = [
       { path: 'b.js', text: '' },
       { path: 'A/z.js', text: '' },
