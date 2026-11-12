@@ -24,6 +24,17 @@ function app(source: string): Rule {
   return { doc: STRESS, source, stages: ['B'] }
 }
 
+const THROUGHPUT = 'create-throughput.md'
+
+function tp(source: string, stages: readonly Stage[] = AB): Rule {
+  return { doc: THROUGHPUT, source, stages }
+}
+
+/** 物の通り道・輸送量の、このアプリが決めた規則。ソースと見比べるもの（A）がない */
+function tpApp(source: string): Rule {
+  return { doc: THROUGHPUT, source, stages: ['B'] }
+}
+
 const KINETIC_BLOCK = 'content/kinetics/**/*Block.java の getRotationAxis・hasShaftTowards'
 
 export const RULES: Readonly<Record<string, Rule>> = {
@@ -112,4 +123,112 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'ST-PORT-OUT-OF-RANGE': app('このアプリの仮の入出力'),
   'ST-SETTING-SCROLL': stress('content/kinetics/motor/CreativeMotorBlockEntity.java・speedController/SpeedControllerBlockEntity.java の ScrollValue と範囲'),
   'ST-NBT-POS': stress('Minecraft の NbtUtils.writeBlockPos（1.20.5 から int 配列）'),
+  // ---- 物の通り道・輸送量（create-throughput.md）。パスは Create の content/ から ----
+  // 設定
+  'TP-CONFIG': tp('infrastructure/config/CLogistics.java（defaultExtractionTimer）・CRecipes.java（bulkPressing）'),
+  // 輸送
+  'TP-BELT-RATE': tp('kinetics/belt/BeltBlockEntity.java の getBeltMovementSpeed、belt/transport/BeltInventory.java（間隔）'),
+  'TP-ARM-RATE': tp('kinetics/mechanicalArm/ArmBlockEntity.java の chasedPointProgress、ArmInteractionPoint.java の extract'),
+  'TP-FUNNEL-RATE': tp('logistics/funnel/FunnelBlockEntity.java の getAmountToExtract・extractionCooldown、FilteringBehaviour の FilterAmount'),
+  'TP-CHUTE-RATE': tp('logistics/chute/ChuteBlockEntity.java の getItemMotion'),
+  // 機械の処理時間
+  'TP-PRESS-TIME': tp('kinetics/press/PressingBehaviour.java の CYCLE・getRunningTickSpeed'),
+  'TP-MIXER-TIME': tp('kinetics/mixer/MechanicalMixerBlockEntity.java の tick'),
+  'TP-MILLSTONE-TIME': tp('kinetics/millstone/MillstoneBlockEntity.java'),
+  'TP-CRUSHING-TIME': tp('kinetics/crusher/CrushingWheelControllerBlockEntity.java'),
+  'TP-SAW-TIME': tp('kinetics/saw/SawBlockEntity.java の start・tick'),
+  'TP-DEPLOYER-TIME': tp('kinetics/deployer/DeployerBlockEntity.java'),
+  // レシピの読む場所
+  'TP-RECIPE-SOURCES': tp('Minecraft のデータパックの読み込み（data/<ns>/recipes/、1.21 は recipe/）と KubeJS の kubejs/data/'),
+  'TP-RECIPE-TIME-FIELD': tp('foundation/recipe（0.5.1 は ProcessingRecipeSerializer の processingTime、6.0 は processing_time）'),
+  'TP-RECIPE-INGREDIENTS': tp('foundation/recipe の材料の読み方、NeoForge の CompoundIngredient（6.0）'),
+  'TP-RECIPE-TYPES': tp('AllRecipeTypes.java（milling・crushing・cutting・mixing・pressing・compacting）'),
+  // どのレシピか
+  'TP-RECIPE-BY-PATH': tpApp('このアプリの決め方（物の通り道で届く物）'),
+  'TP-RECIPE-BY-CONTENTS': tpApp('このアプリの決め方（生データの入れ物の中身）'),
+  'TP-RECIPE-TAGS': tp('Minecraft のタグの読み込み（入れ子のタグ・replace）'),
+  'TP-RECIPE-TIE': tpApp('このアプリの決め方（ID の名前順）'),
+  'TP-RECIPE-FALLBACK': tpApp('このアプリの仮定（初期値は MillstoneBlockEntity・CrushingWheelControllerBlockEntity・SawBlockEntity・MechanicalMixerBlockEntity）'),
+  'TP-RECIPE-NO-PACK': tpApp('このアプリの仮定（Modpack なし）'),
+  // KubeJS のスクリプト
+  'TP-KJS-ORDER': tpApp('このアプリの作り物の KubeJS（KubeJS の priority の決まり）'),
+  'TP-KJS-EVENTS': tpApp('このアプリの作り物の KubeJS（onEvent・ServerEvents）'),
+  'TP-KJS-RECIPE-CALLS': tpApp('このアプリの作り物の KubeJS（KubeJS Create の呼び出し）'),
+  'TP-KJS-ITEMS': tpApp('このアプリの作り物の KubeJS（物の書き方）'),
+  'TP-KJS-UNKNOWN-ITEM': tpApp('このアプリの作り物の KubeJS（知らない項目）'),
+  'TP-KJS-FILTERS': tpApp('このアプリの作り物の KubeJS（レシピの条件）'),
+  'TP-KJS-IDS': tpApp('このアプリの作り物の KubeJS（足したレシピの ID）'),
+  'TP-KJS-REPLACE': tpApp('このアプリの作り物の KubeJS（replaceInput・replaceOutput）'),
+  'TP-KJS-FOR-EACH': tpApp('このアプリの作り物の KubeJS（forEachRecipe・findRecipes）'),
+  'TP-KJS-TAGS': tpApp('このアプリの作り物の KubeJS（タグのイベント）'),
+  'TP-KJS-GLOBALS': tpApp('このアプリの作り物の KubeJS（大域）'),
+  'TP-KJS-ERRORS': tpApp('このアプリの作り物の KubeJS（エラーの扱い）'),
+  'TP-KJS-TIMEOUT': tpApp('このアプリの作り物の KubeJS（時間の上限）'),
+  'TP-KJS-ASSUMPTION': tpApp('このアプリの作り物の KubeJS（仮定）'),
+  // 物の通り道（たどり方）
+  'TP-PATH-INPUT': tpApp('このアプリの仮の入出力（物の入口、#127・#195）'),
+  'TP-PATH-LOOP': tpApp('このアプリのたどり方（輪）'),
+  'TP-PATH-RECIPE': tpApp('このアプリのたどり方（個数 × 確率）'),
+  'TP-PATH-NO-RECIPE': tpApp('このアプリのたどり方（レシピのない物）'),
+  'TP-PATH-SPLIT': tpApp('このアプリのたどり方（等しく分ける）'),
+  'TP-PATH-MERGE': tpApp('このアプリのたどり方（同じ物をまとめる）'),
+  'TP-PATH-MULTI-INGREDIENT': tpApp('このアプリの仮定（材料が2つ以上のレシピ）'),
+  'TP-PATH-STOPPED': tp('kinetics/base/KineticBlockEntity の getSpeed（回転数 0 で動かない）'),
+  'TP-PATH-BATCH': tpApp('このアプリの仮定（64 個まとめて入れたときの処理時間）'),
+  'TP-PATH-OVERFLOW': tpApp('このアプリの検査（処理が追いつかない）'),
+  'TP-PATH-PROBE': tpApp('このアプリの表示（プローブ）'),
+  'TP-PATH-MOTIONS': tpApp('このアプリの表示（物の流れ、#231）'),
+  // ブロックごとの規則
+  'TP-BLOCK-BELT': tp('kinetics/belt/BeltBlock.java、BeltHelper・transport/BeltInventory（進む向き）'),
+  'TP-BLOCK-BELT-MACHINE': tp('kinetics/belt/behaviour/BeltProcessingBehaviour.java、press/PressingBehaviour、deployer/BeltDeployerCallbacks'),
+  'TP-BLOCK-BELT-FUNNEL': tp('kinetics/belt/transport/BeltFunnelInteractionHandler.java'),
+  'TP-BLOCK-DEPOT': tp('logistics/depot/DepotBehaviour.java'),
+  'TP-BLOCK-CHUTE': tp('logistics/chute/ChuteBlockEntity.java・ChuteBlock（斜めの shape）'),
+  'TP-BLOCK-MILLSTONE': tp('kinetics/millstone/MillstoneBlockEntity.java'),
+  'TP-BLOCK-CRUSHING': tp('kinetics/crusher/CrushingWheelControllerBlockEntity.java'),
+  'TP-BLOCK-SAW': tp('kinetics/saw/SawBlockEntity.java（出す向き）'),
+  'TP-BLOCK-BASIN': tp('processing/basin/BasinBlockEntity.java・BasinOperatingBlockEntity'),
+  'TP-BLOCK-FUNNEL-INSERT': tp('logistics/funnel/FunnelBlockEntity.java・FunnelBlock'),
+  'TP-BLOCK-FUNNEL-EXTRACT': tp('logistics/funnel/FunnelBlockEntity.java の activeExtract'),
+  'TP-BLOCK-ARM': tp('kinetics/mechanicalArm/ArmBlockEntity.java の InteractionPoints'),
+  'TP-BLOCK-INVENTORY': tpApp('このアプリの仮定（ほかのブロックは入れ物）'),
+  'TP-BLOCK-BLAZE-BURNER': tp('processing/burner/BlazeBurnerBlock・BlazeBurnerBlockEntity（燃料）'),
+  'TP-BLOCK-UNKNOWN': tpApp('このアプリの仮定（表にないブロック）'),
+  // 物の動き
+  'TP-MOTION-SHAPE': tpApp('このアプリの表示（道の形）'),
+  'TP-MOTION-WAIT': tpApp('このアプリの表示（処理の間とどまる）'),
+  'TP-MOTION-INSTANT': tpApp('このアプリの表示（時間 0 の受け渡し）'),
+  'TP-MOTION-INVENTORY': tpApp('このアプリの表示（入れ物の中は描かない）'),
+  'TP-MOTION-THROWN': tp('Minecraft の ItemEntity.tick（重力 0.04、空気抵抗 0.98）'),
+  'TP-MOTION-STOPPED': tp('kinetics/base/KineticBlockEntity の getSpeed（回転数 0 で動かない）'),
+  'TP-MOTION-FUNNEL-INSERT': tp('logistics/funnel/FunnelBlockEntity.java'),
+  'TP-MOTION-FUNNEL-EXTRACT': tp('logistics/funnel/FunnelBlockEntity.java（defaultExtractionTimer）'),
+  'TP-MOTION-BELT-FUNNEL': tp('kinetics/belt/transport/BeltFunnelInteractionHandler.java の funnelEntry'),
+  'TP-MOTION-CHUTE': tp('logistics/chute/ChuteBlockEntity.java の getItemMotion・getExtractionAmount、SmartChuteBlockEntity'),
+  'TP-MOTION-ARM': tp('kinetics/mechanicalArm/ArmBlockEntity.java の chasedPointProgress'),
+  'TP-MOTION-DEPOT': tp('logistics/depot/DepotBehaviour.java'),
+  'TP-MOTION-BELT-MACHINE': tp('kinetics/belt/behaviour/BeltProcessingBehaviour.java'),
+  'TP-MOTION-MILLSTONE': tp('kinetics/millstone/MillstoneBlockEntity.java'),
+  'TP-MOTION-CRUSHING': tp('kinetics/crusher/CrushingWheelControllerBlockEntity.java'),
+  'TP-MOTION-SAW': tp('kinetics/saw/SawBlockEntity.java（出す動き）'),
+  'TP-MOTION-BASIN': tp('processing/basin/BasinBlockEntity.java'),
+  // 足すブロック
+  'TP-EJECTOR': tp('logistics/depot/EjectorBlockEntity.java の getWindUpSpeed・tick、EntityLauncher.java'),
+  'TP-ANDESITE-TUNNEL': tp('kinetics/belt/transport/BeltTunnelInteractionHandler.java の flapTunnelsAndCheckIfStuck'),
+  'TP-BRASS-TUNNEL': tp('logistics/tunnel/BrassTunnelBlockEntity.java の SelectionMode・distributionProgress'),
+  'TP-HOPPER': tp('Minecraft の HopperBlockEntity（8 tick の間隔）'),
+  'TP-FAN': tp('kinetics/fan/AirCurrent.java・IAirCurrentSource.java・processing/FanProcessing.java'),
+  'TP-SPOUT': tp('fluids/spout/SpoutBlockEntity.java、kinetics/belt/behaviour/BeltProcessingBehaviour.java'),
+  'TP-ITEM-DRAIN': tp('fluids/drain/ItemDrainBlockEntity.java の itemMovementPerTick・FILLING_TIME'),
+  'TP-CRAFTER': tp('kinetics/crafter/MechanicalCrafterBlockEntity.java の Phase・getCountDownSpeed'),
+  // 律速
+  'TP-BOTTLENECK-USAGE': tpApp('このアプリの計算（使用率、#168）'),
+  'TP-BOTTLENECK-CHOOSE': tpApp('このアプリの計算（律速の選び方）'),
+  'TP-BOTTLENECK-IO': tpApp('このアプリの計算（入る数・出る数）'),
+  'TP-BOTTLENECK-HEADROOM': tpApp('このアプリの計算（増やせる数）'),
+  'TP-BOTTLENECK-OVER': tpApp('このアプリの計算（追いつかないとき）'),
+  'TP-BOTTLENECK-MACHINES': tpApp('このアプリの計算（律速に入れる機械）'),
+  'TP-BOTTLENECK-NO-PACK': tpApp('このアプリの仮定（Modpack なし）'),
+  'TP-BOTTLENECK-NONE': tpApp('このアプリの計算（処理する機械がないとき）'),
+  'TP-BOTTLENECK-OUTPUT': tpApp('このアプリの表示（生産ライン、#168）'),
 }

@@ -6,7 +6,7 @@ import { readKubeJsRecipes } from './kubejsRecipes'
 const json = (v: unknown): Uint8Array => strToU8(JSON.stringify(v))
 
 describe('readKubeJsRecipes', () => {
-  it('kubejs/data/<namespace>/recipes/ の下（下のフォルダも）と recipe/ のレシピを読む。Create の処理以外は捨てる', async () => {
+  it('[TP-RECIPE-SOURCES] kubejs/data/<namespace>/recipes/ の下（下のフォルダも）と recipe/ のレシピを読む。Create の処理以外は捨てる', async () => {
     const source = new MemoryFileSource([
       [
         'kubejs/data/createastral/recipes/milling/grain.json',
@@ -27,7 +27,7 @@ describe('readKubeJsRecipes', () => {
     expect(result.scriptsChangeRecipes).toBe(false)
   })
 
-  it('kubejs/data/<namespace>/tags/items/ と 1.21 の tags/item/ のアイテムのタグを読む。入れ子のタグはそのまま', async () => {
+  it('[TP-RECIPE-TAGS] kubejs/data/<namespace>/tags/items/ と 1.21 の tags/item/ のアイテムのタグを読む。入れ子のタグはそのまま', async () => {
     const source = new MemoryFileSource([
       ['kubejs/data/forge/tags/items/ores/iron.json', json({ values: ['kubejs:iron_ore', { id: 'other:ore', required: false }] })],
       ['kubejs/data/c/tags/item/ores.json', json({ replace: true, values: ['#c:ores/iron'] })],
