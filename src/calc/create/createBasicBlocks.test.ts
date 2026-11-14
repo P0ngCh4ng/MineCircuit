@@ -4,7 +4,7 @@ import { CREATE_BASIC_BLOCKS } from './createBasicBlocks'
 import { kineticShape } from './kineticBlocks'
 
 describe('Create の基本の部品（#162）', () => {
-  it('どれも回転軸の決まった状態で、計算で扱える', () => {
+  it('[PL-BASIC-BLOCKS] どれも回転軸の決まった状態で、計算で扱える', () => {
     expect(CREATE_BASIC_BLOCKS.length).toBeGreaterThan(10)
     for (const b of CREATE_BASIC_BLOCKS) {
       expect(b.state.id.namespace).toBe('create')

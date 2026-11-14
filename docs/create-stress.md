@@ -507,41 +507,85 @@ Create の `KineticNetwork.calculateCapacity` は、動力源の **生む回転�
 
 ゲームが設計図を回して置くとき（スキーマティキャノン、クリエイティブの配置）は、バニラの `StructureTemplate.placeInWorld` で位置を写し、各ブロックの状態に `state.mirror(m).rotate(r)` を当てる（先に反転、次に回転）。そのあと、置いたブロックエンティティに `StructureTransform.apply(be)` を当てる。`StructureTransform.apply(BlockState)` は仕掛け（コントラプション）を組む・ばらすときだけ使い、設計図を置くときには使わない。アプリも同じ順（反転 → 回転）で、各ブロックの `rotate`・`mirror` の規則を写す。
 
+- 規則には `TF-…` の ID を付ける（docs/verification.md「3. 規則の一覧」）。テストの名前にも同じ ID を書く。
+- `TF-ORDER` 回転と反転を一度にするときは、先に反転し、次に回す。
+
 ### ブロック状態
 
-バニラの向きのプロパティ（`axis`・`facing`・`horizontal_facing`、液体パイプの `north` など）はバニラの規則（docs/design.md）で変え、そのうえで次を変える。0.5.1 と 6.0 で同じ規則。
+`TF-VANILLA` バニラの向きのプロパティ（`axis`・`facing`・`horizontal_facing`、液体パイプの `north` など）はバニラの規則（docs/design.md）で変え、そのうえで次を変える。0.5.1 と 6.0 で同じ規則。
 
-| プロパティ（ブロック） | 回転 | 反転 |
-| --- | --- | --- |
-| `axis_along_first`（デプロイヤー・鋸・ピストン・ガントリーなど。`DirectionalAxisKineticBlock`） | 90° の奇数回で入れ替える（向きによらない） | 変えない |
-| `flipped`（上下を向いた `mechanical_saw`） | 右回りで `axis_along_first` が false、または左回りで true なら入れ替える。180° なら入れ替える | `axis_along_first` が true で x の反転、false で z の反転なら入れ替える |
-| `horizontal_axis`（`item_vault`・ベルトのトンネルなど） | 90° の奇数回で x ↔ z | 変えない |
-| `part`（`slope=vertical` の `belt`） | 向きの正負（east・south が正）が変わったら start ↔ end | 同じ（反転で向きが逆になるときは 180° の回転と同じ） |
-| `top_shaft`・`bottom_shaft`（`*_encased_cogwheel`。`axis` が x・z のとき） | 180° なら入れ替える。右回りで `axis=z`、左回りで `axis=x` なら入れ替える | `axis` と反転の軸が同じなら入れ替える |
-| `part`・`axis`・`axis_along_first`（`encased_chain_drive`・`adjustable_chain_gearshift`） | つながる向きの軸（`axis` と `axis_along_first` から決まる）と `axis` を回し、`axis_along_first` を決め直す。つながる向きの正の端が負になれば start ↔ end | つながる向きの軸と反転の軸が同じなら start ↔ end |
-| `shape` の `window_ne` など（`fluid_tank`） | 右回りごとに ne → se → sw → nw → ne | x の反転で ne ↔ nw・se ↔ sw、z の反転で ne ↔ se・nw ↔ sw |
-| `sticky_north` など（シャーシ） | 値を回した面へ移す | 値を反転した面へ移す |
-| `backwards`（`controller_rail`） | 180° なら入れ替える。90° では、z 向きのレールを左回り、または x 向きを右回りにしたとき入れ替える | z 向きのレールを z の反転、x 向きを x の反転で入れ替える |
+| 規則 | プロパティ（ブロック） | 回転 | 反転 |
+| --- | --- | --- | --- |
+| `TF-AXIS-ALONG-FIRST` | `axis_along_first`（デプロイヤー・鋸・ピストン・ガントリーなど。`DirectionalAxisKineticBlock`） | 90° の奇数回で入れ替える（向きによらない） | 変えない |
+| `TF-SAW-FLIPPED` | `flipped`（上下を向いた `mechanical_saw`） | 右回りで `axis_along_first` が false、または左回りで true なら入れ替える。180° なら入れ替える | `axis_along_first` が true で x の反転、false で z の反転なら入れ替える |
+| `TF-HORIZONTAL-AXIS` | `horizontal_axis`（`item_vault`・ベルトのトンネルなど） | 90° の奇数回で x ↔ z | 変えない |
+| `TF-BELT-VERTICAL` | `part`（`slope=vertical` の `belt`） | 向きの正負（east・south が正）が変わったら start ↔ end | 同じ（反転で向きが逆になるときは 180° の回転と同じ） |
+| `TF-ENCASED-COG-SHAFTS` | `top_shaft`・`bottom_shaft`（`*_encased_cogwheel`。`axis` が x・z のとき） | 180° なら入れ替える。右回りで `axis=z`、左回りで `axis=x` なら入れ替える | `axis` と反転の軸が同じなら入れ替える |
+| `TF-CHAIN-DRIVE` | `part`・`axis`・`axis_along_first`（`encased_chain_drive`・`adjustable_chain_gearshift`） | つながる向きの軸（`axis` と `axis_along_first` から決まる）と `axis` を回し、`axis_along_first` を決め直す。つながる向きの正の端が負になれば start ↔ end | つながる向きの軸と反転の軸が同じなら start ↔ end |
+| `TF-TANK-WINDOW` | `shape` の `window_ne` など（`fluid_tank`） | 右回りごとに ne → se → sw → nw → ne | x の反転で ne ↔ nw・se ↔ sw、z の反転で ne ↔ se・nw ↔ sw |
+| `TF-CHASSIS-STICKY` | `sticky_north` など（シャーシ） | 値を回した面へ移す | 値を反転した面へ移す |
+| `TF-CONTROLLER-RAIL` | `backwards`（`controller_rail`） | 180° なら入れ替える。90° では、z 向きのレールを左回り、または x 向きを右回りにしたとき入れ替える | z 向きのレールを z の反転、x 向きを x の反転で入れ替える |
 
-扱わないもの（向きのプロパティだけをバニラの規則で変える）：列車の線路（`TrackShape`）、桁（`girder` の `x`・`z`）、カードボードの包み、6.0 のレッドストーンリクエスターなど。
+`TF-UNHANDLED` 扱わないもの（向きのプロパティだけをバニラの規則で変える）：列車の線路（`TrackShape`）、桁（`girder` の `x`・`z`）、カードボードの包み、6.0 のレッドストーンリクエスターなど。
 
 ### 生データの中の位置
 
-| ブロック | 項目 | 相対か | アプリで |
-| --- | --- | --- | --- |
-| `mechanical_arm` | `InteractionPoints` の各 `Pos` | アームからの相対 | 回す・反転する |
-| `display_link` | `TargetOffset` | 相対 | 回す・反転する（ゲームは 6.0 だけが直す。0.5.1 は直さないが、写した形が正しくなる方にそろえた） |
-| `mechanical_crafter` | `ConnectedInput` の `Data` の各位置 | 相対 | 回す・反転する（ゲームは 6.0 だけ） |
-| `chain_conveyor`（6.0） | `Connections` の各位置 | 相対 | 回す・反転する |
-| `belt` | `Controller` | ワールド座標 | 変えない。スキーマティキャノンはベルトの生データを使わず、ベルトを組み直す（`BeltConnectorItem.createBelts`） |
-| `fluid_tank`・`item_vault` | `Controller`、`LastKnownPos` | ワールド座標 | 変えない。置くときにゲームが作り直す |
-| すべての回るブロック | `Source` | ワールド座標 | 変えない。ゲームが計算し直す |
-| `powered_shaft` | `EnginePos` | 相対 | 変えない。エンジンが毎 tick 入れ直す |
+| 規則 | ブロック | 項目 | 相対か | アプリで |
+| --- | --- | --- | --- | --- |
+| `TF-NBT-ARM` | `mechanical_arm` | `InteractionPoints` の各 `Pos` | アームからの相対 | 回す・反転する |
+| `TF-NBT-DISPLAY-LINK` | `display_link` | `TargetOffset` | 相対 | 回す・反転する（ゲームは 6.0 だけが直す。0.5.1 は直さないが、写した形が正しくなる方にそろえた） |
+| `TF-NBT-CRAFTER` | `mechanical_crafter` | `ConnectedInput` の `Data` の各位置 | 相対 | 回す・反転する（ゲームは 6.0 だけ） |
+| `TF-NBT-CHAIN-CONVEYOR` | `chain_conveyor`（6.0） | `Connections` の各位置 | 相対 | 回す・反転する |
+| `TF-NBT-BELT-CONTROLLER` | `belt` | `Controller` | ワールド座標 | 変えない。スキーマティキャノンはベルトの生データを使わず、ベルトを組み直す（`BeltConnectorItem.createBelts`） |
+| `TF-NBT-CONTROLLER` | `fluid_tank`・`item_vault` | `Controller`、`LastKnownPos` | ワールド座標 | 変えない。置くときにゲームが作り直す |
+| `TF-NBT-SOURCE` | すべての回るブロック | `Source` | ワールド座標 | 変えない。ゲームが計算し直す |
+| `TF-NBT-ENGINE-POS` | `powered_shaft` | `EnginePos` | 相対 | 変えない。エンジンが毎 tick 入れ直す |
 
-- 位置の形（int 配列 `[x, y, z]` か compound `{X, Y, Z}`）は、元の形のまま書く。
-- 相対位置の相手が範囲の外なら、回しても相手は動かないので、操作の警告に出す（docs/design.md）。
-- 扱わないもの：6.0 の `chain_conveyor` の `TravellingPackages` の `Target`、コピーキャットの `Material`・ブラケットの `Bracket`（中のブロック状態）、線路の `Connections`、工場のパネルの `Targeting`（ワールド座標）。
+- `TF-NBT-POS-FORM` 位置の形（int 配列 `[x, y, z]` か compound `{X, Y, Z}`）は、元の形のまま書く。
+- `TF-NBT-OUTSIDE` 相対位置の相手が範囲の外なら、回しても相手は動かないので、操作の警告に出す（docs/design.md）。
+- `TF-NBT-UNHANDLED` 扱わないもの：6.0 の `chain_conveyor` の `TravellingPackages` の `Target`、コピーキャットの `Material`・ブラケットの `Bracket`（中のブロック状態）、線路の `Connections`、工場のパネルの `Targeting`（ワールド座標）。
 - [ ] 回して書き出した設計図を、スキーマティキャノンで置いて、機械アームの行き先・縦のベルト・チェーンドライブがゲームで正しく動くか
+
+## 置き方・初期状態
+
+置くツールで Create のブロックを置くとき（docs/ui.md「編集」、docs/design.md「置くブロック（ブラシ）」）の規則。置けるか・置き方の補助は `calc/create/createPlacement.ts`、足りない状態を補うのは `calc/create/createDefaultStates.ts`、基本の部品は `calc/create/createBasicBlocks.ts`。規則には `PL-…` の ID を付ける。
+
+### 置けるか（#121）
+
+ゲームが「その場所に残れるか」を調べる規則（`CogWheelBlock.isValidCogwheelPosition`。0.5.1 と 6.0 で同じ）。あとから隣に置かれても、外れて落ちる。
+
+- `PL-COG-NEXT-TO-LARGE` 歯車（ケース入りを含む）の、軸に垂直な4方向の隣に大歯車があれば置けない。
+- `PL-COG-LARGE-NEXT-TO-SMALL` 大歯車の、軸に垂直な4方向の隣に小歯車があれば置けない。
+- `PL-COG-EXEMPT` 隣のブロックの `axis` がその向きの軸なら、その隣は問題にしない。軸の両端の隣は調べない。歯車でないブロックは調べない。
+
+### 置くときの向き（#119）
+
+このアプリが決めた規則。ゲームにはない（ゲームは見ている向きで決める）。
+
+- `PL-ORIENT-LINK` 向きの候補は、`axis`（x・y・z）か `facing`（6方向）の値を変えたもの。隣とつながる強さの合計がいちばん大きい候補を選ぶ。強さは、シャフトの口が向き合えば 2、小歯車が同じ軸で軸に垂直な向きに隣り合えば 1。
+- `PL-ORIENT-FROM` 3D でクリックした面の側でつながるものは、強さに 4 を足す。
+- `PL-ORIENT-KEEP` 同じ強さなら今の向きのまま。つながる相手がなければ変えない。Create のブロックで、`axis` か `facing` を持つものだけを変える。
+- `PL-ORIENT-VALID` 置けない向き（上の「置けるか」）は候補から外す。
+
+### 置き方の補助（#123）
+
+ゲームの歯車の置き方の補助（`CogwheelBlockItem` の placement helper。0.5.1 と 6.0 で同じ）。ケース入りでない歯車を置くとき、歯車をクリックしたら使う。
+
+- `PL-HELPER-ORDER` 向きは、ブロックの中心から当たった点へのベクトルに近い順に試す（`IPlacementHelper.orderedByDistance`）。置く位置は空きで、設計図の中で、置ける（上の「置けるか」）こと。
+- `PL-HELPER-SMALL` 小歯車で小歯車をクリック：軸に垂直な向きの隣に、同じ軸で置く。
+- `PL-HELPER-LARGE` 大歯車で大歯車をクリック：軸の向き（当たった点に近い側）と、軸に垂直な向きを足した斜めに、その垂直な向きの軸で置く。
+- `PL-HELPER-MIXED` 大きさが違う：軸に垂直な向きのうち一番近い向きと、それと別の軸の向きを足した斜めに、同じ軸で置く。
+- `PL-HELPER-SKIP` 歯車の真ん中の軸（太さ 6 画素の柱）に当たったとき、置くものかクリックしたものが歯車でないとき、置ける位置がないときは使わない（ふつうに面の隣に置く）。
+
+### 足りない状態を補う（#149）
+
+このアプリが決めた規則。ID だけで選んだブロックに、回転軸を決めるプロパティを足す。
+
+- `PL-DEFAULT-FILL` 足すのは `axis=y` か `facing=north`（水平にしか向かないブロックもあるため）。`axis` だけ、`facing` だけ、両方の順に試し、回転軸が決まった最初のものにする。
+- `PL-DEFAULT-KEEP` 書いてある値は変えない。回転軸がすでに決まっていれば、そのまま。
+- `PL-DEFAULT-PROBLEM` 補っても回転軸が決まらない（`axis=w` のように値が読めない）ときは、状態を変えずに理由を返す。
+- `PL-DEFAULT-SCOPE` 補うのは Create の回るブロックだけ。ほかのブロックは知らないブロックとして扱う（null）。
+- `PL-BASIC-BLOCKS` 基本の部品（#162）は、どれも上の規則で補った、回転軸の決まった状態にする。
 
 ## 例（#30 のテスト）
 

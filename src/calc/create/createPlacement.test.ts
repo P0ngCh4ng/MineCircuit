@@ -3,7 +3,7 @@ import { blueprintFixture, state } from '../../../tests/fixtures/blueprintFixtur
 import { LARGE_COG_NEXT_TO_SMALL, NEXT_TO_LARGE_COG, orientForPlacement, placementHelper, placementProblem } from './createPlacement'
 
 describe('orientForPlacement（Create）', () => {
-  it('シャフトの端に置くシャフトは、同じ軸にする。つながる相手がなければ変えない', () => {
+  it('[PL-ORIENT-LINK][PL-ORIENT-KEEP] シャフトの端に置くシャフトは、同じ軸にする。つながる相手がなければ変えない', () => {
     const bp = blueprintFixture({ size: [3, 3, 3] }).place([1, 1, 1], 'create:shaft', { axis: 'y' }).toBlueprint()
     // 上の端（[1,2,1]）
     expect(orientForPlacement(bp, [1, 2, 1], state('create:shaft', { axis: 'x' }), null)?.key).toBe('create:shaft[axis=y]')
@@ -13,7 +13,7 @@ describe('orientForPlacement（Create）', () => {
     expect(orientForPlacement(bp, [1, 0, 1], state('create:shaft', { axis: 'y' }), null)).toBeNull()
   })
 
-  it('歯車の横に置く歯車は、噛み合う軸にする', () => {
+  it('[PL-ORIENT-LINK] 歯車の横に置く歯車は、噛み合う軸にする', () => {
     const bp = blueprintFixture({ size: [3, 1, 3] }).place([1, 0, 1], 'create:cogwheel', { axis: 'y' }).toBlueprint()
     expect(orientForPlacement(bp, [2, 0, 1], state('create:cogwheel', { axis: 'x' }), null)?.key).toBe('create:cogwheel[axis=y]')
   })
@@ -25,7 +25,7 @@ describe('orientForPlacement（Create）', () => {
     )
   })
 
-  it('両側につながる相手があれば、クリックした面の側を優先する', () => {
+  it('[PL-ORIENT-FROM] 両側につながる相手があれば、クリックした面の側を優先する', () => {
     const bp = blueprintFixture({ size: [3, 3, 1] })
       .place([0, 1, 0], 'create:shaft', { axis: 'x' })
       .place([1, 0, 0], 'create:shaft', { axis: 'y' })
@@ -35,7 +35,7 @@ describe('orientForPlacement（Create）', () => {
     expect(orientForPlacement(bp, [1, 1, 0], shaft, 'down')?.key).toBe('create:shaft[axis=y]')
   })
 
-  it('Create 以外のブロックと、向きを持たないブロックは変えない', () => {
+  it('[PL-ORIENT-KEEP] Create 以外のブロックと、向きを持たないブロックは変えない', () => {
     const bp = blueprintFixture({ size: [3, 1, 1] }).place([1, 0, 0], 'create:shaft', { axis: 'x' }).toBlueprint()
     expect(orientForPlacement(bp, [0, 0, 0], state('minecraft:oak_log', { axis: 'y' }), null)).toBeNull()
     expect(orientForPlacement(bp, [0, 0, 0], state('create:mechanical_press'), null)).toBeNull()
@@ -46,7 +46,7 @@ describe('placementProblem（Create の歯車）', () => {
   const large = (axis: string) => state('create:large_cogwheel', { axis })
   const small = (axis: string) => state('create:cogwheel', { axis })
 
-  it('大きい歯車の、軸に垂直な横には歯車を置けない。軸の両端と斜めは置ける', () => {
+  it('[PL-COG-NEXT-TO-LARGE][PL-COG-EXEMPT] 大きい歯車の、軸に垂直な横には歯車を置けない。軸の両端と斜めは置ける', () => {
     const bp = blueprintFixture({ size: [3, 3, 3] }).place([1, 1, 1], 'create:large_cogwheel', { axis: 'y' }).toBlueprint()
     expect(placementProblem(bp, [2, 1, 1], small('y'))).toBe(NEXT_TO_LARGE_COG)
     expect(placementProblem(bp, [1, 1, 2], large('y'))).toBe(NEXT_TO_LARGE_COG)
@@ -58,7 +58,7 @@ describe('placementProblem（Create の歯車）', () => {
     expect(placementProblem(bp, [2, 1, 1], small('x'))).toBeNull()
   })
 
-  it('大きい歯車は小さい歯車の横に置けない。隣の軸がこちらを向いていれば置ける', () => {
+  it('[PL-COG-LARGE-NEXT-TO-SMALL][PL-COG-EXEMPT] 大きい歯車は小さい歯車の横に置けない。隣の軸がこちらを向いていれば置ける', () => {
     const bp = blueprintFixture({ size: [3, 1, 3] })
       .place([0, 0, 0], 'create:cogwheel', { axis: 'y' })
       .place([2, 0, 0], 'create:cogwheel', { axis: 'x' })
@@ -70,13 +70,13 @@ describe('placementProblem（Create の歯車）', () => {
     expect(placementProblem(bp, [1, 0, 0], small('y'))).toBeNull()
   })
 
-  it('ケース入りの歯車も同じ。歯車でないブロックは調べない', () => {
+  it('[PL-COG-NEXT-TO-LARGE][PL-COG-EXEMPT] ケース入りの歯車も同じ。歯車でないブロックは調べない', () => {
     const bp = blueprintFixture({ size: [2, 1, 1] }).place([0, 0, 0], 'create:andesite_encased_large_cogwheel', { axis: 'y' }).toBlueprint()
     expect(placementProblem(bp, [1, 0, 0], state('create:brass_encased_cogwheel', { axis: 'y' }))).toBe(NEXT_TO_LARGE_COG)
     expect(placementProblem(bp, [1, 0, 0], state('create:shaft', { axis: 'y' }))).toBeNull()
   })
 
-  it('向きを自動で合わせるとき、置けない向きは選ばない', () => {
+  it('[PL-ORIENT-VALID] 向きを自動で合わせるとき、置けない向きは選ばない', () => {
     // 小さい歯車 [0,0,0] axis=y の東に、大きい歯車 [2,0,0] axis=y。[1,0,0] に置く小さい歯車
     const bp = blueprintFixture({ size: [3, 1, 1] })
       .place([0, 0, 0], 'create:cogwheel', { axis: 'y' })
@@ -91,7 +91,7 @@ describe('placementHelper（Create の歯車の置き方の補助）', () => {
   const small = state('create:cogwheel', { axis: 'z' })
   const large = state('create:large_cogwheel', { axis: 'z' })
 
-  it('大きさが違う：当たった点に近い向きと別の軸の向きの斜めに、同じ軸で置く', () => {
+  it('[PL-HELPER-MIXED][PL-HELPER-ORDER] 大きさが違う：当たった点に近い向きと別の軸の向きの斜めに、同じ軸で置く', () => {
     const bp = blueprintFixture({ size: [5, 1, 5] }).place([2, 0, 2], 'create:large_cogwheel', { axis: 'y' }).toBlueprint()
     // 上の面の東寄り・南寄り（東が一番近い）→ 東 + 南
     const r = placementHelper(bp, { pos: [2, 0, 2], face: 'up', point: [2.95, 1, 2.7] }, small)
@@ -100,25 +100,67 @@ describe('placementHelper（Create の歯車の置き方の補助）', () => {
     expect(placementHelper(bp, { pos: [2, 0, 2], face: 'up', point: [2.05, 1, 2.3] }, small)?.pos).toEqual([1, 0, 1])
   })
 
-  it('小さい歯車どうし：当たった点に近い向きの横に、同じ軸で置く', () => {
+  it('[PL-HELPER-SMALL][PL-HELPER-ORDER] 小さい歯車どうし：当たった点に近い向きの横に、同じ軸で置く', () => {
     const bp = blueprintFixture({ size: [3, 3, 1] }).place([1, 1, 0], 'create:cogwheel', { axis: 'z' }).toBlueprint()
     expect(placementHelper(bp, { pos: [1, 1, 0], face: 'south', point: [1.1, 1.5, 1] }, small)?.pos).toEqual([0, 1, 0])
     expect(placementHelper(bp, { pos: [1, 1, 0], face: 'south', point: [1.5, 1.95, 1] }, small)?.pos).toEqual([1, 2, 0])
   })
 
-  it('大きい歯車どうし：軸の向きに1つずらした斜めに、軸を直角にして置く', () => {
+  it('[PL-HELPER-LARGE] 大きい歯車どうし：軸の向きに1つずらした斜めに、軸を直角にして置く', () => {
     const bp = blueprintFixture({ size: [4, 4, 4] }).place([1, 1, 1], 'create:large_cogwheel', { axis: 'y' }).toBlueprint()
     // 上の面（軸の向きは上が近い）の東寄り → 東 + 上、軸は x
     const r = placementHelper(bp, { pos: [1, 1, 1], face: 'up', point: [1.95, 2, 1.5] }, large)
     expect(r).toEqual({ pos: [2, 2, 1], state: state('create:large_cogwheel', { axis: 'x' }) })
   })
 
-  it('真ん中の軸に当たったとき、歯車でないもの、ケース入りの歯車を置くときは使わない。置ける位置がなければ使わない', () => {
+  it('[PL-HELPER-SKIP] 真ん中の軸に当たったとき、歯車でないもの、ケース入りの歯車を置くときは使わない。置ける位置がなければ使わない', () => {
     const bp = blueprintFixture({ size: [3, 1, 3] }).place([1, 0, 1], 'create:large_cogwheel', { axis: 'y' }).toBlueprint()
     expect(placementHelper(bp, { pos: [1, 0, 1], face: 'up', point: [1.5, 1, 1.5] }, small)).toBeNull()
     expect(placementHelper(bp, { pos: [1, 0, 1], face: 'up', point: [1.9, 1, 1.7] }, state('create:shaft', { axis: 'y' }))).toBeNull()
     expect(placementHelper(bp, { pos: [1, 0, 1], face: 'up', point: [1.9, 1, 1.7] }, state('create:andesite_encased_cogwheel', { axis: 'y' }))).toBeNull()
     const full = blueprintFixture({ size: [1, 1, 1] }).place([0, 0, 0], 'create:large_cogwheel', { axis: 'y' }).toBlueprint()
     expect(placementHelper(full, { pos: [0, 0, 0], face: 'up', point: [0.9, 1, 0.7] }, small)).toBeNull()
+  })
+})
+
+describe('置き方の補助の分かれ道（#237）', () => {
+  const small = state('create:cogwheel', { axis: 'z' })
+  const large = state('create:large_cogwheel', { axis: 'z' })
+
+  it('[PL-HELPER-SKIP] 横の軸の歯車でも、真ん中の軸に当たれば使わない。空きをクリックしたとき、Create でないものを置くときも使わない', () => {
+    const bp = blueprintFixture({ size: [3, 3, 3] }).place([1, 1, 1], 'create:cogwheel', { axis: 'x' }).toBlueprint()
+    expect(placementHelper(bp, { pos: [1, 1, 1], face: 'east', point: [2, 1.5, 1.5] }, small)).toBeNull()
+    expect(placementHelper(bp, { pos: [1, 1, 1], face: 'east', point: [2, 1.9, 1.1] }, small)).not.toBeNull()
+    expect(placementHelper(bp, { pos: [0, 0, 0], face: 'up', point: [0.9, 1, 0.1] }, small)).toBeNull()
+    expect(placementHelper(bp, { pos: [1, 1, 1], face: 'east', point: [2, 1.9, 1.1] }, state('other:cogwheel', { axis: 'x' }))).toBeNull()
+  })
+
+  it('[PL-HELPER-LARGE][PL-HELPER-ORDER] 大きい歯車どうしで、近い位置がふさがっていれば次に近い位置', () => {
+    const bp = blueprintFixture({ size: [4, 4, 4] })
+      .place([1, 1, 1], 'create:large_cogwheel', { axis: 'y' })
+      .place([2, 2, 1], 'minecraft:stone')
+      .toBlueprint()
+    // 東の次は、北と南が同じ近さなので DIRECTIONS の順で北
+    expect(placementHelper(bp, { pos: [1, 1, 1], face: 'up', point: [1.95, 2, 1.5] }, large)).toEqual({
+      pos: [1, 2, 0],
+      state: state('create:large_cogwheel', { axis: 'z' }),
+    })
+  })
+
+  it('[PL-HELPER-MIXED][PL-HELPER-ORDER] 大きさが違うとき、近い斜めがふさがっていれば次の斜め', () => {
+    const bp = blueprintFixture({ size: [5, 1, 5] })
+      .place([2, 0, 2], 'create:large_cogwheel', { axis: 'y' })
+      .place([3, 0, 3], 'minecraft:stone')
+      .toBlueprint()
+    expect(placementHelper(bp, { pos: [2, 0, 2], face: 'up', point: [2.95, 1, 2.7] }, small)?.pos).toEqual([3, 0, 1])
+  })
+
+  it('[PL-HELPER-SMALL][PL-HELPER-ORDER] 小さい歯車どうしで、近い横がふさがっていれば次に近い横', () => {
+    const bp = blueprintFixture({ size: [3, 3, 1] })
+      .place([1, 1, 0], 'create:cogwheel', { axis: 'z' })
+      .place([0, 1, 0], 'minecraft:stone')
+      .toBlueprint()
+    // 西の次は、上と下が同じ近さなので DIRECTIONS の順で下
+    expect(placementHelper(bp, { pos: [1, 1, 0], face: 'south', point: [1.1, 1.5, 1] }, small)?.pos).toEqual([1, 0, 0])
   })
 })
