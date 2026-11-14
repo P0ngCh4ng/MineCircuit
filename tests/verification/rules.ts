@@ -122,6 +122,7 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'ST-STEP-RATIOS': stress('content/kinetics/RotationPropagator.java の propagateNewSource（向き・速度の衝突で壊す）'),
   'ST-STEP-SPEED': stress('content/kinetics/RotationPropagator.java の propagateNewSource（速いほうが押し切る）'),
   'ST-STEP-CONTROLLER': stress('content/kinetics/speedController/SpeedControllerBlockEntity.java の getConveyedSpeed'),
+  'ST-STEP-CONTROLLER-REVERSE': stress('content/kinetics/speedController/SpeedControllerBlockEntity.java の getConveyedSpeed・getDesiredOutputSpeed（targetingController）'),
   'ST-STEP-MAX-SPEED': stress('content/kinetics/RotationPropagator.java（maxRotationSpeed を超えると壊す）'),
   'ST-STEP-NETWORKS': stress('content/kinetics/KineticNetwork.java（速度コントローラーの先も同じネットワーク）'),
   'ST-STEP-STRESS': stress('content/kinetics/KineticNetwork.java の calculateStress'),
