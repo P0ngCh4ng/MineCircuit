@@ -4,7 +4,7 @@
 // 問題と仮定の位置をクリックすると、そのブロックを選択し、その段へ移ってネットワークを強調する（#31）。
 // 位置のある合計の行（ネット一覧の行 #152、生産ラインの行 #168）も、押すと同じようにその位置へ移る。
 import { computed, ref, watch } from 'vue'
-import { ISSUE_SEVERITIES, issueSeverity, type CalcSummaryItem } from '../calc/calcPlugin'
+import { CALC_MODES, ISSUE_SEVERITIES, issueSeverity, type CalcMode, type CalcSummaryItem } from '../calc/calcPlugin'
 import { PROVENANCE_LABELS } from '../calc/provenance'
 import PortPanel from './calc/PortPanel.vue'
 import { formatPos } from './calc/probeModel'
@@ -22,6 +22,18 @@ const tools = useToolStore()
 const jumpTo = useJumpTo()
 
 const tab = ref<CalcTab>('summary')
+
+/** 見方の切り替え（#243。docs/ui.md「右パネル」） */
+const MODE_LABELS: Record<CalcMode, { label: string; title: string }> = {
+  running: {
+    label: '動かしたとき',
+    title: '止まっているボイラーの蒸気エンジンや風車を、設計図の中身から動かしたものとして計算します',
+  },
+  saved: {
+    label: '保存された状態',
+    title: 'ゲームが設計図を保存したときの状態のまま計算します',
+  },
+}
 
 // 仮の入出力のツールに替えたら、置く種類と一覧のある「入出力」のタブを開く
 watch(
@@ -81,6 +93,19 @@ const tabs = computed<{ id: CalcTab; label: string }[]>(() => [
     <div class="head">
       <h2 id="calc-panel-heading">計算</h2>
       <p v-if="statusText" class="status" role="status">{{ statusText }}</p>
+    </div>
+    <div class="modes" role="radiogroup" aria-label="計算の見方">
+      <button
+        v-for="m in CALC_MODES"
+        :key="m"
+        type="button"
+        role="radio"
+        class="mode"
+        :data-mode="m"
+        :aria-checked="calc.mode === m"
+        :title="MODE_LABELS[m].title"
+        @click="calc.setMode(m)"
+      >{{ MODE_LABELS[m].label }}</button>
     </div>
     <div class="tabs" role="tablist" aria-label="計算の表示">
       <button
@@ -212,6 +237,30 @@ h2 {
   font-weight: 600;
   letter-spacing: 0.08em;
   opacity: 0.75;
+}
+
+.modes {
+  display: flex;
+  gap: 2px;
+  padding: 0 12px 6px;
+}
+
+.mode {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.mode[aria-checked='true'] {
+  background: var(--panel);
+  font-weight: 600;
+  opacity: 1;
 }
 
 .tabs {

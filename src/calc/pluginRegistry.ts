@@ -9,7 +9,7 @@ import type { RawNbt } from '../domain/nbt'
 import type { Vec3 } from '../domain/vec3'
 import type { BlockEntityTransform } from '../edit/regionTransform'
 import { transformVanillaState } from '../edit/stateTransform'
-import type { CalcModpack, CalcPlugin, CalcResult } from './calcPlugin'
+import type { CalcMode, CalcModpack, CalcPlugin, CalcResult } from './calcPlugin'
 import { portsFor, type VirtualPort } from './virtualPort'
 
 export class PluginRegistry {
@@ -126,12 +126,13 @@ export async function runPlugins(
   bp: Blueprint,
   pack: CalcModpack | null,
   ports: readonly VirtualPort[],
+  mode: CalcMode = 'saved',
 ): Promise<PluginOutcome[]> {
   const outcomes: PluginOutcome[] = []
   for (const plugin of registry.available(bp, pack)) {
     const base = { pluginId: plugin.id, label: plugin.label }
     try {
-      const result = await plugin.run(bp, { pack, ports: portsFor(ports, plugin.id) })
+      const result = await plugin.run(bp, { pack, ports: portsFor(ports, plugin.id), mode })
       outcomes.push({ ...base, status: 'ok', result })
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e)

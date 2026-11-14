@@ -3,7 +3,7 @@
 
 import type { Blueprint } from '../domain/blueprint'
 import { Signal } from '../edit/signal'
-import type { CalcModpack } from './calcPlugin'
+import type { CalcMode, CalcModpack } from './calcPlugin'
 import { runPlugins, type PluginOutcome, type PluginRegistry } from './pluginRegistry'
 import type { VirtualPort } from './virtualPort'
 
@@ -12,6 +12,8 @@ export interface CalcRequest {
   readonly blueprint: Blueprint
   readonly pack: CalcModpack | null
   readonly ports: readonly VirtualPort[]
+  /** 見方。省略は saved */
+  readonly mode?: CalcMode
 }
 
 /** 計算を実際に行うところ */
@@ -26,7 +28,7 @@ export class InlineCalcBackend implements CalcBackend {
   constructor(private readonly registry: PluginRegistry) {}
 
   run(request: CalcRequest): Promise<PluginOutcome[]> {
-    return runPlugins(this.registry, request.blueprint, request.pack, request.ports)
+    return runPlugins(this.registry, request.blueprint, request.pack, request.ports, request.mode)
   }
 }
 

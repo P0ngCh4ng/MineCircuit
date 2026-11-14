@@ -4,6 +4,7 @@ import { NOOP_PLUGIN_ID, noopCalcPlugin } from '../../tests/fixtures/noopCalcPlu
 import { nbt } from '../domain/nbt'
 import type { CalcModpack, CalcPlugin } from './calcPlugin'
 import { PluginRegistry, runPlugins } from './pluginRegistry'
+import { resolved } from './provenance'
 import type { VirtualPort } from './virtualPort'
 
 const bp = blueprintFixture()
@@ -13,6 +14,17 @@ const bp = blueprintFixture()
 
 function port(pluginId: string, kind: string): VirtualPort {
   return { id: kind, pos: [0, 0, 0], pluginId, kind, params: {} }
+}
+
+/** 受け取った見方（#243）を合計に出すプラグイン */
+function modeEcho(seen: (string | undefined)[] = []): CalcPlugin {
+  return {
+    ...noopCalcPlugin(),
+    run: async (_bp, ctx) => {
+      seen.push(ctx.mode)
+      return { summary: [{ label: '見方', value: resolved(ctx.mode ?? '', 'builtin') }], issues: [], assumptions: [] }
+    },
+  }
 }
 
 describe('PluginRegistry', () => {
@@ -64,6 +76,14 @@ describe('runPlugins', () => {
     const messages = o.status === 'ok' ? o.result.assumptions.map((a) => a.message) : []
     expect(messages).toContain('仮の入出力 mine を使った')
     expect(messages).not.toContain('仮の入出力 theirs を使った')
+  })
+
+  it('見方（#243）を渡す。省略は保存された状態', async () => {
+    const seen: (string | undefined)[] = []
+    const r = new PluginRegistry([modeEcho(seen)])
+    await runPlugins(r, bp, null, [])
+    await runPlugins(r, bp, null, [], 'running')
+    expect(seen).toEqual(['saved', 'running'])
   })
 
   it('失敗したプラグインは error にし、ほかのプラグインは続ける', async () => {

@@ -49,7 +49,17 @@ export const DEFAULT_KINETICS = {
   disableStress: false,
   mediumSpeed: 30,
   fastSpeed: 100,
+  /** 風車を組み立てられる帆の数の下限（#243） */
+  minimumWindmillSails: 8,
+  /** 風車の回転数を 1 RPM 上げるのに要る帆の数（#243） */
+  windmillSailsPerRPM: 8,
 } as const
+
+/** 蒸気エンジンが弱い熱だけで動くときの効率（BoilerData.passiveEngineEfficiency。#243） */
+export const PASSIVE_ENGINE_EFFICIENCY = 1 / 8
+
+/** ボイラーの段階の上限（BoilerData。#243） */
+export const MAX_BOILER_LEVEL = 18
 
 /** 回転数を nbt の設定値で決めるブロックの初期値（CreativeMotorBlockEntity・SpeedControllerBlockEntity の DEFAULT_SPEED） */
 export const DEFAULT_SCROLL_SPEED = 16

@@ -40,6 +40,7 @@ export class WorkerCalcBackend implements CalcBackend {
         requestId,
         blueprint: toSnapshot(request.blueprint),
         ports: request.ports.map((p) => ({ ...p, pos: [p.pos[0], p.pos[1], p.pos[2]], params: { ...p.params } })),
+        mode: request.mode,
         pack: request.pack ? packInfo(request) : null,
       })
     })

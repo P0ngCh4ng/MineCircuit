@@ -7,10 +7,11 @@
 //
 // 壊れていること（読めない・計算が止まる・一覧にない ID・おかしな値）はテストを失敗させる。
 // 仮定と問題は数を報告に書き、人が見て、おかしな流れ・多すぎる仮定がないかを確かめる。
+// 見方（保存された状態・動かしたとき。#243）は両方で通す。保存された回転数との比較は、保存された状態だけで行う。
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { CalcContext, CalcModpack, CalcResult } from '../../src/calc/calcPlugin'
+import type { CalcMode, CalcModpack, CalcResult } from '../../src/calc/calcPlugin'
 import { runCreateStress } from '../../src/calc/create/createStressPlugin'
 import type { Blueprint } from '../../src/domain/blueprint'
 import type { Vec3 } from '../../src/domain/vec3'
@@ -93,7 +94,9 @@ function savedSpeeds(bp: Blueprint, result: CalcResult): { same: number; differ:
   return { same, differ }
 }
 
-function report(name: string, bp: Blueprint, result: CalcResult): string {
+const MODE_LABELS: Record<CalcMode, string> = { saved: '保存された状態', running: '動かしたとき' }
+
+function report(name: string, bp: Blueprint, result: CalcResult, mode: CalcMode): string {
   let blocks = 0
   let create = 0
   for (const r of bp.regions) {
@@ -105,13 +108,17 @@ function report(name: string, bp: Blueprint, result: CalcResult): string {
   const rotations = result.rotations ?? []
   const speeds = savedSpeeds(bp, result)
   const lines = [
-    `## ${name}`,
+    `## ${name}（${MODE_LABELS[mode]}）`,
     '',
     `- DataVersion ${bp.dataVersion}（${catalogFor(bp).name}）、大きさ ${bp.size.join('×')}、ブロック ${blocks}（Create ${create}）`,
     `- 回るブロック ${rotations.length}（止まっている ${rotations.filter((r) => r.rpm === 0).length}、過負荷 ${rotations.filter((r) => r.overloaded).length}）、動力源 ${result.sources?.length ?? 0}`,
     `- 物のつながり ${(result.links ?? []).filter((l) => l.kind === 'item').length}、物の動き ${(result.itemMoves ?? []).length}`,
-    `- 保存された回転数（Speed）と計算が同じ ${speeds.same}、違う ${speeds.differ.length}`,
-    ...speeds.differ.slice(0, MAX_LISTED).map((d) => `  ${d}`),
+    ...(mode === 'saved'
+      ? [
+          `- 保存された回転数（Speed）と計算が同じ ${speeds.same}、違う ${speeds.differ.length}`,
+          ...speeds.differ.slice(0, MAX_LISTED).map((d) => `  ${d}`),
+        ]
+      : []),
     '',
     '| まとめ | 値 | 出どころ |',
     '| --- | --- | --- |',
@@ -136,23 +143,29 @@ describe.skipIf(BLUEPRINT_DIRS.length === 0)('実在の設計図（段階 C）',
   it('どの設計図も読めて、計算が止まらず、一覧にない ID もおかしな値もない', { timeout: 600_000 }, async () => {
     let pack: CalcModpack | null = null
     if (MODPACK_DIR) pack = await new ModpackLoader(new NodeFileSource(MODPACK_DIR)).load()
-    const ctx: CalcContext = { pack, ports: [] }
     const sections = [`# 実在の設計図の計算（段階 C）`, '', `Modpack：${MODPACK_DIR ? 'あり' : 'なし'}`, '']
     const failures: string[] = []
     for (const dir of BLUEPRINT_DIRS) {
       for (const file of findBlueprints(dir)) {
         const name = relative(dir, file)
         let bp: Blueprint
-        let result: CalcResult
         try {
           bp = await readBlueprint(name, readFileSync(file))
-          result = await runCreateStress(bp, ctx)
         } catch (e) {
           failures.push(`${name}：${e instanceof Error ? e.message : String(e)}`)
           continue
         }
-        failures.push(...problems(bp, result).map((p) => `${name}：${p}`))
-        sections.push(report(name, bp, result))
+        for (const mode of ['saved', 'running'] as const) {
+          let result: CalcResult
+          try {
+            result = await runCreateStress(bp, { pack, ports: [], mode })
+          } catch (e) {
+            failures.push(`${name}（${MODE_LABELS[mode]}）：${e instanceof Error ? e.message : String(e)}`)
+            continue
+          }
+          failures.push(...problems(bp, result).map((p) => `${name}（${MODE_LABELS[mode]}）：${p}`))
+          sections.push(report(name, bp, result, mode))
+        }
       }
     }
     if (REPORT) writeFileSync(REPORT, sections.join('\n'), 'utf8')

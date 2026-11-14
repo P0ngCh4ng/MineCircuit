@@ -50,7 +50,7 @@ export function createCalcWorkerHost(registry: PluginRegistry, post: (message: F
     try {
       const bp = fromSnapshot(message.blueprint)
       const pack = message.pack ? packProxy(message.pack, message.requestId) : null
-      const outcomes = await runPlugins(registry, bp, pack, message.ports)
+      const outcomes = await runPlugins(registry, bp, pack, message.ports, message.mode)
       post({ type: 'result', requestId: message.requestId, outcomes })
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e)
