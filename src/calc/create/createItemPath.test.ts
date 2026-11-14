@@ -540,6 +540,70 @@ describe('物の通り道', () => {
     expect(at(stopped, '1,0,0')?.notes).toContain('止まっているので、物を運ばない')
   })
 
+  it('[TP-BLOCK-BELT-FUNNEL-PUSH] 押し出すベルトのファンネル：後ろの入れ物から取り出し、真下のデポに置く', () => {
+    const build = (funnel: Record<string, string>) =>
+      blueprintFixture()
+        .place([1, 1, 0], 'minecraft:barrel', { facing: 'up' }, chest)
+        .place([0, 1, 0], 'create:andesite_belt_funnel', { facing: 'west', powered: 'false', ...funnel })
+        .place([0, 0, 0], 'create:depot')
+    const { result } = trace(build({ shape: 'pushing' }), [port([1, 1, 0], 'minecraft:coal', 2)])
+    expect(sinkOf(result, '1,1,0', 'minecraft:coal')).toBe(0)
+    expect(rateOf(result, '0,1,0', 'minecraft:coal')).toBe(2)
+    expect(sinkOf(result, '0,0,0', 'minecraft:coal')).toBe(2)
+
+    // 信号が入っている、デポの上で取り込む形なら取り出さない
+    for (const f of [{ shape: 'pushing', powered: 'true' }, { shape: 'pulling', powered: 'false' }]) {
+      const r = trace(build(f), [port([1, 1, 0], 'minecraft:coal', 2)]).result
+      expect(sinkOf(r, '1,1,0', 'minecraft:coal')).toBe(2)
+      expect(rateOf(r, '0,0,0', 'minecraft:coal')).toBe(0)
+    }
+  })
+
+  it('[TP-BLOCK-BELT-FUNNEL-PUSH] 平行の形のベルトのファンネルは、下のベルトが facing へ進むときだけ押し出す', () => {
+    const fx = belt(blueprintFixture(), 0, 0, [2, 1, 0], 'west')
+      .place([2, 1, 0], 'minecraft:barrel', { facing: 'up' }, chest)
+      .place([1, 1, 0], 'create:andesite_belt_funnel', { facing: 'west', shape: 'retracted', powered: 'false' })
+    const speeds = (rpm: number) => ({ '0,0,0': rpm, '1,0,0': rpm, '2,0,0': rpm })
+    // X 軸のベルトは回転数 > 0 で西へ進む
+    const west = trace(fx, [port([2, 1, 0], 'minecraft:coal', 1)], speeds(16)).result
+    expect(rateOf(west, '1,0,0', 'minecraft:coal')).toBe(1)
+    const east = trace(fx, [port([2, 1, 0], 'minecraft:coal', 1)], speeds(-16)).result
+    expect(rateOf(east, '1,0,0', 'minecraft:coal')).toBe(0)
+    expect(sinkOf(east, '2,1,0', 'minecraft:coal')).toBe(1)
+  })
+
+  it('[TP-BLOCK-DEPLOYER-HAND][TP-MOTION-DEPLOYER-HAND] デプロイヤーの手：2つ先のブレイズバーナーに燃料を入れる', () => {
+    const points = nbt.list('compound', [
+      nbt.compound({ Pos: nbt.compound({ X: nbt.int(-1), Y: nbt.int(0), Z: nbt.int(0) }), Mode: nbt.string('TAKE') }),
+      nbt.compound({ Pos: nbt.compound({ X: nbt.int(0), Y: nbt.int(0), Z: nbt.int(1) }), Mode: nbt.string('DEPOSIT') }),
+    ])
+    const build = (mode: string, target: string) =>
+      blueprintFixture()
+        .place([1, 0, 0], 'create:mechanical_arm', nbt.compound({ InteractionPoints: points }))
+        .place([0, 0, 0], 'create:depot')
+        .place([1, 0, 1], 'create:deployer', { facing: 'up', axis_along_first: 'false' }, nbt.compound({ Mode: nbt.string(mode) }))
+        .place([1, 2, 1], target, { blaze: 'smouldering', facing: 'east' })
+    const speeds = (deployer: number) => ({ '1,0,0': 64, '1,0,1': deployer })
+    const { result, log } = trace(build('USE', 'create:blaze_burner'), [port([0, 0, 0], 'minecraft:coal', 1)], speeds(16))
+    expect(rateOf(result, '1,0,1', 'minecraft:coal')).toBe(1)
+    expect(rateOf(result, '1,2,1', 'minecraft:coal')).toBe(1)
+    expect(at(result, '1,0,1')?.capacityPerMinute).toBeGreaterThan(0)
+    expect(messages(log).some((m) => m.includes('デプロイヤー'))).toBe(false)
+    // 手に持って1回の動作のあいだ止まり、バーナーへ移る
+    expect(result.moves.find((m) => m.from.join(',') === '0,0,0' && m.to.join(',') === '1,0,1')?.hold).toBeGreaterThan(0)
+    expect(result.moves.some((m) => m.from.join(',') === '1,0,1' && m.to.join(',') === '1,2,1')).toBe(true)
+
+    // 叩く設定、バーナーでない先、止まっているデプロイヤーでは、手で止まる
+    const punch = trace(build('PUNCH', 'create:blaze_burner'), [port([0, 0, 0], 'minecraft:coal', 1)], speeds(16))
+    expect(rateOf(punch.result, '1,2,1', 'minecraft:coal')).toBe(0)
+    expect(messages(punch.log)).toContain('デプロイヤーが叩く設定なので、手の物の行き先は扱わず、物はここで止まるとした')
+    const stone = trace(build('USE', 'minecraft:stone'), [port([0, 0, 0], 'minecraft:coal', 1)], speeds(16))
+    expect(messages(stone.log)).toContain('デプロイヤーが手の物を使った結果は扱わないので、物はここで止まるとした')
+    const stopped = trace(build('USE', 'create:blaze_burner'), [port([0, 0, 0], 'minecraft:coal', 1)], speeds(0)).result
+    expect(rateOf(stopped, '1,2,1', 'minecraft:coal')).toBe(0)
+    expect(at(stopped, '1,0,1')?.notes).toContain('止まっているので、物はここで止まる')
+  })
+
   it('[TP-BLOCK-BLAZE-BURNER] ブレイズバーナー：届いた物は燃料として燃え、溜まらず、仮定にも載せない', () => {
     const points = nbt.list('compound', [
       nbt.compound({ Pos: nbt.compound({ X: nbt.int(-1), Y: nbt.int(0), Z: nbt.int(0) }), Mode: nbt.string('TAKE') }),
