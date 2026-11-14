@@ -362,6 +362,8 @@ class ItemTracer {
         return this.drain(pos, flow, from, face, carry)
       case 'minecraft:hopper':
         return this.hopper(pos, state, flow, from, carry)
+      case 'create:deployer':
+        return this.deployerHand(pos, state, flow, from, carry)
       case 'create:blaze_burner':
         // ブレイズバーナーは物を燃料として燃やす。先へは出さず、溜まりもしない
         this.arrive(pos, flow, from, carry)
@@ -830,6 +832,62 @@ class ItemTracer {
     this.deliver(container, flow, pos, null)
   }
 
+  /**
+   * デプロイヤーの手（TP-BLOCK-DEPLOYER-HAND）。手の物を2つ先のブロックに使う。
+   * ブレイズバーナーなら燃料として渡し、ほかのブロックに使った結果と叩く設定（PUNCH）は扱わない
+   */
+  private deployerHand(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, carry: Carry): void {
+    this.arrive(pos, flow, from, carry)
+    const facing = state.properties.facing
+    if (!facing || !isDirection(facing)) {
+      this.stop(pos, 'デプロイヤーの向きが分からないので、物はここで止まる')
+      return
+    }
+    const rpm = this.env.rpmAt(pos) ?? 0
+    if (rpm === 0) {
+      this.stop(pos, '止まっているので、物はここで止まる')
+      return
+    }
+    if ((nbtString(this.env.bp.blockEntityAt(pos), 'Mode') ?? 'USE') !== 'USE') {
+      this.stop(pos, 'デプロイヤーが叩く設定なので、手の物の行き先は扱わず、物はここで止まるとした', true)
+      return
+    }
+    // 1回の動作で1個使う
+    this.record(pos).capacityPerMinute = machineCapacityPerMinute('deployer', rpm, 0, this.env.bulkPressing)
+    const [dx, dy, dz] = directionVector(facing)
+    const target = addVec3(pos, [dx * 2, dy * 2, dz * 2])
+    if (this.env.bp.get(target)?.id.toString() !== 'create:blaze_burner') {
+      this.stop(pos, 'デプロイヤーが手の物を使った結果は扱わないので、物はここで止まるとした', true)
+      return
+    }
+    this.hold(pos, carry.moveFrom ?? from, flow, deployerCycleTicks(rpm))
+    this.deliver(target, flow, pos, null)
+  }
+
+  /** 押し出すベルトのファンネル（TP-BLOCK-BELT-FUNNEL-PUSH）。後ろの入れ物から取り出し、真下のベルト・デポに置くか */
+  private beltFunnelPushing(f: Vec3, s: BlockState): boolean {
+    if (s.properties.powered === 'true' || !horizontalFacing(s)) return false
+    const below = addVec3(f, [0, -1, 0])
+    const b = this.env.bp.get(below)
+    const shape = s.properties.shape
+    if (b?.id.toString() === 'create:depot') return shape === 'pushing'
+    if (b?.id.toString() !== 'create:belt') return false
+    if (shape === 'pushing') return true
+    if (shape === 'pulling') return false
+    // 平行の形は、下のベルトの進む向きが facing と同じなら押し出す
+    return this.beltMove(below, b) === horizontalFacing(s)
+  }
+
+  /** ベルトの区間の進む向き。止まっていれば null（TP-BLOCK-BELT） */
+  private beltMove(pos: Vec3, state: BlockState): Direction | null {
+    const facing = horizontalFacing(state)
+    const rpm = this.env.rpmAt(pos) ?? 0
+    if (!facing || rpm === 0) return null
+    const axis = directionAxis(facing)
+    const [positive, negative] = axisDirections(axis)
+    return rpm < 0 !== (axis === 'x') ? negative : positive
+  }
+
   /** ほかのブロック（チェストなど）。入れ物とみなし、取り出すファンネルと機械アームで先へ */
   private inventory(pos: Vec3, id: string, flow: Flow, from: Vec3 | null, carry: Carry): void {
     this.arrive(pos, flow, from, carry)
@@ -867,6 +925,12 @@ class ItemTracer {
     for (const d of ALL_OFFSETS) {
       const n = addVec3(pos, d)
       const s = bp.get(n)
+      // 押し出すベルトのファンネル：取り出して真下のベルト・デポに置く（移動しない受け渡し）
+      const beltFacing = s && BELT_FUNNELS.has(s.id.toString()) ? horizontalFacing(s) : null
+      if (s && beltFacing && equalsVec3(addVec3(n, directionVector(oppositeDirection(beltFacing))), pos) && this.beltFunnelPushing(n, s)) {
+        dests.push({ to: addVec3(n, [0, -1, 0]), face: 'up', via: n, from: n, carry: INSTANT })
+        continue
+      }
       if (!s || !FUNNELS.has(s.id.toString()) || s.properties.extracting !== 'true' || s.properties.powered === 'true') continue
       const facing = s.properties.facing
       if (!facing || !isDirection(facing)) continue
