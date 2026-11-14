@@ -102,6 +102,17 @@ export interface ControllerLink {
   readonly target: Resolved<number>
 }
 
+/** 向きを決めた速度コントローラーのリンク（ST-STEP-CONTROLLER-REVERSE） */
+interface OrientedLink {
+  readonly link: ControllerLink
+  /** 大歯車からコントローラーへ回すなら true */
+  readonly reverse: boolean
+  /** 回すほうのまとまり */
+  readonly from: number
+  /** 設定値で回るほうのまとまり */
+  readonly to: number
+}
+
 /** 計算に使う設定 */
 export interface KineticSettings {
   readonly maxRotationSpeed: number
@@ -411,14 +422,18 @@ export class KineticGraph {
       broken.push(isBroken)
     }
 
-    // 6. 7. まとまりの倍率 x を決める（速度コントローラーは依存の順に）
-    const incoming: ControllerLink[][] = groups.map(() => [])
+    // 6. 7. まとまりの倍率 x を決める（速度コントローラーは向きを決めてから、依存の順に）
+    const powered = groups.map(
+      (members, g) => !broken[g] && members.some((m) => (this.nodes[m].source?.speed.value ?? 0) !== 0 && k[m] !== 0),
+    )
+    const links = this.orientControllers(groups.length, group, powered)
+    const incoming: OrientedLink[][] = groups.map(() => [])
     const outgoing: number[][] = groups.map(() => [])
-    for (const link of this.controllers) {
-      incoming[group[link.cog]].push(link)
-      outgoing[group[link.controller]].push(group[link.cog])
+    for (const o of links) {
+      incoming[o.to].push(o)
+      outgoing[o.from].push(o.to)
     }
-    const order = this.topologicalOrder(groups.length, incoming, outgoing, group)
+    const order = this.topologicalOrder(groups.length, incoming, outgoing)
     const factor = new Array<number>(groups.length).fill(0)
     const factorSource = new Array<Provenance>(groups.length).fill('builtin')
     const solved = new Array<boolean>(groups.length).fill(false)
@@ -431,15 +446,16 @@ export class KineticGraph {
         if (!src || src.speed.value === 0 || k[m] === 0) continue
         candidates.push({ x: src.speed.value / k[m], source: src.speed.source, pos: this.nodes[m].pos, flippable: src.flippable === true })
       }
-      for (const link of incoming[g]) {
-        const input = group[link.controller]
+      for (const { link, reverse, from: input } of incoming[g]) {
         if (!solved[input] || input === g) continue
-        const controllerSpeed = factor[input] * k[link.controller]
-        if (controllerSpeed === 0 || link.target.value === 0) continue
+        // 入力側は回すほうのブロック、出力側は設定値で回るほうのブロック（逆向きは ST-STEP-CONTROLLER-REVERSE）
+        const driver = reverse ? link.cog : link.controller
+        const driven = reverse ? link.controller : link.cog
+        if (factor[input] * k[driver] === 0 || link.target.value === 0) continue
         candidates.push({
-          x: link.target.value / k[link.cog],
+          x: link.target.value / k[driven],
           source: weakerSource(link.target.source, factorSource[input]),
-          pos: this.nodes[link.cog].pos,
+          pos: this.nodes[driven].pos,
           flippable: false,
         })
       }
@@ -598,14 +614,41 @@ export class KineticGraph {
     for (const i of [a, b]) if (this.nodes[i].portId === null) addIssue(this.nodes[i].pos, message)
   }
 
+  /**
+   * 速度コントローラーのリンクの向きを決める（ST-STEP-CONTROLLER-REVERSE）。
+   * 動力源を持つまとまりからリンクをたどり、大歯車の側からたどったものだけを逆向きにする。
+   */
+  private orientControllers(count: number, group: readonly number[], powered: readonly boolean[]): OrientedLink[] {
+    const reverse = new Array<boolean>(this.controllers.length).fill(false)
+    const reached = [...powered]
+    const queue: number[] = []
+    for (let g = 0; g < count; g++) if (reached[g]) queue.push(g)
+    while (queue.length > 0) {
+      const g = queue.shift() as number
+      this.controllers.forEach((link, i) => {
+        const input = group[link.controller]
+        const output = group[link.cog]
+        if (input === g && !reached[output]) {
+          reached[output] = true
+          queue.push(output)
+        } else if (output === g && !reached[input]) {
+          reverse[i] = true
+          reached[input] = true
+          queue.push(input)
+        }
+      })
+    }
+    return this.controllers.map((link, i) => ({
+      link,
+      reverse: reverse[i],
+      from: reverse[i] ? group[link.cog] : group[link.controller],
+      to: reverse[i] ? group[link.controller] : group[link.cog],
+    }))
+  }
+
   /** 速度コントローラーの依存の順。輪になったまとまりは最後に回し、仮定に載せる */
-  private topologicalOrder(
-    count: number,
-    incoming: readonly ControllerLink[][],
-    outgoing: readonly number[][],
-    group: readonly number[],
-  ): number[] {
-    const indegree = incoming.map((links) => links.filter((l) => group[l.controller] !== group[l.cog]).length)
+  private topologicalOrder(count: number, incoming: readonly OrientedLink[][], outgoing: readonly number[][]): number[] {
+    const indegree = incoming.map((links) => links.filter((l) => l.from !== l.to).length)
     const order: number[] = []
     const queue: number[] = []
     for (let g = 0; g < count; g++) if (indegree[g] === 0) queue.push(g)
@@ -623,12 +666,12 @@ export class KineticGraph {
     for (let g = 0; g < count; g++) {
       if (done[g]) continue
       order.push(g)
-      for (const link of incoming[g]) {
+      for (const { link } of incoming[g]) {
         this.log.add('速度コントローラーの出力が入力に戻っているので、このコントローラーは計算に入れていない', this.nodes[link.controller].pos)
       }
     }
-    for (const link of this.controllers) {
-      if (group[link.controller] === group[link.cog]) {
+    for (const { link, from, to } of incoming.flat()) {
+      if (from === to) {
         this.log.add('速度コントローラーの出力が入力に戻っているので、このコントローラーは計算に入れていない', this.nodes[link.controller].pos)
       }
     }

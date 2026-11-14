@@ -115,6 +115,56 @@ describe('KineticGraph：docs/create-stress.md の例', () => {
     expect(evaluate(bp).speed([2, 1, 0])).toBe(0)
   })
 
+  it('[ST-STEP-CONTROLLER-REVERSE] 大歯車の側から回すと、コントローラーの側が設定値で回る', () => {
+    const build = (motor: number, target: number) =>
+      blueprintFixture()
+        .place([1, 0, 0], 'create:shaft', { axis: 'x' })
+        .place([2, 0, 0], 'create:rotation_speed_controller', { axis: 'x' }, scroll(target))
+        .place([2, 1, 0], 'create:large_cogwheel', { axis: 'z' })
+        .place([2, 1, 1], 'create:creative_motor', { facing: 'north' }, scroll(-motor)) // 北向きは符号が逆
+        .toBlueprint()
+    const r = evaluate(build(32, 64))
+    expect(r.speed([2, 1, 0])).toBe(32)
+    expect(r.speed([2, 0, 0])).toBe(64)
+    expect(r.speed([1, 0, 0])).toBe(64)
+    expect(r.network([1, 0, 0])).toBe(r.network([2, 1, 1]))
+    expect(r.ev.issues).toEqual([])
+    // 設定値の符号のまま。大歯車の向きには合わせない
+    expect(evaluate(build(32, -48)).speed([1, 0, 0])).toBe(-48)
+    // 大歯車が止まっている、または設定値が 0 なら回らない
+    expect(evaluate(build(0, 64)).speed([1, 0, 0])).toBe(0)
+    expect(evaluate(build(32, 0)).speed([1, 0, 0])).toBe(0)
+  })
+
+  it('[ST-STEP-CONTROLLER-REVERSE] 両側に動力源があれば今までの向き。たどれない先のコントローラーも逆向きでつなぐ', () => {
+    // 両側に動力源：コントローラーから大歯車へ（大歯車は 64 と自分のモーター 32 の速いほう）
+    const both = blueprintFixture()
+      .place([0, 0, 0], 'create:creative_motor', { facing: 'east' }, scroll(16))
+      .place([1, 0, 0], 'create:shaft', { axis: 'x' })
+      .place([2, 0, 0], 'create:rotation_speed_controller', { axis: 'x' }, scroll(64))
+      .place([2, 1, 0], 'create:large_cogwheel', { axis: 'z' })
+      .place([2, 1, 1], 'create:creative_motor', { facing: 'north' }, scroll(-32))
+      .toBlueprint()
+    const r = evaluate(both)
+    expect(r.speed([1, 0, 0])).toBe(16)
+    expect(r.speed([2, 1, 0])).toBe(64)
+
+    // 2台のコントローラーを1つの大歯車につなぐ：モーターのある側から、もう1台へ逆向きに回る
+    const chain = blueprintFixture()
+      .place([0, 0, 0], 'create:creative_motor', { facing: 'east' }, scroll(16))
+      .place([1, 0, 0], 'create:rotation_speed_controller', { axis: 'x' }, scroll(32))
+      .place([1, 1, 0], 'create:large_cogwheel', { axis: 'z' })
+      .place([1, 1, 1], 'create:shaft', { axis: 'z' })
+      .place([1, 1, 2], 'create:large_cogwheel', { axis: 'z' })
+      .place([1, 0, 2], 'create:rotation_speed_controller', { axis: 'x' }, scroll(-8))
+      .place([2, 0, 2], 'create:shaft', { axis: 'x' })
+      .toBlueprint()
+    const c = evaluate(chain)
+    expect(c.speed([1, 1, 2])).toBe(32)
+    expect(c.speed([2, 0, 2])).toBe(-8)
+    expect(c.ev.issues).toEqual([])
+  })
+
   it('[ST-SOURCE-CREATIVE-MOTOR][ST-STEP-SPEED][ST-CAPACITY-GENERATED] 例3：向きの衝突。ScrollValue を -16 にすると衝突しない', () => {
     const build = (right: number) =>
       blueprintFixture()
