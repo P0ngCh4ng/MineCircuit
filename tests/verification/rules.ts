@@ -14,6 +14,8 @@ export interface Rule {
 
 const STRESS = 'create-stress.md'
 const AB: readonly Stage[] = ['A', 'B']
+/** 実在の設計図で、ゲームが保存した回転数と計算が合った（docs/verification.md「実在の設計図で確かめる（C）」） */
+const ABC: readonly Stage[] = ['A', 'B', 'C']
 
 function stress(source: string, stages: readonly Stage[] = AB): Rule {
   return { doc: STRESS, source, stages }
@@ -52,10 +54,10 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'ST-AXIS-LARGE-COGWHEEL': stress(`${KINETIC_BLOCK}（CogWheelBlock）`),
   'ST-AXIS-ENCASED-COG': stress(`${KINETIC_BLOCK}（EncasedCogwheelBlock の TOP_SHAFT・BOTTOM_SHAFT）`),
   'ST-AXIS-GEARBOX': stress(`${KINETIC_BLOCK}（GearboxBlock）`),
-  'ST-AXIS-CHAIN-DRIVE': stress(`${KINETIC_BLOCK}（ChainDriveBlock）`),
+  'ST-AXIS-CHAIN-DRIVE': stress(`${KINETIC_BLOCK}（ChainDriveBlock）`, ABC),
   'ST-AXIS-SPEED-CONTROLLER': stress(`${KINETIC_BLOCK}（SpeedControllerBlock。HorizontalAxisKineticBlock）`),
   'ST-AXIS-SEQUENCED-GEARSHIFT': stress(`${KINETIC_BLOCK}（SequencedGearshiftBlock の VERTICAL）`),
-  'ST-AXIS-CREATIVE-MOTOR': stress(`${KINETIC_BLOCK}（CreativeMotorBlock）`),
+  'ST-AXIS-CREATIVE-MOTOR': stress(`${KINETIC_BLOCK}（CreativeMotorBlock）`, ABC),
   'ST-AXIS-WATER-WHEEL': stress(`${KINETIC_BLOCK}（WaterWheelBlock）`),
   'ST-AXIS-LARGE-WATER-WHEEL': stress(`${KINETIC_BLOCK}（LargeWaterWheelBlock）`),
   'ST-AXIS-CRANK': stress(`${KINETIC_BLOCK}（HandCrankBlock・ValveHandleBlock・EncasedFanBlock・DrillBlock）`),
@@ -68,7 +70,7 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'ST-AXIS-HOSE-PULLEY': stress(`${KINETIC_BLOCK}（HosePulleyBlock）`),
   'ST-AXIS-ROPE-PULLEY': stress(`${KINETIC_BLOCK}（PulleyBlock）`),
   'ST-AXIS-GANTRY-SHAFT': stress(`${KINETIC_BLOCK}（GantryShaftBlock）`),
-  'ST-AXIS-BELT': stress(`${KINETIC_BLOCK}（BeltBlock）`),
+  'ST-AXIS-BELT': stress(`${KINETIC_BLOCK}（BeltBlock）`, ABC),
   'ST-AXIS-MILLSTONE': stress(`${KINETIC_BLOCK}（MillstoneBlock）`),
   'ST-AXIS-TURNTABLE': stress(`${KINETIC_BLOCK}（TurntableBlock）`),
   'ST-AXIS-MIXER': stress(`${KINETIC_BLOCK}（MechanicalMixerBlock・ArmBlock・ChainConveyorBlock）`),
@@ -77,13 +79,13 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'ST-AXIS-BACKTANK': stress(`${KINETIC_BLOCK}（BacktankBlock）`),
   // つながりの規則
   'ST-LINK-NEIGHBORS': stress('content/kinetics/RotationPropagator.java の getPotentialNeighbourLocations'),
-  'ST-LINK-SHAFT': stress('content/kinetics/RotationPropagator.java の getRotationSpeedModifier（Axis <-> Axis）'),
-  'ST-LINK-CHAIN': stress('content/kinetics/chainDrive/ChainDriveBlock.java の areBlocksConnected・getRotationSpeedModifier、ChainGearshiftBlockEntity'),
+  'ST-LINK-SHAFT': stress('content/kinetics/RotationPropagator.java の getRotationSpeedModifier（Axis <-> Axis）', ABC),
+  'ST-LINK-CHAIN': stress('content/kinetics/chainDrive/ChainDriveBlock.java の areBlocksConnected・getRotationSpeedModifier、ChainGearshiftBlockEntity', ABC),
   'ST-LINK-LARGE-LARGE': stress('content/kinetics/RotationPropagator.java（Large Gear <-> Large Gear）'),
   'ST-LINK-LARGE-SMALL': stress('content/kinetics/RotationPropagator.java（Gear <-> Large Gear）'),
   'ST-LINK-COG': stress('content/kinetics/RotationPropagator.java（Gear <-> Gear）'),
   'ST-LINK-CONTROLLER': stress('content/kinetics/speedController/SpeedControllerBlockEntity.java、RotationPropagator.isLargeCogToSpeedController'),
-  'ST-LINK-BELT': stress('content/kinetics/belt/BeltBlockEntity.java の propagateRotationTo、BeltBlock.nextSegmentPosition'),
+  'ST-LINK-BELT': stress('content/kinetics/belt/BeltBlockEntity.java の propagateRotationTo、BeltBlock.nextSegmentPosition', ABC),
   'ST-LINK-CHAIN-CONVEYOR': stress('content/kinetics/chainConveyor/ChainConveyorBlockEntity.java の propagateRotationTo・connections（6.0 のみ）'),
   'ST-LINK-GANTRY': stress('content/kinetics/gantry/GantryShaftBlockEntity.java・content/contraptions/gantry/GantryCarriageBlockEntity.java の propagateRotationTo'),
   // 面の係数
@@ -92,7 +94,7 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'ST-FACE-CLUTCH': stress('content/kinetics/transmission/ClutchBlockEntity.java の getRotationSpeedModifier'),
   'ST-FACE-SEQUENCED-GEARSHIFT': stress('content/kinetics/transmission/sequencer/SequencedGearshiftBlockEntity.java の getRotationSpeedModifier'),
   // 動力源
-  'ST-SOURCE-CREATIVE-MOTOR': stress('content/kinetics/motor/CreativeMotorBlockEntity.java の getGeneratedSpeed'),
+  'ST-SOURCE-CREATIVE-MOTOR': stress('content/kinetics/motor/CreativeMotorBlockEntity.java の getGeneratedSpeed', ABC),
   'ST-SOURCE-WATER-WHEEL': stress('content/kinetics/waterwheel/WaterWheelBlockEntity.java の getGeneratedSpeed'),
   'ST-SOURCE-WINDMILL': stress('content/contraptions/bearing/WindmillBearingBlockEntity.java の getGeneratedSpeed'),
   'ST-SOURCE-CRANK': stress('content/kinetics/crank/HandCrankBlockEntity.java の getGeneratedSpeed'),
@@ -121,7 +123,7 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'ST-PORT-ATTACH': app('このアプリの仮の入出力（#195）'),
   'ST-PORT-SIGN': app('このアプリの仮の入出力'),
   'ST-PORT-OUT-OF-RANGE': app('このアプリの仮の入出力'),
-  'ST-SETTING-SCROLL': stress('content/kinetics/motor/CreativeMotorBlockEntity.java・speedController/SpeedControllerBlockEntity.java の ScrollValue と範囲'),
+  'ST-SETTING-SCROLL': stress('content/kinetics/motor/CreativeMotorBlockEntity.java・speedController/SpeedControllerBlockEntity.java の ScrollValue と範囲', ABC),
   'ST-NBT-POS': stress('Minecraft の NbtUtils.writeBlockPos（1.20.5 から int 配列）'),
   // ---- 物の通り道・輸送量（create-throughput.md）。パスは Create の content/ から ----
   // 設定
