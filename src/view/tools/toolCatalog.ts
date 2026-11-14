@@ -24,6 +24,7 @@ export const TOOL_CATALOG: readonly ToolInfo[] = [
   { id: 'place', label: '置く', key: 'B', description: 'ブロックを置く・置き換える。ドラッグで一直線に置く', groupStart: true },
   { id: 'erase', label: '消す', key: 'E', description: 'ブロックを消す' },
   { id: 'pick', label: 'スポイト', key: 'I', description: 'クリックしたブロックを「置くブロック」にする' },
+  { id: 'belt', label: 'ベルト', key: 'L', description: 'シャフトを2本順にクリックして、その間にベルトを敷く' },
 ]
 
 /** ツールの情報を返す */
