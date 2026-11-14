@@ -722,7 +722,7 @@ interface CalcPlugin {
 interface CalcContext {
   pack: Modpack | null            // なければ内蔵の初期値で計算
   ports: VirtualPort[]            // このプラグイン宛ての仮の入出力
-  mode: 'saved' | 'running'       // 保存された状態か、動かしたときか（#243）。プラグインは扱う範囲で使う。create-stress.md「動かしたとき」
+  mode?: 'saved' | 'running'      // 保存された状態か、動かしたときか（#243）。省略は saved（画面は初めに running を渡す）。プラグインは扱う範囲で使う。create-stress.md「動かしたとき」
 }
 
 interface CalcResult {

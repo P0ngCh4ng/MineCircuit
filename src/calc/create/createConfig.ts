@@ -95,6 +95,10 @@ export interface CreateServerConfig {
   readonly disableStress: boolean | null
   readonly mediumSpeed: number | null
   readonly fastSpeed: number | null
+  /** 風車を組み立てられる帆の数の下限（`kinetics.minimumWindmillSails`。#243） */
+  readonly minimumWindmillSails: number | null
+  /** 風車の回転数を 1 RPM 上げるのに要る帆の数（`kinetics.windmillSailsPerRPM`。#243） */
+  readonly windmillSailsPerRPM: number | null
   /** ファンネルが取り出す間隔（tick。`logistics.defaultExtractionTimer`） */
   readonly extractionTimer: number | null
   /** プレスがスタックごと押すか（`recipes.bulkPressing`） */
@@ -139,6 +143,8 @@ export function readCreateServerConfig(text: string, path: string): CreateServer
     disableStress: bool('kinetics.disableStress'),
     mediumSpeed: num('kinetics.stats.mediumSpeed'),
     fastSpeed: num('kinetics.stats.fastSpeed'),
+    minimumWindmillSails: num('kinetics.minimumWindmillSails'),
+    windmillSailsPerRPM: num('kinetics.windmillSailsPerRPM'),
     extractionTimer: num('logistics.defaultExtractionTimer'),
     bulkPressing: bool('recipes.bulkPressing'),
     stressVersion: version,

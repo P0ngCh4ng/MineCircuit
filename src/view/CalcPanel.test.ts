@@ -5,6 +5,7 @@ import { blueprintFixture, state } from '../../tests/fixtures/blueprintFixture'
 import { noopCalcPlugin } from '../../tests/fixtures/noopCalcPlugin'
 import { InlineCalcBackend } from '../calc/calcScheduler'
 import { PluginRegistry } from '../calc/pluginRegistry'
+import type { CalcPlugin } from '../calc/calcPlugin'
 import { resolved } from '../calc/provenance'
 import { nbt } from '../domain/nbt'
 import { placeBlock } from '../edit/editCommand'
@@ -36,6 +37,17 @@ function sample() {
     .place([0, 0, 0], 'create:shaft', { axis: 'x' })
     .place([1, 0, 0], 'create:cogwheel', { axis: 'x' }, nbt.compound({ Broken: nbt.byte(1) }))
     .toBlueprint()
+}
+
+/** 受け取った見方（#243）を覚えるプラグイン */
+function modeEcho(seen: (string | undefined)[]): CalcPlugin {
+  return {
+    ...noopCalcPlugin(),
+    run: async (_bp, ctx) => {
+      seen.push(ctx.mode)
+      return { summary: [], issues: [], assumptions: [] }
+    },
+  }
 }
 
 describe('CalcPanel（右パネルの計算結果）', () => {
@@ -178,6 +190,40 @@ describe('CalcPanel（右パネルの計算結果）', () => {
     expect(useLayerStore().current).toBe(0)
     expect(useViewStore().hiddenLayers.has(0)).toBe(false)
     expect(useProbeStore().probedPos).toEqual([1, 0, 0])
+  })
+
+  it('見方を切り替えると計算し直す。初めは「動かしたとき」（#243）', async () => {
+    const seen: (string | undefined)[] = []
+    const { calc, wrapper } = setup([modeEcho(seen)])
+    await calc.attach(sample())
+    await flushPromises()
+    expect(seen).toEqual(['running'])
+    expect(wrapper.find('[data-mode="running"]').attributes('aria-checked')).toBe('true')
+    expect(wrapper.find('[data-mode="running"]').text()).toBe('動かしたとき')
+
+    await wrapper.find('[data-mode="saved"]').trigger('click')
+    await vi.advanceTimersByTimeAsync(100)
+    await flushPromises()
+    expect(calc.mode).toBe('saved')
+    expect(seen).toEqual(['running', 'saved'])
+    expect(wrapper.find('[data-mode="saved"]').attributes('aria-checked')).toBe('true')
+
+    // 同じ見方を押しても計算し直さない
+    await wrapper.find('[data-mode="saved"]').trigger('click')
+    await vi.advanceTimersByTimeAsync(100)
+    await flushPromises()
+    expect(seen).toHaveLength(2)
+  })
+
+  it('設計図がないときに見方を変えても計算しない。次に開いた設計図はその見方で計算する（#243）', async () => {
+    const seen: (string | undefined)[] = []
+    const { calc } = setup([modeEcho(seen)])
+    calc.setMode('saved')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(seen).toEqual([])
+    await calc.attach(sample())
+    await flushPromises()
+    expect(seen).toEqual(['saved'])
   })
 
   it('編集が止まってから計算し直す', async () => {

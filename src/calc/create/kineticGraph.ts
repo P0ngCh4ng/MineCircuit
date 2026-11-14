@@ -8,7 +8,7 @@ import { DIRECTIONS, directionVector, oppositeDirection, type Direction } from '
 import type { RawNbt } from '../../domain/nbt'
 import { addVec3, type Vec3 } from '../../domain/vec3'
 import type { AssumptionLog } from '../assumptionLog'
-import type { CalcIssue, IssueSeverity } from '../calcPlugin'
+import type { CalcIssue, CalcMode, IssueSeverity } from '../calcPlugin'
 import { nbtBoolean, nbtNumber, nbtString } from '../nbtValues'
 import { PROVENANCES, candidate, resolved, type Provenance, type Resolved } from '../provenance'
 import type { VirtualPort } from '../virtualPort'
@@ -18,6 +18,14 @@ import {
   STEAM_ENGINE_BASE_SPEED,
   WATER_WHEEL_SPEED,
 } from './createDefaults'
+import {
+  glueBoxes,
+  runningSteamEngines,
+  runningWindmillSpeed,
+  type GlueBox,
+  type RunningEngine,
+  type WindmillSettings,
+} from './createRunning'
 import type { CreateValueResolver } from './createValueResolver'
 import {
   axisIndex,
@@ -43,6 +51,17 @@ export interface KineticSource {
   readonly speed: Resolved<number>
   /** SU/RPM */
   readonly capacity: Resolved<number>
+  /** 動かしたときの蒸気エンジン。ほかの動力源と向きがぶつかるなら裏返す（ST-RUN-STEAM-FLIP） */
+  readonly flippable?: boolean
+}
+
+/** 動かしたとき（#243）に動力源を決めるのに使うもの */
+interface RunningContext {
+  readonly bp: Blueprint
+  /** 軸の位置ごとの蒸気エンジン */
+  readonly engines: ReadonlyMap<string, RunningEngine>
+  readonly glue: readonly GlueBox[]
+  readonly windmill: WindmillSettings
 }
 
 export interface KineticNode {
@@ -187,14 +206,29 @@ export class KineticGraph {
 
   /**
    * 設計図からノードと辺を作る。仮定（範囲外、nbt がない動力源など）は log に足す。
-   * ports は 'create-stress' 宛ての仮の入出力。
+   * ports は 'create-stress' 宛ての仮の入出力。mode は見方（#243。docs/create-stress.md「動かしたとき」）。
    */
-  static build(bp: Blueprint, ports: readonly VirtualPort[], values: CreateValueResolver, log: AssumptionLog): KineticGraph {
+  static build(
+    bp: Blueprint,
+    ports: readonly VirtualPort[],
+    values: CreateValueResolver,
+    log: AssumptionLog,
+    mode: CalcMode = 'saved',
+  ): KineticGraph {
     const nodes: KineticNode[] = []
     const byPos = new Map<string, number>()
     const blockEntities: (RawNbt | null)[] = []
     const issues: CalcIssue[] = []
     const mediumSpeed = values.mediumSpeed().value
+    const running: RunningContext | null =
+      mode === 'running'
+        ? {
+            bp,
+            engines: runningSteamEngines(bp, log),
+            glue: glueBoxes(bp),
+            windmill: { minimumSails: values.minimumWindmillSails().value, sailsPerRPM: values.windmillSailsPerRPM().value },
+          }
+        : null
 
     // 1. ノードを作る（リージョンが重なる位置は先のリージョンを使う）
     for (const region of bp.regions) {
@@ -202,7 +236,7 @@ export class KineticGraph {
         const pos = addVec3([x, y, z], region.offset)
         const key = posKey(pos)
         if (byPos.has(key) || bp.locate(pos)?.region !== region) return
-        const node = makeNode(pos, state, be, values, log, mediumSpeed, issues)
+        const node = makeNode(pos, state, be, values, log, mediumSpeed, issues, running)
         if (!node) return
         byPos.set(key, nodes.length)
         nodes.push(node)
@@ -391,11 +425,11 @@ export class KineticGraph {
     for (const g of order) {
       solved[g] = true
       if (broken[g]) continue
-      const candidates: { x: number; source: Provenance; pos: Vec3 }[] = []
+      const candidates: { x: number; source: Provenance; pos: Vec3; flippable: boolean }[] = []
       for (const m of groups[g]) {
         const src = this.nodes[m].source
         if (!src || src.speed.value === 0 || k[m] === 0) continue
-        candidates.push({ x: src.speed.value / k[m], source: src.speed.source, pos: this.nodes[m].pos })
+        candidates.push({ x: src.speed.value / k[m], source: src.speed.source, pos: this.nodes[m].pos, flippable: src.flippable === true })
       }
       for (const link of incoming[g]) {
         const input = group[link.controller]
@@ -406,9 +440,17 @@ export class KineticGraph {
           x: link.target.value / k[link.cog],
           source: weakerSource(link.target.source, factorSource[input]),
           pos: this.nodes[link.cog].pos,
+          flippable: false,
         })
       }
       if (candidates.length === 0) continue
+      // 動かしたときの蒸気エンジンは、ほかの動力源の向きに合わせて裏返す（ST-RUN-STEAM-FLIP）
+      const lead = candidates.find((c) => !c.flippable) ?? candidates[0]
+      for (const c of candidates) {
+        if (!c.flippable || Math.sign(c.x) === Math.sign(lead.x)) continue
+        c.x = -c.x
+        this.log.add('蒸気エンジンの向きを、つながるほかの動力源に合わせて裏返した', c.pos)
+      }
       const sign = Math.sign(candidates[0].x)
       if (candidates.some((c) => Math.sign(c.x) !== sign)) {
         for (const c of candidates) addIssue(c.pos, '動力源の回転の向きがぶつかっています。ゲームではブロックが壊れます。')
@@ -702,6 +744,7 @@ function makeNode(
   log: AssumptionLog,
   mediumSpeed: number,
   issues: CalcIssue[],
+  running: RunningContext | null,
 ): KineticNode | null {
   const ns = state.id.namespace
   const path = state.id.path
@@ -727,7 +770,7 @@ function makeNode(
     shape,
     impact: values.impact(path),
     fixedStress: null,
-    source: makeSource(path, be, negativeFacing, values, log, pos),
+    source: makeSource(path, state, be, negativeFacing, values, log, pos, running, issues),
     minSpeed: path === 'mechanical_mixer' || path === 'display_board' ? mediumSpeed : 0,
     portId: null,
   }
@@ -736,12 +779,24 @@ function makeNode(
 /** 動力源の生む回転数と容量（docs/create-stress.md「動力源の回転数」）。動力源でなければ null */
 function makeSource(
   path: string,
+  state: BlockState,
   be: RawNbt | null,
   negativeFacing: boolean,
   values: CreateValueResolver,
   log: AssumptionLog,
   pos: Vec3,
+  running: RunningContext | null,
+  issues: CalcIssue[],
 ): KineticSource | null {
+  // 動かしたとき（#243）。生データで回っている風車と、エンジンの向いていない軸は保存された状態と同じ
+  if (running && path === 'windmill_bearing') {
+    const speed = runningWindmillSpeed(running.bp, pos, state, be, running.windmill, running.glue, log, issues)
+    if (speed !== null) return { speed: resolved(speed === 0 ? 0 : speed, 'assumed'), capacity: values.capacity(path) }
+  }
+  if (running && (path === 'powered_shaft' || path === 'shaft')) {
+    const engine = running.engines.get(posKey(pos))
+    if (engine) return { ...steamSource(engine.efficiency, engine.direction, 'create:steam_engine', 'assumed', values), flippable: true }
+  }
   if (path === 'creative_motor') {
     const scroll = nbtNumber(be, 'ScrollValue')
     const base = scroll === null ? resolved(DEFAULT_SCROLL_SPEED, 'builtin') : resolved(scroll, 'blueprint')
@@ -784,17 +839,27 @@ function makeSource(
       log.add('蒸気エンジンの状態（EnginePower・Direction）がないので、止まっているとみなした', pos)
       return { speed: resolved(0, 'assumed'), capacity: resolved(0, 'assumed') }
     }
-    if (efficiency <= 0 || direction === 0) return { speed: resolved(0, 'blueprint'), capacity: resolved(0, 'blueprint') }
-    const k = efficiency >= 1 ? 4 : 1 + Math.min(2, Math.floor(efficiency * 4))
-    const engineType = nbtString(be, 'EngineType') ?? 'create:steam_engine'
-    const engineName = engineType.startsWith('create:') ? engineType.slice('create:'.length) : engineType
-    const base = values.capacity(engineName)
-    return {
-      speed: resolved(Math.sign(direction) * STEAM_ENGINE_BASE_SPEED * k, 'blueprint'),
-      capacity: resolved((efficiency * base.value) / k, weakerSource('blueprint', base.source)),
-    }
+    return steamSource(efficiency, direction, nbtString(be, 'EngineType') ?? 'create:steam_engine', 'blueprint', values)
   }
   return null
+}
+
+/** 蒸気エンジンの回す軸の回転数と容量（ST-SOURCE-STEAM-ENGINE） */
+function steamSource(
+  efficiency: number,
+  direction: number,
+  engineType: string,
+  source: Provenance,
+  values: CreateValueResolver,
+): KineticSource {
+  if (efficiency <= 0 || direction === 0) return { speed: resolved(0, source), capacity: resolved(0, source) }
+  const k = efficiency >= 1 ? 4 : 1 + Math.min(2, Math.floor(efficiency * 4))
+  const engineName = engineType.startsWith('create:') ? engineType.slice('create:'.length) : engineType
+  const base = values.capacity(engineName)
+  return {
+    speed: resolved(Math.sign(direction) * STEAM_ENGINE_BASE_SPEED * k, source),
+    capacity: resolved((efficiency * base.value) / k, weakerSource(source, base.source)),
+  }
 }
 
 /** 仮の入出力のノード。付けたブロック（node）と同じ所で、同じ軸・同じ向きに回る（#195） */

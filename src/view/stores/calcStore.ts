@@ -4,7 +4,14 @@
 import { defineStore } from 'pinia'
 import { computed, markRaw, ref, shallowRef } from 'vue'
 import { createBuiltinRegistry } from '../../calc/builtinPlugins'
-import { issueSeverity, type CalcItemMove, type CalcModpack, type CalcRotation, type IssueSeverity } from '../../calc/calcPlugin'
+import {
+  issueSeverity,
+  type CalcItemMove,
+  type CalcMode,
+  type CalcModpack,
+  type CalcRotation,
+  type IssueSeverity,
+} from '../../calc/calcPlugin'
 import {
   CalcScheduler,
   InlineCalcBackend,
@@ -29,6 +36,8 @@ export const useCalcStore = defineStore('calc', () => {
   const hasBlueprint = ref(false)
   /** 仮の入出力。画面からは portStore（#70）を通して変える。.mcircuit.json への保存は後の Issue */
   const ports = shallowRef<readonly VirtualPort[]>([])
+  /** 見方（#243）。初めは「動かしたとき」。アプリ全体で1つで、設計図には書かない */
+  const mode = ref<CalcMode>('running')
 
   // 設計図・Modpack・計算の仕組みは画面の状態ではないので、リアクティブにしない
   let blueprint: Blueprint | null = null
@@ -37,7 +46,7 @@ export const useCalcStore = defineStore('calc', () => {
   let disconnect: (() => void) | null = null
 
   function request(): CalcRequest | null {
-    return blueprint ? { blueprint, pack, ports: ports.value } : null
+    return blueprint ? { blueprint, pack, ports: ports.value, mode: mode.value } : null
   }
 
   /** 計算の仕組みを差し替える。テストでは InlineCalcBackend を渡す */
@@ -94,6 +103,13 @@ export const useCalcStore = defineStore('calc', () => {
     if (blueprint) ensureScheduler().schedule(request)
   }
 
+  /** 見方を変えたら計算し直す */
+  function setMode(value: CalcMode): void {
+    if (mode.value === value) return
+    mode.value = value
+    if (blueprint) ensureScheduler().schedule(request)
+  }
+
   /** すぐ計算し直す */
   function recalculate(): Promise<void> {
     return ensureScheduler().runNow(request)
@@ -133,6 +149,7 @@ export const useCalcStore = defineStore('calc', () => {
     error,
     hasBlueprint,
     ports,
+    mode,
     issuePositions,
     issueCounts,
     rotations,
@@ -141,6 +158,7 @@ export const useCalcStore = defineStore('calc', () => {
     attach,
     setPack,
     setPorts,
+    setMode,
     recalculate,
   }
 })

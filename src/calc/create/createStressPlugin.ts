@@ -93,7 +93,7 @@ export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<
     log.add(`create-server.toml が ${lookup.candidates.length} つあるので、${lookup.config.path} を使った`)
   }
   const values = new CreateValueResolver(lookup.config)
-  const graph = KineticGraph.build(bp, ctx.ports, values, log)
+  const graph = KineticGraph.build(bp, ctx.ports, values, log, ctx.mode ?? 'saved')
   const maxRotationSpeed = values.maxRotationSpeed()
   const disableStress = values.disableStress()
   const evaluation = graph.evaluate({ maxRotationSpeed: maxRotationSpeed.value, disableStress: disableStress.value })

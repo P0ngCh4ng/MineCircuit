@@ -36,8 +36,8 @@ describe('ブロックの一覧', () => {
       for (const n of m[1]!.matchAll(/'([a-z0-9_]+)'/g)) names.add(n[1]!)
     }
     Object.keys({ ...DEFAULT_IMPACT, ...DEFAULT_CAPACITY }).forEach((n) => names.add(n))
-    // ブロックではない名前（レシピの種類など）は除く
-    const notBlocks = new Set(['air'])
+    // ブロックではない名前（レシピの種類、エンティティなど）は除く
+    const notBlocks = new Set(['air', 'super_glue'])
     const missing = [...names].filter((n) => !notBlocks.has(n) && !ALL_BLOCK_IDS.has(`create:${n}`))
     expect(missing).toEqual([])
   })

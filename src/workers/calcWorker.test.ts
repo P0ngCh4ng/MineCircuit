@@ -36,6 +36,17 @@ const bp = blueprintFixture()
   .place([1, 0, 0], 'minecraft:stone')
   .toBlueprint()
 
+/** 受け取った見方（#243）を合計に出すプラグイン */
+function modeEcho(seen: (string | undefined)[] = []): CalcPlugin {
+  return {
+    ...noopCalcPlugin(),
+    run: async (_bp, ctx) => {
+      seen.push(ctx.mode)
+      return { summary: [{ label: '見方', value: resolved(ctx.mode ?? '', 'builtin') }], issues: [], assumptions: [] }
+    },
+  }
+}
+
 describe('計算の Worker', () => {
   it('設計図を写して送り、Worker の中のプラグインの結果を受け取る', async () => {
     const backend = new WorkerCalcBackend(fakeWorker(new PluginRegistry([noopCalcPlugin()])))
@@ -50,6 +61,14 @@ describe('計算の Worker', () => {
     if (o.status !== 'ok') return
     expect(o.result.summary[0]).toEqual({ label: 'ブロック数', value: { value: '2', source: 'blueprint' } })
     expect(o.result.assumptions.map((a) => a.message)).toContain('仮の入出力 test-source を使った')
+  })
+
+  it('見方（#243）を Worker の中のプラグインに渡す', async () => {
+    const seen: (string | undefined)[] = []
+    const backend = new WorkerCalcBackend(fakeWorker(new PluginRegistry([modeEcho(seen)])))
+    await backend.run({ blueprint: bp, pack: null, ports: [], mode: 'running' })
+    await backend.run({ blueprint: bp, pack: null, ports: [] })
+    expect(seen).toEqual(['running', 'saved'])
   })
 
   it('Worker の中から Modpack の設定ファイルを画面側に問い合わせる', async () => {

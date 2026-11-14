@@ -2,6 +2,7 @@
 
 import type { BlueprintSnapshot } from '../calc/blueprintSnapshot'
 import type { RecipeBook } from '../io/modpack/recipes'
+import type { CalcMode } from '../calc/calcPlugin'
 import type { PluginOutcome } from '../calc/pluginRegistry'
 import type { VirtualPort } from '../calc/virtualPort'
 
@@ -18,6 +19,8 @@ export type ToCalcWorker =
       readonly requestId: number
       readonly blueprint: BlueprintSnapshot
       readonly ports: readonly VirtualPort[]
+      /** 見方。省略は saved */
+      readonly mode?: CalcMode
       /** Modpack がなければ null */
       readonly pack: PackInfo | null
     }

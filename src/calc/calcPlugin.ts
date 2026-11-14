@@ -36,12 +36,22 @@ export interface CalcModpack {
   recipeBook?(): Promise<RecipeBook>
 }
 
+/**
+ * 計算の見方（#243。docs/create-stress.md「動かしたとき」）。
+ * saved は保存された状態のまま、running は止まっている動力源を設計図の中身から動かしたものとして計算する
+ */
+export type CalcMode = 'saved' | 'running'
+
+export const CALC_MODES: readonly CalcMode[] = ['running', 'saved']
+
 /** プラグインの run に渡すもの */
 export interface CalcContext {
   /** なければ内蔵の初期値で計算する */
   readonly pack: CalcModpack | null
   /** このプラグイン宛ての仮の入出力 */
   readonly ports: readonly VirtualPort[]
+  /** 見方。省略は saved。プラグインは扱う範囲で使う */
+  readonly mode?: CalcMode
 }
 
 /** 合計など、結果の上に出す値1つ分（「使用 2,048 SU / 供給 4,096 SU」） */

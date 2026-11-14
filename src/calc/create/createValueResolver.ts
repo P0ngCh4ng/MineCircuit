@@ -38,6 +38,16 @@ export class CreateValueResolver {
     return this.setting((c) => c.fastSpeed, DEFAULT_KINETICS.fastSpeed)
   }
 
+  /** 風車を組み立てられる帆の数の下限（#243） */
+  minimumWindmillSails(): Resolved<number> {
+    return this.setting((c) => c.minimumWindmillSails, DEFAULT_KINETICS.minimumWindmillSails)
+  }
+
+  /** 風車の回転数を 1 RPM 上げるのに要る帆の数（#243） */
+  windmillSailsPerRPM(): Resolved<number> {
+    return this.setting((c) => c.windmillSailsPerRPM, DEFAULT_KINETICS.windmillSailsPerRPM)
+  }
+
   /** ファンネルが取り出す間隔（tick）。docs/create-throughput.md「設定ファイルの項目」 */
   extractionTimer(): Resolved<number> {
     return this.setting((c) => c.extractionTimer, DEFAULT_LOGISTICS.extractionTimer)
