@@ -37,6 +37,7 @@ function tpApp(source: string): Rule {
   return { doc: THROUGHPUT, source, stages: ['B'] }
 }
 
+const BELT_ITEM = 'content/kinetics/belt/item/BeltConnectorItem.java'
 const KINETIC_BLOCK = 'content/kinetics/**/*Block.java の getRotationAxis・hasShaftTowards'
 
 export const RULES: Readonly<Record<string, Rule>> = {
@@ -296,4 +297,18 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'PL-DEFAULT-PROBLEM': app('このアプリの決めごと（補えないとき、#149）'),
   'PL-DEFAULT-SCOPE': app('このアプリの決めごと（補うブロック、#149）'),
   'PL-BASIC-BLOCKS': app('このアプリの決めごと（基本の部品、#162）'),
+  // ベルトをつなぐ（#248）
+  'PL-BELT-SHAFT': stress(`${BELT_ITEM} の validateAxis、simpleRelays/ShaftBlock.java の isShaft`),
+  'PL-BELT-LENGTH': stress(`${BELT_ITEM} の canConnect（closerThan）、infrastructure/config/CKinetics.java の maxBeltLength`),
+  'PL-BELT-AXIS': stress(`${BELT_ITEM} の canConnect`),
+  'PL-BELT-LINE': stress(`${BELT_ITEM} の canConnect（sames）`),
+  'PL-BELT-SPEED': stress(`${BELT_ITEM} の canConnect（getTheoreticalSpeed）`),
+  'PL-BELT-BETWEEN': stress(`${BELT_ITEM} の canConnect、Minecraft の Material.isReplaceable（6.0 は canBeReplaced）`),
+  'PL-BELT-SAME': stress(`${BELT_ITEM} の useOn`),
+  'PL-BELT-SLOPE': stress(`${BELT_ITEM} の getSlopeBetween・createBelts`),
+  'PL-BELT-FACING': stress(`${BELT_ITEM} の getFacingFromTo・createBelts・getBeltChainBetween`),
+  'PL-BELT-PART': stress(`${BELT_ITEM} の createBelts`),
+  'PL-BELT-WATER': stress(`${BELT_ITEM} の createBelts（ProperWaterloggedBlock.withWater）`),
+  'PL-BELT-NBT': stress('content/kinetics/belt/BeltBlock.java の initBelt、BeltBlockEntity.java の write'),
+  'PL-BELT-NBT-ORIGIN': app('このアプリの決めごと（ベルトの Controller を設計図の中の位置で書く、#248）'),
 }

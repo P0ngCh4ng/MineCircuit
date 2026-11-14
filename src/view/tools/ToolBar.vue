@@ -17,6 +17,7 @@ const ICONS: Record<ToolId, string[]> = {
   place: ['M10 2.5l6.5 3.5v8L10 17.5 3.5 14V6z', 'M10 7v6M7 10h6'],
   erase: ['M10 2.5l6.5 3.5v8L10 17.5 3.5 14V6z', 'M7.5 7.5l5 5M12.5 7.5l-5 5'],
   pick: ['M13.5 3.5l3 3-2 2-3-3z', 'M11.5 5.5l-7 7-1 4 4-1 7-7'],
+  belt: ['M5 10m-2.5 0a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M15 10m-2.5 0a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0', 'M5 7.5h10M5 12.5h10'],
 }
 
 function title(tool: ToolInfo): string {

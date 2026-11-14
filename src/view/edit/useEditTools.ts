@@ -6,10 +6,12 @@ import { eraseBlock } from '../../edit/editCommand'
 import { useDocumentSession } from '../document/documentSession'
 import { layerVisibility } from '../layers/layerDisplay'
 import { useBrushStore } from '../stores/brushStore'
+import { useCalcStore } from '../stores/calcStore'
 import { useLayerStore } from '../stores/layerStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
 import type { EditToolContext } from '../tools/editToolContext'
+import { BeltTool } from '../tools/beltTool'
 import { EraseTool } from '../tools/eraseTool'
 import { PickTool } from '../tools/pickTool'
 import { PlaceTool } from '../tools/placeTool'
@@ -86,6 +88,11 @@ export function useEditTools(): EditKeyActions {
   tools.register(new PlaceTool(ctx))
   tools.register(new EraseTool(ctx))
   tools.register(new PickTool(ctx))
+  // ベルトのツール（#248）。逆向きに回るシャフトどうしを外すのに、最後の計算の回転数を使う
+  const calc = useCalcStore()
+  tools.register(
+    new BeltTool(ctx, (pos) => calc.rotations.find((r) => r.pos[0] === pos[0] && r.pos[1] === pos[1] && r.pos[2] === pos[2])?.rpm ?? null),
+  )
 
   return {
     deleteSelected() {

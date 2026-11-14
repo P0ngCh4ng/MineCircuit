@@ -660,6 +660,29 @@ Create の `KineticNetwork.calculateCapacity` は、動力源の **生む回転�
 - `PL-HELPER-MIXED` 大きさが違う：軸に垂直な向きのうち一番近い向きと、それと別の軸の向きを足した斜めに、同じ軸で置く。
 - `PL-HELPER-SKIP` 歯車の真ん中の軸（太さ 6 画素の柱）に当たったとき、置くものかクリックしたものが歯車でないとき、置ける位置がないときは使わない（ふつうに面の隣に置く）。
 
+### ベルトをつなぐ（#248）
+
+ゲームでベルトをシャフト2本に使ったとき（`content/kinetics/belt/item/BeltConnectorItem.java` の `useOn`・`canConnect`・`createBelts`、`BeltBlock.initBelt`。0.5.1（Fabric）と 6.0 で同じ）の規則。画面の操作は docs/ui.md「ツール」のベルト（L）。規則は `calc/create/createBeltConnector.ts`、書き込みは編集の操作 `replaceCells`。
+
+つなげるか（`canConnect`）：
+
+- `PL-BELT-SHAFT` 選べるのは `create:shaft` だけ（`ShaftBlock.isShaft`）。ケース入りのシャフトや歯車は選べない。
+- `PL-BELT-LENGTH` 2本の距離（ブロックの位置の差の長さ）が `kinetics.maxBeltLength`（初期値 20）より短いこと。ちょうど 20 はつなげない。Modpack の設定はまだ読まず、初期値を使う。
+- `PL-BELT-AXIS` 2本の `axis` が同じで、軸の向きの差が 0（軸に垂直な同じ面の上にある）こと。
+- `PL-BELT-LINE` 差の絶対値（x・y・z）のうち、等しい組がちょうど1組（まっすぐか 45 度の斜め）。縦のシャフト（`axis=y`）は、x と z の両方がずれるとつなげない（水平にまっすぐだけ）。
+- `PL-BELT-SPEED` 2本の回転数が両方とも 0 でなく、符号が逆ならつなげない（`getTheoreticalSpeed`）。アプリでは最後の計算の回転数（過負荷で止まる前の値）を使う。計算の結果がないシャフトは調べない。
+- `PL-BELT-BETWEEN` 間のマス（1本目から 1 マスずつ2本目へ）は、同じ軸のシャフトか、置き換えられるブロック（空きマス・空気・水・溶岩・草・シダ・枯れ木・ツタ・ヒカリゴケ・海草・雪・火など。Minecraft の `isReplaceable`）であること。設計図の外（リージョンのすき間）もつなげない。
+- `PL-BELT-SAME` 同じシャフトを2回選んだときは、何もしない（ゲームでは1本目の選択が消える）。
+
+敷くベルト（`createBelts`）：
+
+- `PL-BELT-SLOPE` 高さが同じなら `horizontal`、真上・真下なら `vertical`、斜めなら上るとき `upward`、下るとき `downward`。全部の区間で同じ。ただし縦のシャフトに掛けたときは `sideways`。
+- `PL-BELT-FACING` 1本目から2本目へ水平に進む向き。縦（`vertical`）のときは、シャフトに垂直な水平の軸（シャフトが x なら z、それ以外は x）の、上へ向かうなら正・下へなら負の向き。区間は1本目から `facing`（と傾き）の向きに1つずつ並べる（`getBeltChainBetween`。計算の `BeltBlock.nextSegmentPosition` と同じ並び）。
+- `PL-BELT-PART` 1本目が `start`、2本目が `end`、間は `middle`。間にシャフトがあれば `pulley`。端と間のシャフトはベルトの区間に置き換わる（ベルトが軸の口を持つ。上の「7. ベルト」）。
+- `PL-BELT-WATER` 水の源（`minecraft:water` の `level=0`、泡の柱、`waterlogged=true` のブロック）があるマスの区間は `waterlogged=true`。ほかは `false`。`casing` は `false`。状態のプロパティは5つ（`casing`・`facing`・`part`・`slope`・`waterlogged`）を全部書く。
+- `PL-BELT-NBT` 区間の生データは、ゲームが置いたあとに書くもの（`initBelt` と `BeltBlockEntity.write`）：`id`（`create:belt`）、`Controller`（始めの区間の位置）、`IsController`（始めの区間だけ 1）、`Length`（区間の数）、`Index`（始めからの番号、0 始まり）、`Casing`（`NONE`）、`Covered`（0）。位置の書き方は `TF-NBT-POS-FORM` と同じく、データの版が 1.20.5（3837）以上なら int 配列、それより前は `{X, Y, Z}`。回転数（`Speed`）と中身（`Inventory`）は書かない（ゲームが決め直す。空の中身として読まれる）。もとのシャフトの生データは消える。
+- `PL-BELT-NBT-ORIGIN` このアプリが決めた規則。`Controller` はワールドの位置だが、設計図の外のことは分からないので、設計図の中の位置（設計図の角を 0 とする）で書く。計算は `Controller` を使わずブロック状態から区間を組み立て、スキーマティキャノンもベルトを組み直す（`TF-NBT-BELT-CONTROLLER`）。
+
 ### 足りない状態を補う（#149）
 
 このアプリが決めた規則。ID だけで選んだブロックに、回転軸を決めるプロパティを足す。

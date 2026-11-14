@@ -117,6 +117,38 @@ export function placeBlocks(bp: Blueprint, cells: readonly Vec3[], state: BlockS
   return { label: `${blockName(state)} を一直線に置く（${changes.length} 個）`, changes }
 }
 
+/**
+ * いくつかのマスを、決めた中身（ブロック状態と生データ）に書き換える操作を作る（ベルトをつなぐ。#248）。
+ * 1回の「元に戻す」で全部戻る。before は今の中身から取り直す（呼ぶ側が持っている値は使わない）。
+ * どれかが範囲の外なら、何も変えず null。今と同じ中身のマスは飛ばし、変わるマスがなければ null
+ */
+export function replaceCells(
+  bp: Blueprint,
+  cells: readonly { readonly pos: Vec3; readonly after: CellValue }[],
+  label: string,
+): EditCommand | null {
+  const changes: CellChange[] = []
+  const seen = new Set<string>()
+  for (const { pos, after } of cells) {
+    const key = pos.join(',')
+    if (seen.has(key)) continue
+    seen.add(key)
+    const before = currentCell(bp, pos)
+    if (!before) return null
+    if (sameCell(before, after)) continue
+    changes.push({ pos, before, after })
+  }
+  return changes.length === 0 ? null : { label, changes }
+}
+
+function sameCell(a: CellValue, b: CellValue): boolean {
+  if (a.state === null || b.state === null) {
+    if (a.state !== b.state) return false
+  } else if (!a.state.equals(b.state)) return false
+  if (a.blockEntity === null || b.blockEntity === null) return a.blockEntity === b.blockEntity
+  return nbtEquals(a.blockEntity, b.blockEntity)
+}
+
 /** pos のブロックを消す操作を作る。空きか範囲の外なら null */
 export function eraseBlock(bp: Blueprint, pos: Vec3): EditCommand | null {
   const before = currentCell(bp, pos)

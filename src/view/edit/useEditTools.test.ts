@@ -44,10 +44,10 @@ afterEach(() => {
 })
 
 describe('編集のツール', () => {
-  it('置く・消す・スポイトのボタンが使え、B / E / I で切り替わる', async () => {
+  it('置く・消す・スポイト・ベルトのボタンが使え、B / E / I / L で切り替わる', async () => {
     const { wrapper, tools } = mountApp()
     await nextTick()
-    for (const id of ['place', 'erase', 'pick']) {
+    for (const id of ['place', 'erase', 'pick', 'belt']) {
       expect(wrapper.get(`[data-tool="${id}"]`).attributes('disabled')).toBeUndefined()
     }
     press('b')
@@ -56,6 +56,8 @@ describe('編集のツール', () => {
     expect(tools.activeToolId).toBe('erase')
     press('i')
     expect(tools.activeToolId).toBe('pick')
+    press('l')
+    expect(tools.activeToolId).toBe('belt')
   })
 
   it('スポイトで取ったブロックを置き、R は置くツールのとき置くブロックを回す', async () => {
