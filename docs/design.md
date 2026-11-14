@@ -381,6 +381,8 @@ function rotateBlock(bp: Blueprint, pos: Vec3, vertical: boolean): EditCommand |
 function setBlockProperty(bp: Blueprint, pos: Vec3, name: string, value: string): EditCommand | null
 // 生データの項目 key を tag にする。生データがなければ initial の写しから作る
 function setBlockEntityTag(bp: Blueprint, pos: Vec3, key: string, tag: NbtTag, initial: RawNbt | null, label: string | null): EditCommand | null
+// いくつかのマスを決めた中身（状態と生データ）に書き換える（ベルトをつなぐ。#248）。1回で全部戻る
+function replaceCells(bp: Blueprint, cells: { pos: Vec3; after: CellValue }[], label: string): EditCommand | null
 // 範囲の操作は下の「範囲の編集」
 ```
 
@@ -388,6 +390,7 @@ function setBlockEntityTag(bp: Blueprint, pos: Vec3, key: string, tag: NbtTag, i
 - 回転では生データ（nbt）をそのまま引き継ぐ。ブロック状態の項目を直す操作（`setBlockProperty`）も同じ
 - 右パネルでブロック状態の値を選ぶときの候補（`edit/propertyChoices.ts`）。Modpack があれば、ブロック状態の定義から読んだ取りうる値（`propertyValueOptionsFor`）。なければ、よく使う項目だけ一般の値（`axis`：x・y・z、`facing`：6方向、`horizontal_facing`：水平の4方向、`true`・`false` の項目：その2つ）。どちらでも分からない項目は、文字を打って直す。今の値は候補になくても必ず入れる
 - 生データの項目を変える操作は、元の生データを書き換えず、写しを作って項目だけを差し替える。元に戻すと元の生データ（同じもの）を書き戻す。どのブロックのどの項目を変えられるか、生データがないときに何を入れるかは、Mod ごとの知識なので calc に置く（`calc/blockSettings.ts` の `blockSettingsFor`）。画面はそれを表示するだけ
+- ベルトをつなぐ（#248）：どのマスに何を置くか（つなげるか、区間のブロック状態と生データ）は Create の知識なので calc に置く（`calc/create/createBeltConnector.ts` の `planBeltConnection`。規則は docs/create-stress.md「ベルトをつなぐ」）。ベルトのツール（`view/tools/beltTool.ts`）がそれを `replaceCells` にして書き込む。`replaceCells` は before を今の中身から取り直し、どれかのマスが範囲の外なら何も変えない
 - 置くツールで枠のすぐ外へ置くときは、そのマスが入るように広げる（`placeGrowing`、下の「設計図の大きさを変える（#191）」）。それより外は受け付けない
 
 ### 範囲の編集（#129）
@@ -1013,7 +1016,7 @@ flowchart LR
 
 ```ts
 interface Tool {
-  readonly id: 'select' | 'measure' | 'network' | 'sameBlock' | 'probe' | 'port' | 'place' | 'erase' | 'pick'
+  readonly id: 'select' | 'measure' | 'network' | 'sameBlock' | 'probe' | 'port' | 'place' | 'erase' | 'pick' | 'belt'
   onHover(target: PickTarget | null): void
   onClick(target: PickTarget, mods: { shift: boolean }): void
 }

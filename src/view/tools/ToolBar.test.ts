@@ -33,6 +33,7 @@ describe('ToolBar', () => {
       'place',
       'erase',
       'pick',
+      'belt',
     ])
     expect(wrapper.get('[data-tool="select"]').attributes('aria-pressed')).toBe('true')
     expect(wrapper.get('[data-tool="measure"]').attributes('disabled')).toBeDefined()
