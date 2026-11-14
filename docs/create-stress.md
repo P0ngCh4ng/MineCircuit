@@ -351,8 +351,89 @@ Create はギアボックスなどの比を「どの面から回転が来たか�
 | `ST-SOURCE-CRANK` | `hand_crank` / `*_valve_handle` | 回している間だけ `(Backwards なら −1、それ以外は +1) × 32`。`facing` が負の向きなら符号を反転 | 回しているとみなし（仮定）、向きは nbt の `Backwards` |
 | `ST-SOURCE-STEAM-ENGINE` | `powered_shaft`（蒸気エンジン） | `Direction × 16 × k`。k = 効率が 1 以上なら 4、それ以外は `1 + min(2, floor(効率 × 4))` | nbt の `EnginePower`（効率）、`Direction`、`EngineType`。ないときは 0 とし、仮定に載せる |
 
-- 蒸気エンジンの容量（1 RPM あたり）は `効率 × capacity(EngineType) / k`。実際の容量は `効率 × 1024 × 16`（効率 1 で 16,384 SU）。効率はボイラー（流体タンク）の大きさと熱で決まり、最初の版ではタンクから計算しない。
-- 風車の帆は、組み立て中は仕掛けのエンティティになる。設計図に帆のブロックがあっても数えない（未確認事項）。
+- 蒸気エンジンの容量（1 RPM あたり）は `効率 × capacity(EngineType) / k`。実際の容量は `効率 × 1024 × 16`（効率 1 で 16,384 SU）。効率はボイラー（流体タンク）の大きさと熱で決まる。保存された状態ではタンクから計算せず、生データの `EnginePower` を使う。動かしたときはタンクから計算する（下の「動かしたとき」）。
+- 風車の帆は、組み立て中は仕掛けのエンティティになる。保存された状態では、設計図に帆のブロックがあっても数えない（未確認事項）。動かしたときは帆のブロックを数える（下の「動かしたとき」）。
+
+## 動かしたとき（#243）
+
+`ST-RUN-MODE` 計算には2つの見方がある。
+
+| 見方 | 動力源の状態 |
+| --- | --- |
+| 保存された状態 | 生データに保存された状態をそのまま使う（上の「動力源の回転数」）。冷えたまま保存したボイラーの蒸気エンジンや、組み立てる前の風車は止まっている |
+| 動かしたとき | 蒸気エンジンと風車を、設計図の中身から動かしたものとして計算する。ほかの動力源は保存された状態と同じ |
+
+- 水車とハンドルは、保存された状態でもすでに回っているとみなしている（`ST-SOURCE-WATER-WHEEL`・`ST-SOURCE-CRANK`）。クリエイティブモーターは設定値で回る。見方で変わるのは蒸気エンジンと風車だけ。
+- 初めは「動かしたとき」にする。アプリで作った設計図には保存された状態がないので、保存された状態では蒸気エンジンと風車がいつも止まるため。切り替えは docs/ui.md「右パネル」。
+- 動かしたときに推測で埋めた値は、すべて仮定に載せる。
+- 計算のほかの手順（つながり、速度比、応力の合計）は、2つの見方で同じ。
+
+### ボイラーと蒸気エンジン
+
+出典は `content/fluids/tank/BoilerData.java`・`BoilerHeaters.java`、`content/kinetics/steamEngine/SteamEngineBlockEntity.java`・`SteamEngineBlock.java`、`content/processing/burner/BlazeBurnerBlock.java`。2つの版で同じ（水の量の単位だけ違い、Fabric は 81 倍）。
+
+`ST-RUN-BOILER-TANK` ボイラーは、流体タンク（`fluid_tank`）の組1つ。組の主（一番小さい x・y・z の角）の生データに `Size`（幅）と `Height`（高さ）がある。組は、主から x・z に幅、y に高さの箱で、大きさは `幅 × 幅 × 高さ`（`FluidTankBlockEntity.getTotalTankSize`）。
+
+- 主の生データがない（アプリで置いたタンクなど）ときは、`bottom=true` から `top=true` まで縦に続く1列を、幅 1 のタンクとみなし、仮定に載せる。
+- 組が設計図の外にはみ出すときは、中にある分だけを大きさに数え、仮定に載せる（範囲外は空気とみなす規則と同じ考え）。
+
+`ST-RUN-BOILER-HEAT` 熱は、組の一番下の段の真下（幅 × 幅の位置）のブロックごとに決め、合計する（`BoilerData.updateTemperature`）。
+
+| 真下のブロック | 熱 |
+| --- | --- |
+| `blaze_burner`（`blaze=seething`） | 2 |
+| `blaze_burner`（`blaze=kindled`・`fading`） | 1 |
+| `blaze_burner`（`blaze=smouldering`） | 1。燃料を入れたとみなす（仮定）。ゲームでは燃料がないと弱い熱 |
+| `blaze_burner`（`blaze=none`） | なし |
+| `magma_block`・`lava`・`fire`・`soul_fire`、火のついた `campfire`・`soul_campfire`（`lit=true`） | 弱い熱（`passive_boiler_heaters` のタグ） |
+| ほか | なし |
+
+- 弱い熱は、ほかの熱（1 以上）が1つもないときだけ効く。
+
+`ST-RUN-BOILER-WATER` 水は足りているとみなし、水による段階の上限を 18 にする。仮定に載せる。ポンプと管から水の量を出すのは、まだしない（ゲームでは 1 段あたり毎 tick 10 mB）。
+
+`ST-RUN-BOILER-LEVEL` 段階 = `min(熱の合計, 水の上限 18, min(18, floor(大きさ / 4)))`（`BoilerData.getActualHeat`）。
+
+`ST-RUN-BOILER-ENGINES` 付いたエンジンは、組のどれかのタンクに面で接する蒸気エンジン（`steam_engine`）のうち、付いている向きが「タンクからエンジンへの向き」と同じもの（`BoilerData.evaluate`）。付いている向きは、`face=floor` なら上、`face=ceiling` なら下、`face=wall` なら `facing`（`SteamEngineBlock.getFacing`）。数を n とする。
+
+`ST-RUN-BOILER-EFFICIENCY` エンジン1台の効率（`BoilerData.getEngineEfficiency`）。0〜1 に収める。
+
+| 条件 | 効率 |
+| --- | --- |
+| 弱い熱だけで、大きさの上限と水の上限がどちらも 1 以上 | `(1 / 8) / n` |
+| 熱の合計が 0 | 0 |
+| n ≤ 段階 | 1 |
+| それ以外 | `段階 / n` |
+
+`ST-RUN-STEAM-SHAFT` エンジンが回す軸は、エンジンから付いている向きに2つ先のブロック（`SteamEngineBlock.getShaftPos`）。`powered_shaft` のほか、アプリで置いた `shaft` もエンジンの軸とみなす（ゲームでは置くと `powered_shaft` に変わる）。そこに軸がなければ、エンジンは何も回さない。
+
+`ST-RUN-STEAM-DIRECTION` 向き = a × b × c（`SteamEngineBlockEntity.tick`）。
+
+- a：効率が 0 か、軸が y なら +1。それ以外は、エンジンの向き（付いている向き。上か下なら `facing`）が正（east・up・south）なら +1、負なら −1
+- b：軸が z なら −1、それ以外は +1
+- c：エンジンの生データの `ScrollValue` が 1（反時計回り）なら −1、それ以外は +1
+
+回転数と容量は `ST-SOURCE-STEAM-ENGINE` の式に、この効率と向きを入れる。`EngineType` は `create:steam_engine`。
+
+`ST-RUN-STEAM-FLIP` ゲームは、軸がほかの動力源で逆向きに回っていると、エンジンの向きを裏返す（`ScrollValue` を変える）。動かしたときも、向きの衝突になるエンジンは裏返し、仮定に載せる。
+
+`ST-RUN-STEAM-ONE-PER-SHAFT` 1本の軸に2台以上のエンジンが向いているときは、1台だけを使う。軸の生データの `EnginePos` が指すエンジンがあればそれ、なければ位置の小さい順（x・y・z）で最初のもの。仮定に載せる（ゲームでは先に付いた1台。未確認事項）。
+
+### 風車
+
+出典は `content/contraptions/bearing/WindmillBearingBlockEntity.java`・`BearingContraption.java`、`content/contraptions/Contraption.java`（`moveBlock`）・`BlockMovementChecks.java`。2つの版で同じ。
+
+`ST-RUN-WINDMILL-SAVED` 生データで回っている（`Running` が true で `LastGenerated` がある）ときは、保存された状態と同じ回転数を使う。回している風車の帆はエンティティになり、設計図のブロックに残らないため。
+
+`ST-RUN-WINDMILL-SAILS` 帆の数は、軸受（`windmill_bearing`）の `facing` の先のブロックから、仕掛けとして一緒に動くブロックをたどって数える。帆は `windmill_sails` のタグのブロック（`sail_frame`・`white_sail`・色付きの `*_sail`・羊毛 `*_wool`）。たどるつながりは次のとおり。
+
+- 帆（`sail_frame`・`*_sail`）は、自分の `facing` の軸と違う向きの隣とつながる（`BlockMovementChecks.isBlockAttachedTowards`）
+- 接着剤（`super_glue` のエンティティ）の箱の中で隣り合うブロックはつながる
+- スライムブロック・ハチミツブロックは、隣とつながる
+
+ほかのつながり（シャーシ、ブロックの付き方など）はたどらないので、帆を少なく数えることがある。たどったときは仮定に載せる。軸受の真後ろ（`facing` の反対）はたどらない。
+
+`ST-RUN-WINDMILL-SPEED` 帆が `minimumWindmillSails`（初期値 8）より少なければ組み立てられないので 0 とし、問題に「帆が足りません」と出す。それ以外は `clamp(floor(帆の数 / windmillSailsPerRPM), 1, 16) × 向き`（`windmillSailsPerRPM` の初期値 8）。向きは、軸受の生データの `ScrollValue` が 1（反時計回り）なら −1、それ以外は +1。2つの設定は `create-server.toml` の `[kinetics]` にあれば使う。
 
 ## 計算の手順
 
@@ -699,6 +780,7 @@ ATM10（1.21.1）の未確認事項（Create の版、`defaultconfigs/` の値�
 - [ ] 1.21.1 の設計図で、`Source` などの位置が int 配列で入っているか（実物の .nbt で確認。手元に ATM10 がない）
 - [ ] 風車を回したまま保存した設計図に、帆（仕掛けのエンティティ）が入るか
 - [ ] 1本の `powered_shaft` に蒸気エンジンを2台付けたときの扱い（コードでは1台分の位置しか持たない）
+- [ ] 動かしたとき（#243）のボイラーと風車の回転数・容量が、ゲームで動かしたときと同じか
 - [ ] 速度コントローラーの出力側に、より速い動力源があるときの結果
 - [ ] ギアボックスの面の係数（この書類で順番によらない形に直したもの）が、輪になった配置でもゲームと一致するか
 - [ ] 例1〜6 がゲームと同じ結果になるか
@@ -731,6 +813,7 @@ docs/spec.md と docs/design.md の未確認事項のうち、この書類で答
 - `content/kinetics/belt/`（`BeltBlock`、`BeltBlockEntity`、`BeltPart`、`BeltSlope`）
 - `content/kinetics/speedController/SpeedControllerBlockEntity.java`
 - `content/kinetics/motor/CreativeMotorBlockEntity.java`、`waterwheel/`、`crank/`、`steamEngine/PoweredShaftBlockEntity.java`、`content/contraptions/bearing/WindmillBearingBlockEntity.java`
+- 動かしたとき：`content/fluids/tank/`（`BoilerData`、`BoilerHeaters`、`FluidTankBlockEntity`）、`content/kinetics/steamEngine/`（`SteamEngineBlock`、`SteamEngineBlockEntity`）、`content/processing/burner/BlazeBurnerBlock.java`、`content/contraptions/`（`Contraption`、`BlockMovementChecks`、`bearing/BearingContraption`、`glue/SuperGlueEntity`）、`infrastructure/data/CreateRegistrateTags.java`（タグ）
 - `content/kinetics/chainConveyor/ChainConveyorBlockEntity.java`
 - `infrastructure/config/`（`AllConfigs`、`CServer`、`CKinetics`、`CStress`）、`api/stress/BlockStressValues.java`
 - `AllBlocks.java`、`foundation/data/BuilderTransformers.java`
