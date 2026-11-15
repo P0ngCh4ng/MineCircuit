@@ -324,24 +324,48 @@ describe('物の通り道', () => {
     expect(at(off, '1,0,0')).toBeUndefined()
   })
 
-  it('[TP-ITEM-DRAIN] アイテムドレイン：入った面から反対の面へ 2.5 ブロック/秒で通り抜ける。レシピは読まないので物は変わらない（#233）', () => {
+  it('[TP-ITEM-DRAIN] アイテムドレイン：入った面から反対の面へ 2.5 ブロック/秒で通り抜け、液体のバケツは 20 tick 止まって空のバケツになる（#233・#235）', () => {
     const fx = belt(blueprintFixture({ size: [4, 1, 1] }), 0, 0, [0, 1], 'east')
       .place([2, 0, 0], 'create:item_drain')
       .place([3, 0, 0], 'minecraft:chest', chest)
     const { result, log } = trace(fx, [port([0, 0, 0], 'minecraft:water_bucket')], { '0,0,0': -24, '1,0,0': -24 })
-    expect(sinkOf(result, '3,0,0', 'minecraft:water_bucket')).toBe(1)
+    expect(sinkOf(result, '3,0,0', 'minecraft:bucket')).toBe(1)
     expect(result.moves.find((m) => m.to.join(',') === '3,0,0')?.seconds).toBe(0.4)
-    expect(messages(log)).toContain('アイテムドレインのレシピ（液体を抜く）は読まないので、物は変わらずに通るとした')
+    expect(result.moves.find((m) => m.to.join(',') === '2,0,0')?.hold).toBe(1)
+    expect(at(result, '2,0,0')?.recipes[0]).toMatchObject({
+      type: 'emptying',
+      input: 'minecraft:water_bucket',
+      outputs: [{ item: 'minecraft:bucket', rate: 1, source: 'virtual' }],
+    })
+    expect(at(result, '2,0,0')?.recipes[0]?.choice.duration).toEqual({ value: 20, source: 'builtin', note: 'バケツの液体を抜く' })
+    expect(messages(log)).toEqual([])
+    // 液体の入っていない物は、止まらずに通り抜ける
+    const stone = trace(fx, [port([0, 0, 0], 'minecraft:stone')], { '0,0,0': -24, '1,0,0': -24 })
+    expect(sinkOf(stone.result, '3,0,0', 'minecraft:stone')).toBe(1)
+    expect(stone.result.moves.find((m) => m.to.join(',') === '2,0,0')?.hold ?? 0).toBe(0)
   })
 
-  it('[TP-SPOUT] スパウト：2段上のスパウトの下で 20 tick 止まり、物は変わらずに進む（#233）', () => {
+  it('[TP-SPOUT] スパウト：2段上のスパウトの下で 20 tick 止まり、タンクの水を入れたガラス瓶は水入り瓶になる（#233・#235）', () => {
+    const water = nbt.compound({
+      Tanks: nbt.list('compound', [
+        nbt.compound({ TankContent: nbt.compound({ FluidName: nbt.string('minecraft:water'), Amount: nbt.int(1000) }) }),
+      ]),
+    })
     const fx = belt(blueprintFixture({ size: [4, 3, 1] }), 0, 0, [0, 1, 2], 'east')
-      .place([1, 2, 0], 'create:spout')
+      .place([1, 2, 0], 'create:spout', {}, water)
       .place([3, 0, 0], 'minecraft:chest', chest)
-    const { result } = trace(fx, [port([0, 0, 0], 'minecraft:glass_bottle')], { '0,0,0': -24, '1,0,0': -24, '2,0,0': -24 })
-    expect(sinkOf(result, '3,0,0', 'minecraft:glass_bottle')).toBe(1)
+    const speeds = { '0,0,0': -24, '1,0,0': -24, '2,0,0': -24 }
+    const { result, log } = trace(fx, [port([0, 0, 0], 'minecraft:glass_bottle')], speeds)
+    expect(sinkOf(result, '3,0,0', 'minecraft:potion')).toBe(1)
     expect(result.moves.find((m) => m.to.join(',') === '1,0,0')?.hold).toBe(1)
     expect(rateOf(result, '1,2,0', 'minecraft:glass_bottle')).toBe(1)
+    expect(at(result, '1,2,0')?.recipes[0]).toMatchObject({ type: 'filling', input: 'minecraft:glass_bottle' })
+    expect(messages(log)).toEqual([])
+    // 液体を入れられない物は、止まらずに通る
+    const stone = trace(fx, [port([0, 0, 0], 'minecraft:stone')], speeds)
+    expect(sinkOf(stone.result, '3,0,0', 'minecraft:stone')).toBe(1)
+    expect(stone.result.moves.find((m) => m.to.join(',') === '1,0,0')?.hold ?? 0).toBe(0)
+    expect(at(stone.result, '1,2,0')?.notes).toContain('minecraft:stone には minecraft:water を入れられないので、物は変わらずに通る')
   })
 
   it('[TP-PATH-MOTIONS] 物の動き：物の入口がなければ何も出さない（#231）', () => {
@@ -1487,5 +1511,100 @@ describe('扇風機の処理（#235）', () => {
     const fast = trace(fx, [port([2, 0, 0], 'minecraft:gravel')], speeds(-32), FAN_BOOK)
     expect(sinkOf(fast.result, '10,0,0', 'minecraft:gravel')).toBe(1)
     expect(at(fast.result, '9,0,0')?.notes).toContain('風の中を通る時間が 120 tick で、洗うのにかかる 151 tick に届かないので、物は変わらずに通り過ぎる')
+  })
+})
+
+describe('スパウトとアイテムドレイン（#235）', () => {
+  const FLUID_BOOK: RecipeBook = {
+    ...BOOK,
+    recipes: [
+      ...BOOK.recipes,
+      {
+        ...recipe('create:filling/honey_bottle', 'filling', ['minecraft:glass_bottle'], 0, [out('minecraft:honey_bottle')]),
+        fluids: [],
+        fluidTags: ['c:honey'],
+      },
+      recipe('create:emptying/honey_bottle', 'emptying', ['minecraft:honey_bottle'], 0, [out('minecraft:glass_bottle')]),
+    ],
+  }
+  const tank = (id: string) =>
+    nbt.compound({
+      Tanks: nbt.list('compound', [nbt.compound({ TankContent: nbt.compound({ id: nbt.string(id), amount: nbt.int(1000) }) })]),
+    })
+  const pipe = (open: string[]) => {
+    const props: Record<string, string> = { waterlogged: 'false' }
+    for (const d of ['north', 'south', 'east', 'west', 'up', 'down']) props[d] = open.includes(d) ? 'true' : 'false'
+    return props
+  }
+
+  /** デポ (0,0,0) の2段上にスパウト (0,2,0) */
+  const spoutOnDepot = (spoutData?: NbtCompound) =>
+    blueprintFixture({ size: [4, 5, 2] }).place([0, 0, 0], 'create:depot').place([0, 2, 0], 'create:spout', {}, spoutData)
+
+  it('[TP-SPOUT] 材料と液体のタグに合う create:filling のレシピを使う（1.21 のタンクの形）', () => {
+    const { result, log } = trace(spoutOnDepot(tank('create:honey')), [port([0, 0, 0], 'minecraft:glass_bottle')], {}, FLUID_BOOK)
+    expect(sinkOf(result, '0,0,0', 'minecraft:honey_bottle')).toBe(1)
+    expect(at(result, '0,2,0')?.recipes[0]?.choice.duration).toEqual({ value: 20, source: 'modpack', note: 'create:filling/honey_bottle' })
+    expect(messages(log)).toEqual([])
+  })
+
+  it('[TP-SPOUT-FLUID] タンクが空なら、ポンプと管をたどり、鍾乳石が溶岩を垂らす大釜の液体を使う。バケツは溶岩入りバケツになる', () => {
+    // スパウト (0,2,0) → ポンプ (1,2,0) → 管 (2,2,0)（西・下）→ 管 (2,1,0)（上・東）→ 大釜 (3,1,0)。大釜の上に鍾乳石・石・溶岩
+    const fx = spoutOnDepot()
+      .place([1, 2, 0], 'create:mechanical_pump', { facing: 'east', waterlogged: 'false' })
+      .place([2, 2, 0], 'create:fluid_pipe', pipe(['west', 'down']))
+      .place([2, 1, 0], 'create:fluid_pipe', pipe(['up', 'east']))
+      .place([3, 1, 0], 'minecraft:cauldron')
+      .place([3, 2, 0], 'minecraft:pointed_dripstone', { vertical_direction: 'down', thickness: 'tip', waterlogged: 'false' })
+      .place([3, 3, 0], 'minecraft:stone')
+      .place([3, 4, 0], 'minecraft:lava', { level: '0' })
+    const { result, log } = trace(fx, [port([0, 0, 0], 'minecraft:bucket')], {}, FLUID_BOOK)
+    expect(sinkOf(result, '0,0,0', 'minecraft:lava_bucket')).toBe(1)
+    expect(messages(log)).toEqual(['スパウトのタンクが空なので、つながった管の先の minecraft:lava が入るとした'])
+    // 管の口の先に水の水源もあれば、名前順で最初の溶岩を使う
+    fx.place([2, 0, 0], 'minecraft:water', { level: '0' }).place([2, 1, 0], 'create:fluid_pipe', pipe(['up', 'east', 'down']))
+    const two = trace(fx, [port([0, 0, 0], 'minecraft:bucket')], {}, FLUID_BOOK)
+    expect(sinkOf(two.result, '0,0,0', 'minecraft:lava_bucket')).toBe(1)
+    expect(messages(two.log)).toEqual([
+      'スパウトのタンクが空なので、つながった管の先の minecraft:lava が入るとした（見つかった液体は minecraft:lava・minecraft:water。名前順で最初のものを使った）',
+    ])
+  })
+
+  it('[TP-SPOUT-FLUID] 液体が分からなければ、物は変わらず、止まらずに通る', () => {
+    const { result, log } = trace(spoutOnDepot(), [port([0, 0, 0], 'minecraft:bucket')], {}, FLUID_BOOK)
+    expect(sinkOf(result, '0,0,0', 'minecraft:bucket')).toBe(1)
+    expect(messages(log)).toEqual([
+      'スパウトの液体が分からない（タンクが空で、つながった管の先に液体が見つからない）ので、物は変わらずに通るとした',
+    ])
+  })
+
+  it('[TP-SPOUT] 水・溶岩でない液体のバケツは <液体>_bucket として仮定に載せる。Modpack がなくても Create の決まりは使う', () => {
+    const { result, log } = trace(spoutOnDepot(tank('create:chocolate')), [port([0, 0, 0], 'minecraft:bucket')], {}, null)
+    expect(sinkOf(result, '0,0,0', 'create:chocolate_bucket')).toBe(1)
+    expect(messages(log)).toEqual(['create:chocolate のバケツを create:chocolate_bucket とした'])
+    const bottle = trace(spoutOnDepot(tank('create:honey')), [port([0, 0, 0], 'minecraft:glass_bottle')], {}, null)
+    expect(sinkOf(bottle.result, '0,0,0', 'minecraft:glass_bottle')).toBe(1)
+    expect(messages(bottle.log)).toEqual([
+      'Modpack のレシピがないので、スパウトで minecraft:glass_bottle に液体を入れられるか分からず、物は変わらないとした',
+    ])
+  })
+
+  it('[TP-ITEM-DRAIN] ポーションはガラス瓶、create:emptying のレシピに合う物はそのできる物になる。上から入れた物はドレインに置かれる', () => {
+    const fx = blueprintFixture({ size: [1, 1, 1] }).place([0, 0, 0], 'create:item_drain')
+    const potion = trace(fx, [port([0, 0, 0], 'minecraft:splash_potion')], {}, FLUID_BOOK)
+    expect(sinkOf(potion.result, '0,0,0', 'minecraft:glass_bottle')).toBe(1)
+    const honey = trace(fx, [port([0, 0, 0], 'minecraft:honey_bottle')], {}, FLUID_BOOK)
+    expect(sinkOf(honey.result, '0,0,0', 'minecraft:glass_bottle')).toBe(1)
+    expect(at(honey.result, '0,0,0')?.recipes[0]?.choice.recipe?.id).toBe('create:emptying/honey_bottle')
+    // 2つの物の入口から同じ物が届けば、1つのレシピにまとめる。スクリプトがレシピを変えていれば仮定に載せる
+    const twice = trace(fx, [port([0, 0, 0], 'minecraft:honey_bottle'), port([0, 0, 0], 'minecraft:honey_bottle')], {}, { ...FLUID_BOOK, scriptsChangeRecipes: true })
+    expect(at(twice.result, '0,0,0')?.recipes).toHaveLength(1)
+    expect(at(twice.result, '0,0,0')?.recipes[0]?.outputs).toEqual([{ item: 'minecraft:glass_bottle', rate: 2, source: 'virtual' }])
+    expect(messages(twice.log)).toEqual(['KubeJS のスクリプトがレシピを変えているが、スクリプトのレシピは読めないので、物の通り道に入れていない'])
+    const none = trace(fx, [port([0, 0, 0], 'minecraft:honey_bottle')], {}, null)
+    expect(sinkOf(none.result, '0,0,0', 'minecraft:honey_bottle')).toBe(1)
+    expect(messages(none.log)).toEqual([
+      'Modpack のレシピがないので、アイテムドレインで minecraft:honey_bottle から液体を抜けるか分からず、物は変わらないとした',
+    ])
   })
 })

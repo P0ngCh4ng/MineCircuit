@@ -163,9 +163,9 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 | Modpack の `kubejs/server_scripts/` | KubeJS のスクリプト。作り物の KubeJS の上で動かし、レシピを足す・消す・置き換える操作を集めて、上の2つに当てはめる（下の「KubeJS のスクリプトのレシピ」。#145） |
 
 - `TP-RECIPE-TIME-FIELD` 処理時間の項目は、1.18 は `processingTime`、1.21（Create 6.0）は `processing_time`。どちらも書いていなければ 0。
-- `TP-RECIPE-INGREDIENTS` 材料のうち液体（`amount` を持つもの、`fluid`・`fluidTag`）は見ない。
+- `TP-RECIPE-INGREDIENTS` 材料のうち液体（`amount` を持つもの、`fluid`・`fluidTag`）は、アイテムの材料には入れない。液体を入れるレシピ（`create:filling`）だけは、液体の材料を別に持つ（液体の ID は `fluid`、タグは 1.18 の `fluidTag`・1.21 の `tag`）。
 - 材料の形は（`TP-RECIPE-INGREDIENTS`）`{ item }`・`{ tag }`・その配列のほか、NeoForge のいずれかの材料 `{ type: "neoforge:compound", ingredients: [...] }` の中も読む（Create 6.0 の Mod 連携のレシピ。`create:milling/compat/...` など、Create 6.0.10 の加工のレシピ 553 のうち 353 がこの形。2026-10-28 に確認）。1.21.2 からの文字列の形（`"minecraft:wheat"`、`"#c:crops/wheat"`）も読む。
-- `TP-RECIPE-TYPES` 読むのは `type` が `create:milling`・`create:crushing`・`create:cutting`・`create:mixing`・`create:pressing`・`create:compacting` と、扇風機の処理（#235。下の「扇風機」）に使う `create:splashing`・`create:haunting`・`minecraft:smelting`・`minecraft:blasting`・`minecraft:smoking` のものだけ。材料（`ingredients` の `item` と `tag`）と処理時間（`processingTime`）とできる物（`results`）だけを持つ。
+- `TP-RECIPE-TYPES` 読むのは `type` が `create:milling`・`create:crushing`・`create:cutting`・`create:mixing`・`create:pressing`・`create:compacting`、スパウトとアイテムドレイン（#235）に使う `create:filling`・`create:emptying` と、扇風機の処理（#235。下の「扇風機」）に使う `create:splashing`・`create:haunting`・`minecraft:smelting`・`minecraft:blasting`・`minecraft:smoking` のものだけ。材料（`ingredients` の `item` と `tag`）と処理時間（`processingTime`）とできる物（`results`）だけを持つ。
 - `TP-RECIPE-TYPES` Minecraft の料理のレシピ（`minecraft:smelting` など）は、材料が `ingredient`（1つの材料か、そのどれか）、できる物が `result`（1.18 は ID の文字列で1個、1.21 は `{ id, count }`。`{ item, count }` も読む）。処理時間（`cookingtime`）は扇風機では使わないので読まない。
 - 読む種類を足したときは、保存してある Modpack の読み込みの結果を読み直す（保存の鍵の版を上げる）。
 - 条件付きのレシピ（`conditions`、`fabric:load_conditions`）の条件は見ない。
@@ -456,20 +456,34 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 
 `TP-SPOUT`
 
-- プレスと同じく、2段下のベルトの区間の真ん中か、デポの物に液体を入れる（`create:filling` のレシピ）。間の1段に当たり判定のあるブロックがあれば入れない。
-- 動き：真ん中で 20 tick（`FILLING_TIME`）止まり、できた物になって進む。
-- 計算では：液体を入れるレシピは読まないので、物は変わらずに進むとして仮定に載せる（できる物は #235）。止まる時間は入れる。
-- 出典：`fluids/spout/SpoutBlockEntity.java`（`below(2)`）、`kinetics/belt/behaviour/BeltProcessingBehaviour.java`
+- プレスと同じく、2段下のベルトの区間の真ん中か、デポの物に液体を入れる。間の1段に当たり判定のあるブロックがあれば入れない。
+- 動き：液体を入れられる物なら、真ん中で 20 tick（`FILLING_TIME`）止まり、できた物になって進む。入れられない物は止まらずに通る（`onItemReceived` が `PASS`）。
+- できる物（`FillingBySpout.fillItem`）：
+  1. 材料の物と、スパウトの液体に合う `create:filling` のレシピ。2つ以上あれば ID の名前順で最初のもの（仮定に載せる）。
+  2. なければ、Create の決まり（`GenericItemFilling`）：バケツ（`minecraft:bucket`）は液体のバケツ（水 → `water_bucket`、溶岩 → `lava_bucket`、ほかは `<液体の namespace>:<液体の名前>_bucket` として仮定に載せる）。ガラス瓶（`minecraft:glass_bottle`）に水なら `minecraft:potion`（水入り瓶）。
+  3. どれでもなければ、物は変わらずに通る。
+- 液体のタグは、`minecraft:water`・`minecraft:lava` は水・溶岩（流れるものも）。ほかのタグは、タグの名前の最後（`c:honey` の `honey`）が液体の名前と同じなら合うとする（液体のタグのファイルは読まない）。
+- `TP-SPOUT-FLUID` スパウトの液体（計算では）：
+  1. 生データのタンク（1.18 は `Tanks[0].TankContent.FluidName`、1.21 は `Tanks[0].TankContent.id`）が空でなければ、その液体。
+  2. 空なら、スパウトの上と横につながった液体の管（`create:fluid_pipe`・`encased_fluid_pipe` はつながる面のプロパティ、`glass_fluid_pipe` は `axis`、`mechanical_pump`・`fluid_valve` は `facing` の軸）をたどり、管の口の先にある液体の出どころを集める。出どころは、液体の水源（`level=0` の水・溶岩、`waterlogged=true` のブロックは水）、水・溶岩の入った大釜、空の大釜で上の鍾乳石（`pointed_dripstone`、下向き）の根もとの1つ上のブロックの、さらに上が水・溶岩の水源のもの（鍾乳石が大釜に垂らす液体）、生データのタンクに液体のある Create のブロック（液体タンク・スパウト・ドレイン・ベイスン）。ポンプの向きは見ない。
+  3. 見つかった液体が1つならそれを使い、2つ以上なら名前順で最初のものを使う。どちらも、管からたどったことを仮定に載せる。見つからなければ、液体が分からないので物は変わらずに通るとして仮定に載せる。
+- 出典：`fluids/spout/SpoutBlockEntity.java`（`below(2)`、`onItemReceived`・`whenItemHeld`）、`fluids/spout/FillingBySpout.java`、`fluids/transfer/GenericItemFilling.java`、`kinetics/belt/behaviour/BeltProcessingBehaviour.java`。液体の管のたどり方は、このアプリの決めごと。
 
 #### アイテムドレイン（`create:item_drain`）
 
 `TP-ITEM-DRAIN`
 
 - 受け取る：どの面からでも。上から入れた物は真ん中に置く。液体を抜ける物は1個ずつ受け取り、残りは入れた側に残る。
-- 動き：入った面から反対の面へ、1 tick に 1/8 ブロックで通り抜ける。液体を抜ける物（`create:emptying` のレシピ）なら、真ん中で 20 tick 止まる。
+- 動き：入った面から反対の面へ、1 tick に 1/8 ブロックで通り抜ける。液体を抜ける物なら、真ん中で 20 tick 止まる。
+- できる物（`GenericItemEmptying.emptyItem`）：
+  1. ポーション（`minecraft:potion`・`splash_potion`・`lingering_potion`）は、ガラス瓶。
+  2. 材料に合う `create:emptying` のレシピ。2つ以上あれば ID の名前順で最初のもの（仮定に載せる）。
+  3. なければ、液体の入った物：液体のバケツ（ID が `_bucket` で終わるもの。空のバケツと粉雪のバケツ `powder_snow_bucket` を除く）は、空のバケツ（`minecraft:bucket`）。
+  4. どれでもなければ、物は変わらず、止まらずに通り抜ける。
+- 抜いた液体はドレインのタンクに入り、管で運ばれる。計算では液体の行き先はたどらない（「この版で扱わないもの」の液体の流量）。
 - 先へ送る：反対の面の先のブロックが受け取るなら渡し、受け取らなければ放り出す。
-- 計算では：液体を抜くレシピは読まないので、物は変わらず、止まらずに通り抜けるとして仮定に載せる（#235）。上からと、入れ物として入れた物（機械アーム・ファンネル）は、ドレインに置かれ、取り出すファンネル・機械アームで先へ。
-- 出典：`fluids/drain/ItemDrainBlockEntity.java`（`itemMovementPerTick`、`FILLING_TIME`）
+- 計算では：上からと、入れ物として入れた物（機械アーム・ファンネル）は、ドレインに置かれ、取り出すファンネル・機械アームで先へ。
+- 出典：`fluids/drain/ItemDrainBlockEntity.java`（`itemMovementPerTick`、`FILLING_TIME`）、`fluids/transfer/GenericItemEmptying.java`
 
 #### メカニカルクラフター（`create:mechanical_crafter`）
 

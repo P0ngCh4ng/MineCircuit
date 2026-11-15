@@ -15,12 +15,15 @@ export type CreateRecipeType =
   | 'compacting'
   | 'splashing'
   | 'haunting'
+  | 'filling'
+  | 'emptying'
 /** Minecraft の料理のレシピの種類（`minecraft:` を外した名前）。扇風機で燻す・焼くのに使う（#235） */
 export type CookingRecipeType = 'smelting' | 'blasting' | 'smoking'
 /**
  * 読むレシピの種類。
  * pressing はベルト・デポの上のプレス、compacting はバスンの上のプレス（圧縮）。この2つはふつう処理時間を書かない。
- * splashing・haunting と料理の3つは扇風機の処理（docs/create-throughput.md「扇風機」）
+ * splashing・haunting と料理の3つは扇風機の処理（docs/create-throughput.md「扇風機」）。
+ * filling・emptying はスパウトとアイテムドレイン（#235）
  */
 export type ProcessingRecipeType = CreateRecipeType | CookingRecipeType
 export const CREATE_RECIPE_TYPES: readonly CreateRecipeType[] = [
@@ -32,6 +35,8 @@ export const CREATE_RECIPE_TYPES: readonly CreateRecipeType[] = [
   'compacting',
   'splashing',
   'haunting',
+  'filling',
+  'emptying',
 ]
 export const COOKING_RECIPE_TYPES: readonly CookingRecipeType[] = ['smelting', 'blasting', 'smoking']
 export const PROCESSING_RECIPE_TYPES: readonly ProcessingRecipeType[] = [...CREATE_RECIPE_TYPES, ...COOKING_RECIPE_TYPES]
@@ -62,6 +67,10 @@ export interface ProcessingRecipe {
   readonly duration: number
   /** できる物（#127）。液体は含めない */
   readonly results: RecipeResult[]
+  /** 液体の材料の ID（`minecraft:water`）。filling だけが持つ（#235） */
+  readonly fluids?: string[]
+  /** 液体の材料のタグ（`c:honey`、`#` なし）。filling だけが持つ（#235） */
+  readonly fluidTags?: string[]
 }
 
 /** レシピの結果1つ分 */
@@ -110,7 +119,7 @@ export function readProcessingRecipe(id: string, data: unknown): ProcessingRecip
   collectIngredients(data.ingredients, items, tags)
   // 1.18 は processingTime、1.21（Create 6.0）は processing_time
   const time = data.processingTime ?? data.processing_time
-  return {
+  const recipe: ProcessingRecipe = {
     id,
     type,
     items: [...items],
@@ -118,6 +127,29 @@ export function readProcessingRecipe(id: string, data: unknown): ProcessingRecip
     duration: typeof time === 'number' && Number.isFinite(time) && time > 0 ? Math.floor(time) : 0,
     results: readResults(data.results),
   }
+  if (type !== 'filling') return recipe
+  const fluids = new Set<string>()
+  const fluidTags = new Set<string>()
+  collectFluidIngredients(data.ingredients, fluids, fluidTags)
+  return { ...recipe, fluids: [...fluids], fluidTags: [...fluidTags] }
+}
+
+/**
+ * 液体の材料を集める（#235）。読める形：
+ * - 1.18：`{ fluid, amount }`・`{ fluidTag, amount }`
+ * - 1.21（Create 6.0）：`{ type: 'neoforge:single', fluid, amount }`・`{ type: 'neoforge:tag', tag, amount }`
+ */
+function collectFluidIngredients(value: unknown, fluids: Set<string>, tags: Set<string>): void {
+  if (Array.isArray(value)) {
+    for (const v of value) collectFluidIngredients(v, fluids, tags)
+    return
+  }
+  if (!isObject(value)) return
+  const isFluid = 'amount' in value || 'fluid' in value || 'fluidTag' in value
+  if (!isFluid) return
+  if (typeof value.fluid === 'string') fluids.add(value.fluid)
+  if (typeof value.fluidTag === 'string') tags.add(value.fluidTag)
+  if (typeof value.tag === 'string') tags.add(value.tag)
 }
 
 /**

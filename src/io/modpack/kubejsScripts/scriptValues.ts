@@ -134,6 +134,25 @@ export function toIngredients(value: unknown): { items: string[]; tags: string[]
   return { items: [...items], tags: [...tags] }
 }
 
+/**
+ * 液体の材料（`Fluid.of(…)`・`{ fluid, amount }`・`{ fluidTag, amount }`）を集める（スパウトのレシピ。#235）
+ */
+export function toFluidIngredients(value: unknown): { fluids: string[]; fluidTags: string[] } {
+  const fluids = new Set<string>()
+  const fluidTags = new Set<string>()
+  const visit = (v: unknown, depth: number): void => {
+    if (depth > 8) return
+    if (v instanceof ScriptFluid) fluids.add(withNamespace(v.id))
+    else if (Array.isArray(v)) for (const x of v) visit(x, depth + 1)
+    else if (isObject(v)) {
+      if (typeof v.fluid === 'string') fluids.add(withNamespace(v.fluid))
+      if (typeof v.fluidTag === 'string') fluidTags.add(withNamespace(v.fluidTag))
+    }
+  }
+  visit(value, 0)
+  return { fluids: [...fluids], fluidTags: [...fluidTags] }
+}
+
 /** できる物に直す。タグは除く */
 export function toResults(value: unknown): RecipeResult[] {
   return toScriptItems(value)
