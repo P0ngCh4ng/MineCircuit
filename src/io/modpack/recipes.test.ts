@@ -5,7 +5,8 @@ describe('readProcessingRecipe', () => {
   it('[TP-RECIPE-TYPES] 石臼・粉砕・ソー・ミキサー・プレス・圧縮・洗う・憑依のレシピを読む。種類は create: を外した名前', () => {
     for (const type of CREATE_RECIPE_TYPES) {
       const r = readProcessingRecipe(`create:${type}/x`, { type: `create:${type}`, ingredients: [{ item: 'minecraft:wheat' }] })
-      expect(r).toEqual({ id: `create:${type}/x`, type, items: ['minecraft:wheat'], tags: [], duration: 0, results: [] })
+      const fluids = type === 'filling' ? { fluids: [], fluidTags: [] } : {}
+      expect(r).toEqual({ id: `create:${type}/x`, type, items: ['minecraft:wheat'], tags: [], duration: 0, results: [], ...fluids })
     }
     expect(PROCESSING_RECIPE_TYPES).toEqual([
       'milling',
@@ -16,12 +17,50 @@ describe('readProcessingRecipe', () => {
       'compacting',
       'splashing',
       'haunting',
+      'filling',
+      'emptying',
       'smelting',
       'blasting',
       'smoking',
     ])
     expect(recipeTypeId('milling')).toBe('create:milling')
     expect(recipeTypeId('smoking')).toBe('minecraft:smoking')
+  })
+
+  it('[TP-RECIPE-INGREDIENTS] スパウトのレシピ（#235）は液体の材料を別に持つ。1.18 の fluid・fluidTag と 1.21 の neoforge:single・neoforge:tag', () => {
+    expect(
+      readProcessingRecipe('create:filling/honey_bottle', {
+        type: 'create:filling',
+        ingredients: [{ item: 'minecraft:glass_bottle' }, { fluidTag: 'forge:honey', amount: 250 }],
+        results: [{ item: 'minecraft:honey_bottle' }],
+      }),
+    ).toMatchObject({ items: ['minecraft:glass_bottle'], tags: [], fluids: [], fluidTags: ['forge:honey'], results: [{ item: 'minecraft:honey_bottle' }] })
+    expect(
+      readProcessingRecipe('create:filling/grass_block', {
+        type: 'create:filling',
+        ingredients: [
+          { item: 'minecraft:dirt' },
+          { type: 'neoforge:single', amount: 500, fluid: 'minecraft:water' },
+          { type: 'neoforge:tag', amount: 250, tag: 'c:tea' },
+        ],
+        results: [{ id: 'minecraft:grass_block' }],
+      }),
+    ).toMatchObject({ items: ['minecraft:dirt'], tags: [], fluids: ['minecraft:water'], fluidTags: ['c:tea'] })
+    // 液体を抜くレシピは、できる物のうち液体を見ない
+    expect(
+      readProcessingRecipe('create:emptying/honey_bottle', {
+        type: 'create:emptying',
+        ingredients: [{ item: 'minecraft:honey_bottle' }],
+        results: [{ item: 'minecraft:glass_bottle' }, { fluid: 'create:honey', amount: 250 }],
+      }),
+    ).toEqual({
+      id: 'create:emptying/honey_bottle',
+      type: 'emptying',
+      items: ['minecraft:honey_bottle'],
+      tags: [],
+      duration: 0,
+      results: [{ item: 'minecraft:glass_bottle', count: 1, chance: 1 }],
+    })
   })
 
   it('[TP-RECIPE-TYPES] 料理のレシピ（#235）：材料は ingredient、できる物は result（1.18 は文字列、1.21 は { id, count }）。cookingtime は読まない', () => {

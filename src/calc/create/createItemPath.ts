@@ -27,6 +27,7 @@ import {
   TICKS_PER_SECOND,
   type RecipeChoice,
 } from './createThroughput'
+import { emptyItem, FILLING_TICKS, fillItem, spoutFluid, type FluidProcess } from './spoutDrain'
 import { FAN_PROCESSING_NAMES, findFanCurrents, type FanCell, type FanCurrents, type FanProcessingKind } from './fanCurrent'
 import { arcPath, blockCenter, ejectorPath, throwPath, type MotionPath } from './itemMotion'
 import { testFilter } from './itemFilter'
@@ -704,19 +705,65 @@ class ItemTracer {
   }
 
   /**
-   * アイテムドレイン。入った面から反対の面へ、1 tick に 1/8 ブロックで通り抜け、反対の面の先へ渡す。
-   * 上や入れ物として入れた物は、ドレインの中に置かれ、取り出すファンネル・機械アームで先へ。
-   * 液体を抜くレシピは読まないので、物は変わらず、止まらずに通るとする
+   * アイテムドレイン（TP-ITEM-DRAIN）。入った面から反対の面へ、1 tick に 1/8 ブロックで通り抜け、反対の面の先へ渡す。
+   * 液体を抜ける物なら、真ん中で 20 tick 止まり、抜いた物になる。
+   * 上や入れ物として入れた物は、ドレインの中に置かれ、取り出すファンネル・機械アームで先へ
    */
   private drain(pos: Vec3, flow: Flow, from: Vec3 | null, face: Direction | null, carry: Carry): void {
     this.arrive(pos, flow, from, carry)
-    this.stop(pos, 'アイテムドレインのレシピ（液体を抜く）は読まないので、物は変わらずに通るとした', true)
-    if (!face || directionAxis(face) === 'y') {
-      this.emit(pos, flow, {})
-      return
+    const proc = emptyItem(flow.item, this.env.recipes)
+    if (!proc && !this.env.recipes) {
+      this.env.log.add(`Modpack のレシピがないので、アイテムドレインで ${flow.item} から液体を抜けるか分からず、物は変わらないとした`, pos)
     }
-    const exit = oppositeDirection(face)
-    this.handOff(pos, addVec3(pos, directionVector(exit)), flow, face, null, { seconds: 1 / DRAIN_SPEED, dropVy: 0 })
+    const flows = proc ? this.applyFluidProcess(pos, proc, flow, { pos, from }) : [flow]
+    for (const out of flows) {
+      if (!face || directionAxis(face) === 'y') {
+        this.emit(pos, out, {})
+        continue
+      }
+      const exit = oppositeDirection(face)
+      this.handOff(pos, addVec3(pos, directionVector(exit)), out, face, null, { seconds: 1 / DRAIN_SPEED, dropVy: 0 })
+    }
+  }
+
+  /**
+   * スパウト・ドレインの処理を記録し、できる物を返す。holdAt で 20 tick 止まる（物の流れの表示）
+   */
+  private applyFluidProcess(
+    pos: Vec3,
+    proc: FluidProcess,
+    flow: Flow,
+    holdAt: { readonly pos: Vec3; readonly from: Vec3 | null },
+  ): Flow[] {
+    if (proc.assumption) this.env.log.add(proc.assumption, pos)
+    if (this.env.recipes?.scriptsChangeRecipes) {
+      this.env.log.add('KubeJS のスクリプトがレシピを変えているが、スクリプトのレシピは読めないので、物の通り道に入れていない')
+    }
+    this.hold(holdAt.pos, holdAt.from, flow, FILLING_TICKS)
+    const rec = this.record(pos)
+    const source = weakerSource(flow.source, proc.choice.duration.source)
+    const outs: ItemOutput[] = []
+    for (const r of proc.recipe.results) addOutput(outs, { item: r.item, rate: flow.rate * r.count * r.chance, source })
+    const kept = outs.filter((o) => o.rate > EPSILON)
+    const existing = rec.recipes.find((a) => a.choice.recipe?.id === proc.recipe.id && a.input === flow.item)
+    if (existing) {
+      for (const o of kept) addOutput(existing.outputs, o)
+    } else {
+      rec.recipes.push({ type: proc.type, input: flow.item, choice: proc.choice, outputs: kept.map((o) => ({ ...o })) })
+    }
+    return kept
+  }
+
+  /** スパウトの液体（TP-SPOUT-FLUID）。分からなければ null。管からたどったときと分からないときは仮定に載せる */
+  private spoutFluidAt(pos: Vec3): string | null {
+    const f = spoutFluid(this.env.bp, pos)
+    if (f.from === 'pipe') {
+      const more = f.candidates.length > 1 ? `（見つかった液体は ${f.candidates.join('・')}。名前順で最初のものを使った）` : ''
+      this.env.log.add(`スパウトのタンクが空なので、つながった管の先の ${f.fluid} が入るとした${more}`, pos)
+    } else if (f.from === 'unknown') {
+      this.env.log.add('スパウトの液体が分からない（タンクが空で、つながった管の先に液体が見つからない）ので、物は変わらずに通るとした', pos)
+    }
+    return f.fluid
   }
 
   /**
@@ -756,11 +803,19 @@ class ItemTracer {
     const m = this.env.bp.get(mpos)
     const id = m?.id.toString()
     if (id === 'create:spout') {
-      // スパウトは液体を入れる間（20 tick）止める。液体を入れるレシピは読まないので、物は変わらないとする
+      // スパウトは液体を入れられる物だけを 20 tick 止め、液体を入れた物にする（TP-SPOUT）
       this.recordArrival(mpos, flow, base)
-      this.hold(base, baseFrom, flow, SPOUT_FILL_TICKS)
-      this.stop(mpos, 'スパウトのレシピ（液体を入れる）は読まないので、物は変わらずに通るとした', true)
-      return 'pass'
+      const fluid = this.spoutFluidAt(mpos)
+      const proc = fluid ? fillItem(flow.item, fluid, this.env.recipes) : null
+      if (!proc) {
+        if (fluid && !this.env.recipes) {
+          this.env.log.add(`Modpack のレシピがないので、スパウトで ${flow.item} に液体を入れられるか分からず、物は変わらないとした`, mpos)
+        } else if (fluid) {
+          this.note(mpos, `${flow.item} には ${fluid} を入れられないので、物は変わらずに通る`)
+        }
+        return 'pass'
+      }
+      return this.applyFluidProcess(mpos, proc, flow, { pos: base, from: baseFrom })
     }
     const isPress = id === 'create:mechanical_press'
     const isDeployer = id === 'create:deployer' && m?.properties.facing === 'down'
@@ -1598,7 +1653,6 @@ function distance(a: Vec3, b: Vec3): number {
 }
 
 /** スパウトが液体を入れる間の tick（FILLING_TIME） */
-const SPOUT_FILL_TICKS = 20
 /** 扇風機で1個を処理する時間。fanProcessingTime（150）× (⌊(1 − 1) / 16⌋ + 1) + 1（TP-FAN-RECIPE） */
 const FAN_PROCESSING_TICKS = 151
 /** 真鍮のトンネルが分けるまで待つ tick（設定の brassTunnelTimer の初期値） */

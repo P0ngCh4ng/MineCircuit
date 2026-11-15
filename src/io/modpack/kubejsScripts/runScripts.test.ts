@@ -93,6 +93,28 @@ describe('runKubeJsScripts（1.18 の書き方）', () => {
     expect(out.recipes.some((r) => r.items.includes('minecraft:cod'))).toBe(false)
   })
 
+  it('[TP-KJS-RECIPE-CALLS] スパウト・ドレインのレシピ（#235）：create.filling は液体の材料（Fluid.of・{ fluidTag }）も持つ', () => {
+    const out = run({
+      'fluid.js': `
+        ServerEvents.recipes(event => {
+          event.recipes.create.filling('minecraft:honey_bottle', ['minecraft:glass_bottle', Fluid.of('create:honey', 250)]).id('pack:honey')
+          event.recipes.createFilling('minecraft:experience_bottle', ['minecraft:glass_bottle', { fluidTag: 'c:experience', amount: 250 }]).id('pack:xp')
+          event.recipes.create.emptying([Fluid.of('create:honey', 250), 'minecraft:glass_bottle'], 'minecraft:honey_bottle').id('pack:drain')
+        })
+      `,
+    })
+    expect(byId(out, 'pack:honey')).toMatchObject({
+      type: 'filling',
+      items: ['minecraft:glass_bottle'],
+      results: [{ item: 'minecraft:honey_bottle' }],
+      fluids: ['create:honey'],
+      fluidTags: [],
+    })
+    expect(byId(out, 'pack:xp')).toMatchObject({ fluids: [], fluidTags: ['c:experience'] })
+    expect(byId(out, 'pack:drain')).toMatchObject({ type: 'emptying', items: ['minecraft:honey_bottle'], results: [{ item: 'minecraft:glass_bottle' }] })
+    expect(byId(out, 'pack:drain')?.fluids).toBeUndefined()
+  })
+
   it('[TP-KJS-FILTERS][TP-KJS-REPLACE] remove・replaceInput（2つの引数の古い書き方も）を当てはめる', () => {
     const out = run({
       'a.js': `

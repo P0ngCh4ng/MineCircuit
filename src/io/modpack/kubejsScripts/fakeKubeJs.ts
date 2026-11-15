@@ -15,7 +15,7 @@ import {
 } from '../recipes'
 import type { ScriptError, ScriptRunInput, UnsupportedCall } from './scriptTypes'
 import { isSvalInternalName } from './svalNames'
-import { ScriptFluid, ScriptItem, parseItemString, toIngredients, toPlainJson, toResults, toScriptItems, toSingleId, withNamespace } from './scriptValues'
+import { ScriptFluid, ScriptItem, parseItemString, toFluidIngredients, toIngredients, toPlainJson, toResults, toScriptItems, toSingleId, withNamespace } from './scriptValues'
 
 /** 呼ぶイベントの処理（登録したファイルと一緒に覚える） */
 interface Handler {
@@ -344,7 +344,9 @@ export class FakeKubeJs {
     return (outputs, inputs) => {
       const { items, tags } = toIngredients(inputs)
       const duration = FakeKubeJs.DEFAULT_PROCESSING_TIME
-      return this.addRecipe({ id: this.nextId(), type, items, tags, duration, results: toResults(outputs) })
+      const recipe: ProcessingRecipe = { id: this.nextId(), type, items, tags, duration, results: toResults(outputs) }
+      // スパウトのレシピは液体の材料も持つ（`Fluid.of('minecraft:water', 250)`。#235）
+      return this.addRecipe(type === 'filling' ? { ...recipe, ...toFluidIngredients(inputs) } : recipe)
     }
   }
 

@@ -248,8 +248,9 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'TP-FAN-RECIPE': tp('kinetics/fan/processing/AllFanProcessingTypes.java の canProcess・process、FanProcessing.java の処理時間'),
   'TP-FAN-ON-BELT': tp('kinetics/fan/AirCurrent.java の findAffectedHandlers、processing/FanProcessing.java の applyProcessing(TransportedItemStack)'),
   'TP-FAN-DROPPED': tp('kinetics/fan/AirCurrent.java の tickAffectedEntities、processing/FanProcessing.java の applyProcessing(ItemEntity)'),
-  'TP-SPOUT': tp('fluids/spout/SpoutBlockEntity.java、kinetics/belt/behaviour/BeltProcessingBehaviour.java'),
-  'TP-ITEM-DRAIN': tp('fluids/drain/ItemDrainBlockEntity.java の itemMovementPerTick・FILLING_TIME'),
+  'TP-SPOUT': tp('fluids/spout/SpoutBlockEntity.java・FillingBySpout.java、fluids/transfer/GenericItemFilling.java、kinetics/belt/behaviour/BeltProcessingBehaviour.java'),
+  'TP-SPOUT-FLUID': tpApp('このアプリの決めごと（スパウトの生データのタンクと、液体の管をたどって液体を決める）'),
+  'TP-ITEM-DRAIN': tp('fluids/drain/ItemDrainBlockEntity.java の itemMovementPerTick・FILLING_TIME、fluids/transfer/GenericItemEmptying.java'),
   'TP-CRAFTER': tp('kinetics/crafter/MechanicalCrafterBlockEntity.java の Phase・getCountDownSpeed'),
   // 律速
   'TP-BOTTLENECK-USAGE': tpApp('このアプリの計算（使用率、#168）'),

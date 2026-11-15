@@ -44,6 +44,9 @@ export const DEFAULT_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, numb
   smelting: 0,
   blasting: 0,
   smoking: 0,
+  // スパウト・ドレインはいつも 20 tick（TP-SPOUT・TP-ITEM-DRAIN）
+  filling: 0,
+  emptying: 0,
 }
 
 /** 処理時間にレシピの時間を使う機械か（プレス・圧縮は押す動きの速さだけで決まる） */
@@ -59,6 +62,8 @@ const USES_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, boolean>> = {
   smelting: false,
   blasting: false,
   smoking: false,
+  filling: false,
+  emptying: false,
 }
 
 /** 機械の名前（仮定の文と、律速の機械の名前に使う） */
@@ -74,6 +79,8 @@ export const RECIPE_MACHINE_NAMES: Readonly<Record<ProcessingRecipeType, string>
   smelting: '扇風機（焼く）',
   blasting: '扇風機（焼く）',
   smoking: '扇風機（燻す）',
+  filling: 'スパウト',
+  emptying: 'アイテムドレイン',
 }
 
 // ---- 計算（純粋な関数）。回転数が 0 なら null（動かない） ----
