@@ -157,6 +157,7 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 
 | 場所 | 中身 |
 | --- | --- |
+| Minecraft 本体の jar の `data/minecraft/recipes/`（1.21 は `recipe/`） | 扇風機に使う料理のレシピ（かまど・溶鉱炉・燻製器。#235）。同じ ID なら Mod の jar を優先 |
 | Mod の jar の `data/<namespace>/recipes/`（1.21 は `recipe/`） | Mod が持つレシピ |
 | Modpack の `kubejs/data/<namespace>/recipes/` | KubeJS のデータパックで足したレシピ。同じ ID なら jar より優先 |
 | Modpack の `kubejs/server_scripts/` | KubeJS のスクリプト。作り物の KubeJS の上で動かし、レシピを足す・消す・置き換える操作を集めて、上の2つに当てはめる（下の「KubeJS のスクリプトのレシピ」。#145） |
@@ -164,7 +165,9 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 - `TP-RECIPE-TIME-FIELD` 処理時間の項目は、1.18 は `processingTime`、1.21（Create 6.0）は `processing_time`。どちらも書いていなければ 0。
 - `TP-RECIPE-INGREDIENTS` 材料のうち液体（`amount` を持つもの、`fluid`・`fluidTag`）は見ない。
 - 材料の形は（`TP-RECIPE-INGREDIENTS`）`{ item }`・`{ tag }`・その配列のほか、NeoForge のいずれかの材料 `{ type: "neoforge:compound", ingredients: [...] }` の中も読む（Create 6.0 の Mod 連携のレシピ。`create:milling/compat/...` など、Create 6.0.10 の加工のレシピ 553 のうち 353 がこの形。2026-10-28 に確認）。1.21.2 からの文字列の形（`"minecraft:wheat"`、`"#c:crops/wheat"`）も読む。
-- `TP-RECIPE-TYPES` 読むのは `type` が `create:milling`・`create:crushing`・`create:cutting`・`create:mixing` のものだけ。材料（`ingredients` の `item` と `tag`）と処理時間（`processingTime`）だけを持つ。
+- `TP-RECIPE-TYPES` 読むのは `type` が `create:milling`・`create:crushing`・`create:cutting`・`create:mixing`・`create:pressing`・`create:compacting` と、扇風機の処理（#235。下の「扇風機」）に使う `create:splashing`・`create:haunting`・`minecraft:smelting`・`minecraft:blasting`・`minecraft:smoking` のものだけ。材料（`ingredients` の `item` と `tag`）と処理時間（`processingTime`）とできる物（`results`）だけを持つ。
+- `TP-RECIPE-TYPES` Minecraft の料理のレシピ（`minecraft:smelting` など）は、材料が `ingredient`（1つの材料か、そのどれか）、できる物が `result`（1.18 は ID の文字列で1個、1.21 は `{ id, count }`。`{ item, count }` も読む）。処理時間（`cookingtime`）は扇風機では使わないので読まない。
+- 読む種類を足したときは、保存してある Modpack の読み込みの結果を読み直す（保存の鍵の版を上げる）。
 - 条件付きのレシピ（`conditions`、`fabric:load_conditions`）の条件は見ない。
 - KubeJS のスクリプト（`kubejs/server_scripts/`）で足した・変えたレシピは、スクリプトを動かして集める（下の「KubeJS のスクリプトのレシピ」）。手元の Create Astral は、Create の処理のレシピのほとんどをスクリプトで足している（2026-10-29 に確認。石臼 約 49・粉砕 約 77・ソー 約 49・ミキサー 約 361・プレス 約 14・圧縮 約 97。`kubejs/data/` のレシピ JSON は 52 個だけ）。
 - ワールドのデータパック（`saves/<ワールド>/datapacks/`）は、この版では読まない。
@@ -198,12 +201,13 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 | `ServerEvents.recipes(fn)` | 1.19〜1.21 | レシピ |
 | `ServerEvents.tags('item', fn)` | 1.19〜1.21 | アイテムのタグ |
 
-**レシピのイベントで扱う呼び出し。** `TP-KJS-RECIPE-CALLS` レシピは、この節の上の「読む場所」と同じ形（材料・処理時間・できる物）に直す。読むのは同じ6つの種類だけ。
+**レシピのイベントで扱う呼び出し。** `TP-KJS-RECIPE-CALLS` レシピは、この節の上の「読む場所」と同じ形（材料・処理時間・できる物）に直す。読むのは同じ種類だけ。
 
 | 呼び出し | すること |
 | --- | --- |
-| `event.recipes.createMilling(出る物, 材料)` など（`create` + 種類の名前） | レシピを足す。1.18 の kubejs-create の書き方 |
+| `event.recipes.createMilling(出る物, 材料)` など（`create` + 種類の名前。`createSplashing`・`createHaunting` も） | レシピを足す。1.18 の kubejs-create の書き方 |
 | `event.recipes.create.milling(出る物, 材料)` など | レシピを足す。1.19 からの書き方 |
+| `event.smelting(出る物, 材料)`・`event.blasting(…)`・`event.smoking(…)`、`event.recipes.minecraft.smelting(…)` など | 料理のレシピを足す（扇風機の処理に使う。#235）。出る物は1つ |
 | 上の2つに続く `.processingTime(n)`・`.id(id)` | 処理時間・ID を決める。`.heatRequirement(…)` など、ほかは何もしない。`.processingTime` を呼ばなければ 100（kubejs-create の初期値。1802 の `ProcessingRecipeJS`、2001 の `ProcessingRecipeSchema`） |
 | `event.custom(json)` | JSON を、jar のレシピ JSON と同じ読み方で読む |
 | `event.remove(条件)` | 条件に合うレシピを消す |
@@ -214,7 +218,7 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 - `TP-KJS-FILTERS` 条件（`event.remove` などの1つ目）は、`id`・`type`・`output`・`input`・`mod` と、その配列（どれか）・オブジェクト（全部）・`{ not: … }` を扱う。照らす相手は、その時点のすべてのレシピ（jar・kubejs/data・それまでにスクリプトで足したもの）。知らない項目のある条件は、何も消さずに仮定に載せる。
 - `TP-KJS-IDS` 操作は呼ばれた順に当てはめる。ID を決めずに足したレシピの ID は `kubejs:script/<ファイルのパス（.js なし）>/<その中の番号>` にする。
 - `TP-KJS-REPLACE` 置き換えは、材料の ID か同じタグが元と同じものだけを替える（元のアイテムを含むタグの材料は替えない）。できる物はアイテムの ID だけを替える。2つの引数の古い書き方（`event.replaceInput(元, 先)`）は、すべてのレシピが相手。
-- `TP-KJS-FOR-EACH` `event.forEachRecipe`・`event.findRecipes` は、上の6つの種類のレシピだけを渡す。ほかの種類（Farmer's Delight の料理など）は渡さないので、それを元に作るレシピは集まらない。
+- `TP-KJS-FOR-EACH` `event.forEachRecipe`・`event.findRecipes` は、読む種類のレシピだけを渡す。ほかの種類（Farmer's Delight の料理など）は渡さないので、それを元に作るレシピは集まらない。
 
 **タグのイベントで扱う呼び出し。** `TP-KJS-TAGS` `event.add(タグ, アイテム)`・`event.remove(タグ, アイテム)`・`event.removeAll(タグ)`。jar・kubejs/data のタグを読んだあとに当てはめる。
 
@@ -284,7 +288,7 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 
 ### 扱わないもの
 
-- 扇風機の処理と風、メカニカルクラフター、ベルトの上の粉砕、デプロイヤーの手の物のレシピ（ブレイズバーナーに燃料を入れるのは扱う。`TP-BLOCK-DEPLOYER-HAND`）。届いたら素通りするか止まるとして、仮定に載せる。扇風機とメカニカルクラフターは #235 で足す。
+- 扇風機の風が物を押し流す動き、メカニカルクラフター、ベルトの上の粉砕、デプロイヤーの手の物のレシピ（ブレイズバーナーに燃料を入れるのは扱う。`TP-BLOCK-DEPLOYER-HAND`）。届いたら素通りするか止まるとして、仮定に載せる。メカニカルクラフターは #235 で足す。扇風機の処理（洗う・燻す・焼く・憑依）は扱う（`TP-FAN-RECIPE`）。
 - 放り出した物の正確な落ちる先、レッドストーンの状態（保存したときの `powered` を使う。`powered=true` のファンネルは動かない）。
 - ブロックの当たり判定。空気とベルトのファンネル以外は、当たり判定があるとみなす。
 - 受け取る面：機械アーム・ファンネル・ベイスンが入れるときは、入れ物に直接入れるので面を問わない。シュートと粉砕ホイールが面で受け取るのは上からだけ。水平の `facing` のベイスンの出す先が空気なら、ベイスンに溜まるとして仮定に載せる。
@@ -390,12 +394,63 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 
 `TP-FAN`
 
-- 風の向きは回転の向きで決まる（押すか引くか）。風の届く距離は lerp(min(|回転数| / 256, 1), 3, 20) ブロックで、間に風を止めるブロックがあればそこまで（`fanPushDistance`・`fanPullDistance` の初期値 20、`fanRotationArgmax` の初期値 256）。
+- 風の通り道は、扇風機の `facing` の側のマス（1 マス先から、届く距離まで）。押すときも引くときも同じマスで、風の向きだけが変わる。
+- 風の向きは、回転数を `facing` の向きの符号に直した値（`facing` が east・up・south ならそのまま、west・down・north なら符号を逆に）が正なら `facing` の向き（押す）、負なら逆（引く）（`EncasedFanBlockEntity.getAirFlowDirection`、`convertToDirection`）。回転数が 0 なら風はない。
+- 風の届く距離は lerp(min(|回転数| / 256, 1), 3, 20) ブロック（`fanPushDistance`・`fanPullDistance` の初期値 20、`fanRotationArgmax` の初期値 256）。1 マス先から順に見て、風を止めるブロックがあればそこまで（`AirCurrent.getFlowLimit`）：
+  - 扇風機を通すブロック（タグ `create:fan_transparent`：ブレイズバーナー、帆の枠、鉄格子、柵、葉、焚き火など）と、当たり判定のないブロック（空気・水・溶岩・火）は通す。
+  - 当たり判定が1ブロック全部なら、そのマスの手前で止まる。
+  - 一部だけの形なら、風の向きに5本の線（面の (0.25, 0.25)・(0.25, 0.75)・(0.5, 0.5)・(0.75, 0.25)・(0.75, 0.75)）を通し、どれかが抜ければ通す。どれも当たれば、そのマスの中で止まる（そのマスまでは届く）。
+  - 計算では、上の2つ目と3つ目を次の表で決める。表にないブロックは、1ブロック全部の形として手前で止める。
+
+    | ブロック | 計算では |
+    | --- | --- |
+    | 上向き・下向きのファンネル（`create:andesite_funnel`・`brass_funnel`）で、風が水平 | 線が抜けるので通す（上向きは高さ −2/16〜8/16、下向きは 8/16〜18/16 の形） |
+    | ほかのファンネル、ベルト（`create:belt`）、デポ（`create:depot`） | そのマスまで届いて止まる（ベルトの平らな所は 1〜15 × 3/16〜13/16、デポは高さ 13/16 の箱で、5本とも当たる） |
+
 - 風の中の放り出した物は、風の向きへ押される。目標の速さは |回転数| / 512 ÷ （扇風機からの距離 / 届く距離）ブロック/tick で、1 tick に差の 1/8 ずつ近づく。
-- 風の通り道に水・火・溶岩・ソウルファイアがあれば、その先の物（放り出した物とベルトの上の物）を洗う・燻す・焼く（溶鉱炉）・憑依させる。処理にかかる時間は `fanProcessingTime`（150）× (⌊(個数 − 1) / 16⌋ + 1) + 1 tick。
 - シュートにつながった扇風機は、シュートの中の物の速さを変える（上の「シュート」）。
-- 計算では：まだ扱わない（#235）。届いたら止まり、仮定に載せる。
-- 出典：`kinetics/fan/AirCurrent.java`、`kinetics/fan/IAirCurrentSource.java`（`getMaxDistance`）、`kinetics/fan/processing/FanProcessing.java`
+- 出典：`kinetics/fan/AirCurrent.java`（`rebuild`・`getFlowLimit`・`findMaxDepth`）、`kinetics/fan/IAirCurrentSource.java`（`getMaxDistance`）、`kinetics/fan/EncasedFanBlockEntity.java`、`kinetics/base/KineticBlockEntity.java`（`convertToDirection`）。0.5.1 と 6.0 で同じ。
+
+`TP-FAN-CATALYST` 風の通り道の処理の種類（`AirCurrent.rebuild`、`FanProcessingType.getAt`）：
+
+- 風の通り道のマスごとに、次の順で最初に当てはまる種類を見る（優先度の高い順）。
+
+  | 種類 | そのマスにあるもの |
+  | --- | --- |
+  | 洗う（splashing） | 水（水源・流れる水、`waterlogged=true` のブロックも） |
+  | 憑依（haunting） | ソウルファイア、火のついたソウル焚き火（`lit=true`）、ソウルの火のついたブレイズバーナー（`create:lit_blaze_burner` の `flame_type=soul`） |
+  | 燻す（smoking） | 火、火のついた焚き火、ふつうの火のついたブレイズバーナー（`lit_blaze_burner` の `flame_type=regular`）、ブレイズバーナーの `blaze=smouldering` |
+  | 焼く（blasting） | 溶岩（水源・流れる溶岩）、ブレイズバーナーの `blaze` が `fading`・`kindled`・`seething` |
+
+- 種類は、見つけたマスから風の進む向きに、次の種類が見つかるまで続く。押す風なら見つけたマスとその先（扇風機から遠い方）、引く風なら見つけたマスとその手前（扇風機に近い方）。どの種類もなければ、何もしない風。
+- 種類を決めるタグ（`create:fan_processing_catalysts/…`）は、Create の jar の中身（0.5.1。ブロックのタグとして、焼く：`blaze_burner`、燻す：`blaze_burner`・`lit_blaze_burner`・`fire`・`campfire`、憑依：`lit_blaze_burner`・`soul_fire`・`soul_campfire`。液体のタグとして、焼く：溶岩、洗う：水）。Modpack がタグを変えていても、この表を使う。
+
+`TP-FAN-RECIPE` できる物（`AllFanProcessingTypes` の `process`）：
+
+| 種類 | 使うレシピ | レシピがないとき |
+| --- | --- | --- |
+| 洗う | `create:splashing` | 変わらない |
+| 憑依 | `create:haunting` | 変わらない |
+| 燻す | `minecraft:smoking` | 変わらない |
+| 焼く | `minecraft:smelting`、なければ `minecraft:blasting`。ただし同じ物の `minecraft:smoking` のレシピが同じ物を作るなら（食べ物）、焼けて**なくなる** | 燃えない物（ネザライトなど）でなければ、焼けて**なくなる**。計算では燃えない物か分からないので、なくなるとして仮定に載せる |
+
+- かかる時間は `fanProcessingTime`（150）× (⌊(個数 − 1) / 16⌋ + 1) + 1 tick。計算では1個ずつ（151 tick）とする。
+- 風の中の物は全部同時に処理するので、扇風機は律速の機械にしない（処理できる数を持たない）。
+- 出典：`kinetics/fan/processing/AllFanProcessingTypes.java`、`FanProcessing.java`。0.5.1 と 6.0 で同じ（6.0 は燃えない物を `DataComponents.FIRE_RESISTANT` で見る）。
+
+`TP-FAN-ON-BELT` 風の中のベルト・デポ（`AirCurrent.findAffectedHandlers`、`FanProcessing.applyProcessing(TransportedItemStack…)`）：
+
+- 風の通り道のマスと、風が水平ならその1段下のマスにあるベルト・デポの上の物を処理する。種類はそのブロック自身の種類（上の表。ふつうはない）、なければそのマスの風の種類。
+- デポ：置いた物は処理が終わるまで（151 tick）とどまり、できた物が先へ進む。
+- ベルト：物は止まらずに進み、風の中を続けて通る区間にいた時間が 151 tick に届いたら、その区間でできる物に変わって先へ進む。届かなければ変わらずに通り過ぎ、プローブに出す。区間1つの時間は 1 ÷ ベルトの速さ（秒）。
+
+`TP-FAN-DROPPED` 風の中に放り出した物（`AirCurrent.tickAffectedEntities`、`FanProcessing.applyProcessing(ItemEntity…)`）：
+
+- 落ちた物（取り出すファンネル・シュートの先・ベルトの端など、空気に出した物）が、受け取るブロックに断られて（フィルターに合わないファンネルなど）そこにとどまり、そのマスかその1つ上のマスが風の通り道なら、処理してから、できた物をもう一度同じブロックに渡す。受け取られたら先へ、また断られたらそこに溜まる。
+- 受け取るブロックがそのまま受け取る物は、処理されない（ファンネルは触れた物をすぐ吸い込む）。
+- 計算では、風が物を押し流す動き（上の目標の速さ）はたどらず、物は落ちた所にとどまるとする。
+
+- 計算では：扇風機のブロックそのものに物が届いたら、今までどおり止めて仮定に載せる。
 
 #### スパウト（`create:spout`）
 
@@ -500,7 +555,7 @@ Create 6.0（1.21.1）のソースと比べた（2026-10-27）。上の規則は
 
 - 物の入口を置かないときの、設計図全体の流れ。
 - 運ぶブロック（ベルト・機械アーム・ファンネル）の輸送量で決まる律速（上の「律速（#168）」）。
-- 扇風機による処理（洗う・焼く・燻す）と、シュートの扇風機の風。規則は「物の動き（#233）」に書いた。計算に入れるのは #233 から。
+- シュートの扇風機の風と、扇風機の風が物を押し流す動き。規則は「物の動き（#233）」の「扇風機」に書いた。扇風機の処理は #235 で計算に入れた。
 - チェーンコンベアとパッケージ（Create 6.0 だけにある）。
 - 液体（ポンプ・パイプ）の流量。
 - ワールドのデータパックのレシピ。

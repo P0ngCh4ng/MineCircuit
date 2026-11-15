@@ -61,6 +61,38 @@ describe('runKubeJsScripts（1.18 の書き方）', () => {
     expect(byId(out, 'kubejs:script/recipes/milling/2')?.results).toEqual([{ item: 'minecraft:string', count: 1, chance: 0.5 }])
   })
 
+  it('[TP-KJS-RECIPE-CALLS][TP-KJS-FILTERS] 扇風機の処理のレシピ（#235）：smelting・blasting・smoking・create.splashing・createHaunting を足し、種類で消せる', () => {
+    const out = run({
+      'fan.js': `
+        ServerEvents.recipes(event => {
+          event.smelting('minecraft:copper_ingot', 'minecraft:raw_copper').id('pack:copper')
+          event.blasting('2x minecraft:iron_ingot', '#c:raw_materials/iron').id('pack:iron')
+          event.recipes.minecraft.smoking('minecraft:cooked_beef', 'minecraft:beef').id('pack:beef')
+          event.recipes.create.splashing([Item.of('minecraft:clay_ball').withChance(0.5)], 'minecraft:gravel').id('pack:wash')
+          event.recipes.createHaunting('minecraft:soul_sand', 'minecraft:sand').id('pack:haunt')
+          event.campfireCooking('minecraft:cooked_cod', 'minecraft:cod')
+          event.smelting('minecraft:glass', 'minecraft:sand').id('pack:glass')
+          event.remove({ type: 'minecraft:smelting', output: 'minecraft:glass' })
+        })
+      `,
+    })
+    expect(byId(out, 'pack:copper')).toEqual({
+      id: 'pack:copper',
+      type: 'smelting',
+      items: ['minecraft:raw_copper'],
+      tags: [],
+      duration: 0,
+      results: [{ item: 'minecraft:copper_ingot', count: 1, chance: 1 }],
+    })
+    expect(byId(out, 'pack:iron')).toMatchObject({ type: 'blasting', tags: ['c:raw_materials/iron'], results: [{ item: 'minecraft:iron_ingot', count: 2, chance: 1 }] })
+    expect(byId(out, 'pack:beef')).toMatchObject({ type: 'smoking', items: ['minecraft:beef'] })
+    expect(byId(out, 'pack:wash')).toMatchObject({ type: 'splashing', results: [{ item: 'minecraft:clay_ball', count: 1, chance: 0.5 }] })
+    expect(byId(out, 'pack:haunt')).toMatchObject({ type: 'haunting', items: ['minecraft:sand'] })
+    expect(byId(out, 'pack:glass')).toBeUndefined()
+    // 焚き火の料理は読まない
+    expect(out.recipes.some((r) => r.items.includes('minecraft:cod'))).toBe(false)
+  })
+
   it('[TP-KJS-FILTERS][TP-KJS-REPLACE] remove・replaceInput（2つの引数の古い書き方も）を当てはめる', () => {
     const out = run({
       'a.js': `

@@ -3,7 +3,16 @@
 // ほかの呼び出しは何もしない値（noop）を返し、名前を数える。スクリプトに渡すのはここで作った値だけにする（runScripts.ts）。
 
 import { flattenItemTags, type ItemTagFiles } from '../itemTags'
-import { readProcessingRecipe, PROCESSING_RECIPE_TYPES, type ProcessingRecipe, type ProcessingRecipeType } from '../recipes'
+import {
+  COOKING_RECIPE_TYPES,
+  CREATE_RECIPE_TYPES,
+  parseRecipeType,
+  readProcessingRecipe,
+  recipeTypeId,
+  type CookingRecipeType,
+  type ProcessingRecipe,
+  type ProcessingRecipeType,
+} from '../recipes'
 import type { ScriptError, ScriptRunInput, UnsupportedCall } from './scriptTypes'
 import { isSvalInternalName } from './svalNames'
 import { ScriptFluid, ScriptItem, parseItemString, toIngredients, toPlainJson, toResults, toScriptItems, toSingleId, withNamespace } from './scriptValues'
@@ -14,10 +23,15 @@ interface Handler {
   readonly fn: (event: unknown) => unknown
 }
 
-/** レシピの種類の名前（`create:milling`、`milling`）を短い名前にする。読む6つ以外は null */
+/** レシピの種類の名前（`create:milling`、`minecraft:smelting`、`milling`）を短い名前にする。namespace がなければ Create の種類。読まない種類は null */
 function processingType(name: string): ProcessingRecipeType | null {
-  const short = name.startsWith('create:') ? name.slice('create:'.length) : name
-  return (PROCESSING_RECIPE_TYPES as readonly string[]).includes(short) ? (short as ProcessingRecipeType) : null
+  if (name.includes(':')) return parseRecipeType(name)
+  return (CREATE_RECIPE_TYPES as readonly string[]).includes(name) ? (name as ProcessingRecipeType) : null
+}
+
+/** `smelting` → 料理の種類。ほかは null */
+function cookingType(name: string): CookingRecipeType | null {
+  return (COOKING_RECIPE_TYPES as readonly string[]).includes(name) ? (name as CookingRecipeType) : null
 }
 
 /** `createMilling` → `milling` */
@@ -26,13 +40,10 @@ function legacyBuilderType(name: string): ProcessingRecipeType | null {
   return m ? processingType(m[1][0].toLowerCase() + m[1].slice(1)) : null
 }
 
-/** レシピの読む6つ以外の種類を作る、よく使う呼び出し。何もしないが、再現しないものとしては数えない */
+/** 読まない種類のレシピを作る、よく使う呼び出し。何もしないが、再現しないものとしては数えない */
 const OTHER_RECIPE_METHODS = new Set([
   'shaped',
   'shapeless',
-  'smelting',
-  'blasting',
-  'smoking',
   'campfireCooking',
   'stonecutting',
   'smithing',
@@ -337,7 +348,23 @@ export class FakeKubeJs {
     }
   }
 
+  /** 料理のレシピ（`event.smelting(出る物, 材料)`）。出る物は1つ。処理時間は扇風機では使わない */
+  private cookingBuilderFor(type: CookingRecipeType): (output: unknown, input: unknown) => unknown {
+    return (output, input) => {
+      const { items, tags } = toIngredients(input)
+      return this.addRecipe({ id: this.nextId(), type, items, tags, duration: 0, results: toResults(output).slice(0, 1) })
+    }
+  }
+
   private recipeEvent(): unknown {
+    // `event.recipes.minecraft.smelting(…)`
+    const minecraft = new Proxy(Object.create(null) as Record<string, unknown>, {
+      get: (_t, key) => {
+        if (typeof key !== 'string') return undefined
+        const type = cookingType(key)
+        return type ? this.cookingBuilderFor(type) : NOOP
+      },
+    })
     // `event.recipes.create.milling(…)`
     const create = new Proxy(Object.create(null) as Record<string, unknown>, {
       get: (_t, key) => {
@@ -350,6 +377,7 @@ export class FakeKubeJs {
     const recipes = new Proxy(Object.create(null) as Record<string, unknown>, {
       get: (_t, key) => {
         if (key === 'create') return create
+        if (key === 'minecraft') return minecraft
         if (typeof key !== 'string') return undefined
         const type = legacyBuilderType(key)
         return type ? this.builderFor(type) : NOOP
@@ -413,6 +441,7 @@ export class FakeKubeJs {
       },
     }
     for (const name of OTHER_RECIPE_METHODS) methods[name] = () => NOOP
+    for (const type of COOKING_RECIPE_TYPES) methods[type] = this.cookingBuilderFor(type)
     return this.eventObject('レシピのイベント', methods)
   }
 
@@ -420,10 +449,10 @@ export class FakeKubeJs {
   private recipeView(r: ProcessingRecipe): unknown {
     const known: Record<string, unknown> = {
       getId: () => r.id,
-      getType: () => `create:${r.type}`,
+      getType: () => recipeTypeId(r.type),
       getMod: () => r.id.split(':')[0],
       id: r.id,
-      type: `create:${r.type}`,
+      type: recipeTypeId(r.type),
     }
     return new Proxy(Object.create(null) as Record<string, unknown>, {
       get: (_t, key) => {
@@ -494,10 +523,10 @@ export class FakeKubeJs {
         return any((x) => (typeof x === 'string' ? (r) => r.id.split(':')[0] === x : null))
       case 'type':
         return any((x) => {
-          if (x instanceof RegExp) return (r) => x.test(`create:${r.type}`)
+          if (x instanceof RegExp) return (r) => x.test(recipeTypeId(r.type))
           if (typeof x !== 'string') return null
           const t = processingType(x)
-          // 読む6つ以外の種類は、ここにあるどのレシピにも合わない
+          // 読まない種類は、ここにあるどのレシピにも合わない
           return (r) => t !== null && r.type === t
         })
       case 'output':

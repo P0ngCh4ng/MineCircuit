@@ -13,7 +13,8 @@ describe('readKubeJsRecipes', () => {
         json({ type: 'create:milling', ingredients: [{ item: 'minecraft:wheat' }], processingTime: 120 }),
       ],
       ['kubejs/data/pack/recipe/deep/a/b/cut.json', json({ type: 'create:cutting', ingredients: [{ tag: 'minecraft:logs' }] })],
-      ['kubejs/data/createastral/recipes/smelt.json', json({ type: 'minecraft:smelting', ingredient: { item: 'a:b' } })],
+      ['kubejs/data/createastral/recipes/smelt.json', json({ type: 'minecraft:smelting', ingredient: { item: 'a:b' }, result: 'a:c' })],
+      ['kubejs/data/createastral/recipes/shaped.json', json({ type: 'minecraft:crafting_shaped', key: {} })],
       ['kubejs/data/createastral/tags/items/x.json', json({ type: 'create:milling' })],
       ['kubejs/data/createastral/recipes/notes.txt', strToU8('not json')],
       ['data/elsewhere/recipes/x.json', json({ type: 'create:milling' })],
@@ -21,6 +22,7 @@ describe('readKubeJsRecipes', () => {
     const result = await readKubeJsRecipes(source)
     expect(result.recipes).toMatchObject([
       { id: 'createastral:milling/grain', type: 'milling', items: ['minecraft:wheat'], tags: [], duration: 120 },
+      { id: 'createastral:smelt', type: 'smelting', items: ['a:b'], results: [{ item: 'a:c', count: 1, chance: 1 }] },
       { id: 'pack:deep/a/b/cut', type: 'cutting', items: [], tags: ['minecraft:logs'], duration: 0 },
     ])
     expect(result.problems).toEqual([])

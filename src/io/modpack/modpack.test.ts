@@ -76,6 +76,36 @@ describe('Modpack', () => {
     expect(book.scriptsChangeRecipes).toBe(true)
   })
 
+  it('[TP-RECIPE-SOURCES] Minecraft 本体の jar のレシピ（扇風機の料理のレシピ。#235）も使い、同じ ID なら Mod の jar を優先する', async () => {
+    const cooking = (id: string, result: string): ProcessingRecipe => ({
+      id,
+      type: 'smelting',
+      items: ['minecraft:raw_copper'],
+      tags: [],
+      duration: 0,
+      results: [{ item: result, count: 1, chance: 1 }],
+    })
+    const vanilla = summary('client.jar', {
+      recipes: [cooking('minecraft:copper_ingot', 'minecraft:copper_ingot'), cooking('minecraft:glass', 'minecraft:glass')],
+    })
+    const pack = new Modpack(
+      [summary('a.jar', { recipes: [cooking('minecraft:glass', 'a:glass')] })],
+      null,
+      [],
+      [],
+      [],
+      {
+        status: { kind: 'found', version: '1.18.2', where: 'Modpack', jarPath: 'versions/1.18.2/1.18.2.jar', jaJp: false },
+        assets: { version: '1.18.2', source: new MemoryFileSource([]), jarPath: 'versions/1.18.2/1.18.2.jar', summary: vanilla, jaJp: {} },
+      },
+    )
+    const book = await pack.recipeBook()
+    expect(Object.fromEntries(book.recipes.map((r) => [r.id, r.results[0]?.item]))).toEqual({
+      'minecraft:copper_ingot': 'minecraft:copper_ingot',
+      'minecraft:glass': 'a:glass',
+    })
+  })
+
   it('KubeJS のレシピがなければ jar のレシピだけで、スクリプトはレシピを変えていない扱い', async () => {
     const pack = new Modpack([summary('a.jar', { recipes: [recipe('create:milling/wheat', 100)] })], null)
     expect(await pack.recipeBook()).toEqual({ recipes: [recipe('create:milling/wheat', 100)], scriptsChangeRecipes: false, itemTags: {} })

@@ -171,7 +171,7 @@ MINECIRCUIT_BLUEPRINTS="<設計図のフォルダ>" MINECIRCUIT_MODPACK="<Modpac
 | ブロック | `tests/verification/blocks/create-0.5.1-fabric.json`（584 個）、`create-6.0.10.json`（643 個）。ID・プロパティの値の範囲・ブロックエンティティ・応力の初期値 | `tests/verification/createBlocks.test.ts` |
 | 物の通り道での扱い | `tests/verification/itemPathRoles.ts`。ブロックエンティティの種類（113 種）ごと | 同上 |
 | 回転・反転 | ブロックの一覧のプロパティの値の範囲 | `tests/verification/createTransform.test.ts` |
-| 規則 | [create-stress.md](create-stress.md) の `ST-…`（応力、92 個）・`TF-…`（回転・反転、23 個）・`PL-…`（置き方・初期状態、30 個）、[create-throughput.md](create-throughput.md) の `TP-…`（物の通り道と輸送量、103 個）。出典と段階は `tests/verification/rules.ts` | `tests/verification/rules.test.ts`。書類・テストの名前・`rules.ts` の三つが一致し、どの規則も A（Create にない規則は除く）と B を持つこと |
+| 規則 | [create-stress.md](create-stress.md) の `ST-…`（応力、92 個）・`TF-…`（回転・反転、23 個）・`PL-…`（置き方・初期状態、30 個）、[create-throughput.md](create-throughput.md) の `TP-…`（物の通り道と輸送量、107 個）。出典と段階は `tests/verification/rules.ts` | `tests/verification/rules.test.ts`。書類・テストの名前・`rules.ts` の三つが一致し、どの規則も A（Create にない規則は除く）と B を持つこと |
 | 回転軸と軸の口 | create-stress.md の表の行ごと | `tests/verification/createKineticShapes.test.ts`。表の行のブロックを合わせると、計算で回るブロックの全部になること |
 | 分岐 | `vitest.config.ts` の coverage。`npm run coverage` | 下限を割ると失敗する。CI もこれでテストする |
 | 実在の設計図（C） | 利用者の PC のフォルダ（リポジトリに入れない） | `tests/verification/realBlueprints.test.ts`。環境変数を渡したときだけ動く（上の「実在の設計図で確かめる（C）」） |
