@@ -157,7 +157,7 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 
 | 場所 | 中身 |
 | --- | --- |
-| Minecraft 本体の jar の `data/minecraft/recipes/`（1.21 は `recipe/`） | 扇風機に使う料理のレシピ（かまど・溶鉱炉・燻製器。#235）。同じ ID なら Mod の jar を優先 |
+| Minecraft 本体の jar の `data/minecraft/recipes/`（1.21 は `recipe/`） | 扇風機に使う料理のレシピ（かまど・溶鉱炉・燻製器）と、メカニカルクラフターに使う作業台のレシピ（#235）。同じ ID なら Mod の jar を優先 |
 | Mod の jar の `data/<namespace>/recipes/`（1.21 は `recipe/`） | Mod が持つレシピ |
 | Modpack の `kubejs/data/<namespace>/recipes/` | KubeJS のデータパックで足したレシピ。同じ ID なら jar より優先 |
 | Modpack の `kubejs/server_scripts/` | KubeJS のスクリプト。作り物の KubeJS の上で動かし、レシピを足す・消す・置き換える操作を集めて、上の2つに当てはめる（下の「KubeJS のスクリプトのレシピ」。#145） |
@@ -165,8 +165,14 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 - `TP-RECIPE-TIME-FIELD` 処理時間の項目は、1.18 は `processingTime`、1.21（Create 6.0）は `processing_time`。どちらも書いていなければ 0。
 - `TP-RECIPE-INGREDIENTS` 材料のうち液体（`amount` を持つもの、`fluid`・`fluidTag`）は、アイテムの材料には入れない。液体を入れるレシピ（`create:filling`）だけは、液体の材料を別に持つ（液体の ID は `fluid`、タグは 1.18 の `fluidTag`・1.21 の `tag`）。
 - 材料の形は（`TP-RECIPE-INGREDIENTS`）`{ item }`・`{ tag }`・その配列のほか、NeoForge のいずれかの材料 `{ type: "neoforge:compound", ingredients: [...] }` の中も読む（Create 6.0 の Mod 連携のレシピ。`create:milling/compat/...` など、Create 6.0.10 の加工のレシピ 553 のうち 353 がこの形。2026-10-28 に確認）。1.21.2 からの文字列の形（`"minecraft:wheat"`、`"#c:crops/wheat"`）も読む。
-- `TP-RECIPE-TYPES` 読むのは `type` が `create:milling`・`create:crushing`・`create:cutting`・`create:mixing`・`create:pressing`・`create:compacting`、スパウトとアイテムドレイン（#235）に使う `create:filling`・`create:emptying` と、扇風機の処理（#235。下の「扇風機」）に使う `create:splashing`・`create:haunting`・`minecraft:smelting`・`minecraft:blasting`・`minecraft:smoking` のものだけ。材料（`ingredients` の `item` と `tag`）と処理時間（`processingTime`）とできる物（`results`）だけを持つ。
+- `TP-RECIPE-TYPES` 読むのは `type` が `create:milling`・`create:crushing`・`create:cutting`・`create:mixing`・`create:pressing`・`create:compacting`、スパウトとアイテムドレイン（#235）に使う `create:filling`・`create:emptying`、メカニカルクラフター（#235）に使う `create:mechanical_crafting`・`minecraft:crafting_shaped`・`minecraft:crafting_shapeless` と、扇風機の処理（#235。下の「扇風機」）に使う `create:splashing`・`create:haunting`・`minecraft:smelting`・`minecraft:blasting`・`minecraft:smoking` のものだけ。材料（`ingredients` の `item` と `tag`）と処理時間（`processingTime`）とできる物（`results`）だけを持つ。
 - `TP-RECIPE-TYPES` Minecraft の料理のレシピ（`minecraft:smelting` など）は、材料が `ingredient`（1つの材料か、そのどれか）、できる物が `result`（1.18 は ID の文字列で1個、1.21 は `{ id, count }`。`{ item, count }` も読む）。処理時間（`cookingtime`）は扇風機では使わないので読まない。
+- `TP-RECIPE-CRAFTING` 作業台のレシピとメカニカルクラフターのレシピは、材料の並びも持つ。
+  - 形のあるもの（`crafting_shaped`・`mechanical_crafting`）：`pattern`（上の行から、1文字が1マス、空白は空き）と `key`（文字 → 材料）。
+  - 形のないもの（`crafting_shapeless`）：`ingredients`（材料1つが1マス）。
+  - 材料は `{ item }`・`{ tag }`・そのどれか（配列）・文字列（1.21.2 から）。できる物は `result`（1.18 は `{ item, count }`、1.21 は `{ id, count }`）。
+  - `mechanical_crafting` の左右を入れ替えた並びを受け付けるか：1.18 は `acceptMirrored`、6.0 は `accept_mirrored`。書いていなければ受け付ける。作業台の形のあるレシピは、いつも受け付ける。
+  - 特別なレシピ（`crafting_special_…`・`crafting_decorated_pot` など、並びを持たないもの）は読まない。
 - 読む種類を足したときは、保存してある Modpack の読み込みの結果を読み直す（保存の鍵の版を上げる）。
 - 条件付きのレシピ（`conditions`、`fabric:load_conditions`）の条件は見ない。
 - KubeJS のスクリプト（`kubejs/server_scripts/`）で足した・変えたレシピは、スクリプトを動かして集める（下の「KubeJS のスクリプトのレシピ」）。手元の Create Astral は、Create の処理のレシピのほとんどをスクリプトで足している（2026-10-29 に確認。石臼 約 49・粉砕 約 77・ソー 約 49・ミキサー 約 361・プレス 約 14・圧縮 約 97。`kubejs/data/` のレシピ JSON は 52 個だけ）。
@@ -277,7 +283,7 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 | 下の節 | 重さ付きイジェクター・トンネル・ホッパー・スパウト・アイテムドレイン | — | 下の「物の動き（#233）」の「足すブロック」 |
 | `TP-BLOCK-DEPLOYER-HAND` | デプロイヤーの手（機械アーム・ファンネルなどが入れたとき。#251） | どの面からでも | 生データの `Mode` が `USE`（なければ `USE`）なら、手の物を2つ先（`pos + 2 × facing`）のブロックに使う。そこがブレイズバーナーなら、燃料として渡す（`TP-BLOCK-BLAZE-BURNER`）。ほかのブロックに使ったときの結果と、`PUNCH` は扱わず、そこで止めて仮定に載せる。1回の動作で1個使うので、処理できる数は `TP-DEPLOYER-TIME` の1分あたりの回数（`DeployerBlockEntity.activate`、`BlazeBurnerBlock.use`） |
 | `TP-BLOCK-BLAZE-BURNER` | ブレイズバーナー（`create:blaze_burner`） | どの面からでも（燃料として） | 燃やすので、物はそこでなくなる。先へ送らず、溜まる物にも出る数にも入れない。仮定には載せない |
-| `TP-BLOCK-UNKNOWN` | 表にない Create のブロック（扇風機・メカニカルクラフターなど） | — | そこで止め、仮定に載せる |
+| `TP-BLOCK-UNKNOWN` | 表にない Create のブロック | — | そこで止め、仮定に載せる |
 
 ### 出すもの
 
@@ -288,7 +294,7 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 
 ### 扱わないもの
 
-- 扇風機の風が物を押し流す動き、メカニカルクラフター、ベルトの上の粉砕、デプロイヤーの手の物のレシピ（ブレイズバーナーに燃料を入れるのは扱う。`TP-BLOCK-DEPLOYER-HAND`）。届いたら素通りするか止まるとして、仮定に載せる。メカニカルクラフターは #235 で足す。扇風機の処理（洗う・燻す・焼く・憑依）は扱う（`TP-FAN-RECIPE`）。
+- 扇風機の風が物を押し流す動き、ベルトの上の粉砕、デプロイヤーの手の物のレシピ（ブレイズバーナーに燃料を入れるのは扱う。`TP-BLOCK-DEPLOYER-HAND`）。届いたら素通りするか止まるとして、仮定に載せる。扇風機の処理（洗う・燻す・焼く・憑依）は扱う（`TP-FAN-RECIPE`）。メカニカルクラフターは扱う（`TP-CRAFTER`）。
 - 放り出した物の正確な落ちる先、レッドストーンの状態（保存したときの `powered` を使う。`powered=true` のファンネルは動かない）。
 - ブロックの当たり判定。空気とベルトのファンネル以外は、当たり判定があるとみなす。
 - 受け取る面：機械アーム・ファンネル・ベイスンが入れるときは、入れ物に直接入れるので面を問わない。シュートと粉砕ホイールが面で受け取るのは上からだけ。水平の `facing` のベイスンの出す先が空気なら、ベイスンに溜まるとして仮定に載せる。
@@ -489,13 +495,33 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 
 `TP-CRAFTER`
 
-- 速さ s = |回転数| を 4〜250 に収めた値。各段階の時間は「数値 / s」tick（切り上げ）。
-- すべてのクラフターに材料が入ると、組み立てを始める（500。2台目からは max(100, s + 1)。Create 6.0 は 1 で、すぐ始まる）。
-- 組み立てた物は、矢印の向きの次のクラフターへ渡す（1000）。最後の1台で作る（2000）。
-- できた物は、最後のクラフターの矢印の先のブロックに入れるか、放り出す。
-- 物の通り道では、材料を入れる所（物の入口・アーム・ファンネル）から、最後のクラフターまでを1つの機械として扱い、待つ時間は上の段階の合計にする。
-- 計算では：まだ扱わない（#235）。届いたら止まり、仮定に載せる。
-- 出典：`kinetics/crafter/MechanicalCrafterBlockEntity.java`（`Phase`、`getCountDownSpeed`）
+- 受け取る：どの面からでも、入れ物として（ファンネル・機械アーム・ベルトの端など）。1台に入るのは1個。スロットカバーを付けたクラフター（生データの `Cover` が真）には入らない。
+- 速さ s = |回転数| を 4〜250 に収めた値。止まっていれば組み立てない。
+- すべてのクラフター（カバーの付いたものは除く）に材料が入ると、組み立てを始める。
+- 段階ごとに、残りの数から毎 tick s を引き、0 より小さくなったら次の段階へ進む（数値 n の段階は ⌊n / s⌋ + 1 tick）。
+  - 組み立て（`ASSEMBLING`）：1（Create 6.0。0.5.1 は 500、2台目からは max(100, s + 1)）。
+  - 次のクラフターへ渡す（`EXPORTING`）：1000。前のクラフターがすべて渡し終えると、次のクラフターの組み立てが始まる。
+  - 最後の1台で作る（`CRAFTING`）：2000。
+- 1回にかかる時間は、矢印をたどって最後の1台までの、一番長い道の段階の合計。
+- `TP-CRAFTER-GRID` クラフターの組（`RecipeGridHandler`）：
+  - 矢印の向き（`facing` と `pointing` から決まる）の隣が、同じ `facing` のクラフターなら、そこへ渡す。2台の `pointing` が逆向き（上と下、左と右）なら渡さない。
+  - 矢印の向き：`pointing=up` は上、`down` は下、`left` は `facing` を時計回りに回した向き、`right` は反時計回りに回した向き（`MechanicalCrafterBlock.getTargetDirection`）。
+  - 組は、渡す・渡されるでつながったクラフターすべて。矢印の先がクラフターでない1台が、最後の1台。
+  - 材料の並びは、最後の1台から見た位置。上が上、横は `facing` を反時計回りに回した向きが右（`GroupedItems.mergeOnto`）。
+  - 入力をつないだクラフター（生データの `ConnectedInput`。`Controller` が偽なら、`Data` の1つ目がまとめ役への相対位置。まとめ役の `Data` がつないだクラフターの相対位置）は、どれに入れても、まとめ役の組の空いたクラフターに、上の段から順に1個ずつ入る（`ConnectedInputHandler`）。
+- `TP-CRAFTER-RECIPE` できる物（`RecipeGridHandler.tryToApplyRecipe`）：
+  1. 作業台のレシピ（`crafting_shaped`・`crafting_shapeless`）。形のあるものは、並びの空いていない範囲がパターンと同じ（左右を入れ替えたものも）なら合う。形のないものは、入っている材料の数と種類が合えば合う。
+  2. なければ `create:mechanical_crafting`（左右の入れ替えは `accept_mirrored` のとき）。
+  3. 合うレシピが2つ以上なら ID の名前順で最初のもの（仮定に載せる）。どれもなければ、材料は放り出される。
+  4. 容器の残る材料は、できた物と一緒に出る（水・溶岩・牛乳のバケツ → バケツ、ハチミツ入りの瓶・ドラゴンブレス → ガラス瓶）。
+- できた物は、最後のクラフターの矢印の先のブロックに入れる（入れ物・ベルトなど）。先が空気なら、最後のクラフターの前（`facing` の側）に放り出す。
+- 計算では：
+  - 組の材料は、物の入口からたどり終えてから、組ごとにまとめて処理する（組のすべてのクラフターへの材料がそろってから組み立てるため）。処理したあとに組に届いた物は、組み立てに入れない（仮定に載せる）。
+  - 1台に届く物が1種類なら、並びは決まる。入力をつないだ組に2種類以上が届くときは、並びが分からないので、材料の数と種類だけで合うレシピを探し、仮定に載せる。
+  - 1秒に作る数は、材料ごとの「届く数 ÷ 1回に使う数」の一番小さいものと、1回にかかる時間で作れる数の小さい方。速さは組のうち一番遅いクラフターのもの。使われない材料は、クラフターの前で詰まる（メモに書く）。
+  - 材料が届かないクラフター（カバーのないもの）があれば、組み立てない（仮定に載せる）。
+  - 律速の機械には入れない（届く物と作る物の数え方が違うため）。
+- 出典：`kinetics/crafter/MechanicalCrafterBlockEntity.java`（`Phase`、`getCountDownSpeed`、`tryInsert`、`eject`）、`RecipeGridHandler.java`、`ConnectedInputHandler.java`、`MechanicalCraftingRecipe.java`、`MechanicalCraftingInput.java`
 
 #### この版で扱わないもの
 
@@ -592,7 +618,7 @@ Create 6.0（1.21.1）のソースと比べた（2026-10-27）。上の規則は
 - ソーがベルトの上の物を処理するときの時間（ベルトの処理は別の経路）。
 - 作り物の KubeJS で集めたレシピが、ゲームの中のレシピ（JEI などで見えるもの）と同じになるか（Create Astral で数を比べる）。
 - イジェクターが投げてから次に受け取れるまでの、ふたの動きの tick 数（約 4 tick とした。ゲームで計る）。
-- メカニカルクラフターの組み立てを始める時間（500 と max(100, s + 1) のどちらになるかは、クラフターの並び方による）。
+- メカニカルクラフターの組み立てを始める時間。Create 6.0 の 1 を使う（0.5.1 の 500 と max(100, s + 1) のどちらになるかは、クラフターの並び方による）。
 - 扇風機の風の中の物の速さ（式は読んだが、物の摩擦との組み合わせで実際の速さが変わる。ゲームで計る）。
 
 ## 参照したソース

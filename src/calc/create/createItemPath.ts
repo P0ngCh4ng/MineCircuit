@@ -28,6 +28,19 @@ import {
   type RecipeChoice,
 } from './createThroughput'
 import { emptyItem, FILLING_TICKS, fillItem, spoutFluid, type FluidProcess } from './spoutDrain'
+import {
+  CRAFTER_ID,
+  crafterCovered,
+  crafterCycleTicks,
+  crafterGroup,
+  crafterInputController,
+  crafterOutput,
+  crafterSpeed,
+  craftingRemainder,
+  gridCoord,
+  matchCrafting,
+  type CrafterSlot,
+} from './mechanicalCrafter'
 import { FAN_PROCESSING_NAMES, findFanCurrents, type FanCell, type FanCurrents, type FanProcessingKind } from './fanCurrent'
 import { arcPath, blockCenter, ejectorPath, throwPath, type MotionPath } from './itemMotion'
 import { testFilter } from './itemFilter'
@@ -207,6 +220,7 @@ export function traceItemPaths(ports: readonly VirtualPort[], env: ItemPathEnv):
     if (!(rate > 0)) continue
     tracer.tracePort(port.pos, { item, rate, source: 'virtual' })
   }
+  tracer.finishCrafters()
   return tracer.result()
 }
 
@@ -283,6 +297,10 @@ class ItemTracer {
   private steps = 0
   /** たどった物の入口の数の合計（個/秒） */
   private inputRate = 0
+  /** メカニカルクラフターの入力のまとめ役ごとに、届いた物（TP-CRAFTER） */
+  private readonly crafterInputs = new Map<string, Flow[]>()
+  /** 材料が届いたクラフターの組（最後の1台の位置）。処理したものは true */
+  private readonly crafterGroups = new Map<string, { readonly final: Vec3; done: boolean }>()
 
   constructor(private readonly env: ItemPathEnv) {
     this.arms = findArms(env.bp)
@@ -380,6 +398,8 @@ class ItemTracer {
         return this.hopper(pos, state, flow, from, carry)
       case 'create:deployer':
         return this.deployerHand(pos, state, flow, from, carry)
+      case CRAFTER_ID:
+        return this.crafter(pos, flow, from, carry)
       case 'create:blaze_burner':
         // ブレイズバーナーは物を燃料として燃やす。先へは出さず、溜まりもしない
         this.arrive(pos, flow, from, carry)
@@ -723,6 +743,150 @@ class ItemTracer {
       }
       const exit = oppositeDirection(face)
       this.handOff(pos, addVec3(pos, directionVector(exit)), out, face, null, { seconds: 1 / DRAIN_SPEED, dropVy: 0 })
+    }
+  }
+
+  // ---- メカニカルクラフター（docs/create-throughput.md「メカニカルクラフター」） ----
+
+  /**
+   * メカニカルクラフターに材料が届く。組のすべてのクラフターの材料がそろってから組み立てるので、ここでは覚えておき、
+   * 物の入口からたどり終えてから組ごとに処理する（finishCrafters）
+   */
+  private crafter(pos: Vec3, flow: Flow, from: Vec3 | null, carry: Carry): void {
+    const bp = this.env.bp
+    if (crafterCovered(bp, pos)) {
+      this.refuse(pos, 'スロットカバーが付いているので、物を受け取らない')
+      return
+    }
+    this.arrive(pos, flow, from, carry)
+    const group = crafterGroup(bp, pos)!
+    const k = posKey(group.final)
+    const known = this.crafterGroups.get(k)
+    if (known?.done) {
+      this.env.log.add('クラフターの組を組み立てたあとに届いた物は、組み立てに入れていない', pos)
+      return
+    }
+    if (!known) this.crafterGroups.set(k, { final: group.final, done: false })
+    const controller = posKey(crafterInputController(bp, pos))
+    const list = this.crafterInputs.get(controller) ?? []
+    const same = list.findIndex((f) => f.item === flow.item)
+    if (same < 0) list.push(flow)
+    else list[same] = { ...list[same]!, rate: list[same]!.rate + flow.rate, source: weakerSource(list[same]!.source, flow.source) }
+    this.crafterInputs.set(controller, list)
+  }
+
+  /** 材料が届いたクラフターの組を処理する。できた物の先で、また別の組に届けば、それも処理する */
+  finishCrafters(): void {
+    for (;;) {
+      const next = [...this.crafterGroups.values()].find((g) => !g.done)
+      if (!next) return
+      next.done = true
+      this.steps = 0
+      this.ancestors.clear()
+      this.craft(next.final)
+    }
+  }
+
+  /** クラフターの組で作る（TP-CRAFTER・TP-CRAFTER-GRID・TP-CRAFTER-RECIPE） */
+  private craft(finalPos: Vec3): void {
+    const bp = this.env.bp
+    const group = crafterGroup(bp, finalPos)!
+    const final = group.final
+    const rpm = Math.min(...group.members.map((m) => Math.abs(this.env.rpmAt(m) ?? 0)))
+    const s = crafterSpeed(rpm)
+    if (s === 0) {
+      this.stop(final, '止まっているので、組み立てない')
+      return
+    }
+    const slots: CrafterSlot[] = []
+    const missing: Vec3[] = []
+    const slotPools: string[] = []
+    for (const m of group.members) {
+      if (crafterCovered(bp, m)) continue
+      const pool = posKey(crafterInputController(bp, m))
+      const flows = this.crafterInputs.get(pool) ?? []
+      if (flows.length === 0) missing.push(m)
+      slots.push({ pos: m, coord: gridCoord(m, final, group.facing), items: flows.map((f) => f.item) })
+      slotPools.push(pool)
+    }
+    if (missing.length > 0) {
+      this.env.log.add(`材料が届かないクラフター（${missing.map(posText).join('、')}）があるので、組み立てない`, final)
+      return
+    }
+    const book = this.env.recipes
+    const rec = this.record(final)
+    if (!book) {
+      rec.recipesUnknown = true
+      this.env.log.add('Modpack のレシピがないので、メカニカルクラフターでできる物が分からず、物の通り道はクラフターで止まる', final)
+      return
+    }
+    if (book.scriptsChangeRecipes) {
+      this.env.log.add('KubeJS のスクリプトがレシピを変えているが、スクリプトのレシピは読めないので、物の通り道に入れていない')
+    }
+    const match = matchCrafting(slots, book)
+    if (!match) {
+      this.stop(final, '材料の並びに合うレシピがないので、材料は放り出される')
+      return
+    }
+    const recipe = match.recipe
+    if (match.count > 1) {
+      this.env.log.add(`メカニカルクラフターの材料の並びに合うレシピが ${match.count} つあるので、ID の名前順で最初の ${recipe.id} を使った`, final)
+    }
+    if (match.unordered) {
+      this.env.log.add('入力をつないだクラフターに2種類以上の物が届くので、並びは分からず、材料の数と種類だけでレシピを決めた', final)
+    }
+    // 材料ごとに、1回に使う数と届く数から、1秒に作る数を決める
+    const use = new Map<string, number>()
+    match.items.forEach((item, i) => {
+      const k = `${slotPools[i]}|${item}`
+      use.set(k, (use.get(k) ?? 0) + 1)
+    })
+    const cycle = crafterCycleTicks(group.longest, s)
+    let rate = TICKS_PER_SECOND / cycle
+    const sources: Provenance[] = [match.unordered ? 'assumed' : 'modpack']
+    for (const [k, n] of use) {
+      const [pool, item] = [k.slice(0, k.indexOf('|')), k.slice(k.indexOf('|') + 1)]
+      const f = this.crafterInputs.get(pool)!.find((x) => x.item === item)!
+      rate = Math.min(rate, f.rate / n)
+      sources.push(f.source)
+    }
+    for (const pool of new Set(slotPools)) {
+      for (const f of this.crafterInputs.get(pool)!) {
+        const n = use.get(`${pool}|${f.item}`)
+        if (n === undefined || f.rate - rate * n <= EPSILON) continue
+        this.note(final, `${f.item} のうち ${formatRate(f.rate - rate * n)} 個/秒は使われず、クラフターの前で詰まる`)
+      }
+    }
+    const source = weakest(sources)
+    const outs: ItemOutput[] = []
+    for (const r of recipe.results) addOutput(outs, { item: r.item, rate: rate * r.count * r.chance, source })
+    for (const item of match.items) {
+      const rest = craftingRemainder(item)
+      if (rest) addOutput(outs, { item: rest, rate, source })
+    }
+    const kept = outs.filter((o) => o.rate > EPSILON)
+    const input = [...new Set(match.items)].sort().map((item) => `${item} ×${match.items.filter((x) => x === item).length}`).join('、')
+    rec.recipes.push({
+      type: recipe.type,
+      input,
+      choice: {
+        duration: resolved(cycle, 'builtin', `クラフター ${group.longest} 台の道、速さ ${s}`),
+        text: `${recipe.id}（${input}、${cycle} tick）`,
+        assumption: null,
+        recipe,
+        item: match.items[0] ?? null,
+      },
+      outputs: kept.map((o) => ({ ...o })),
+    })
+    const out = crafterOutput(bp, final)
+    for (const o of kept) {
+      this.hold(final, null, o, cycle)
+      if (out.ejected) {
+        this.note(final, '矢印の先にブロックがないので、できた物は前に放り出される')
+        this.handOff(final, out.to, o, 'up', null, { seconds: 0, dropVy: 0 })
+      } else {
+        this.deliver(out.to, o, final, out.face, INSTANT)
+      }
     }
   }
 

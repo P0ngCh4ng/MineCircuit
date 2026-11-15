@@ -47,6 +47,10 @@ export const DEFAULT_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, numb
   // スパウト・ドレインはいつも 20 tick（TP-SPOUT・TP-ITEM-DRAIN）
   filling: 0,
   emptying: 0,
+  // メカニカルクラフターは段階の時間で決まる（TP-CRAFTER）
+  mechanical_crafting: 0,
+  crafting_shaped: 0,
+  crafting_shapeless: 0,
 }
 
 /** 処理時間にレシピの時間を使う機械か（プレス・圧縮は押す動きの速さだけで決まる） */
@@ -64,6 +68,9 @@ const USES_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, boolean>> = {
   smoking: false,
   filling: false,
   emptying: false,
+  mechanical_crafting: false,
+  crafting_shaped: false,
+  crafting_shapeless: false,
 }
 
 /** 機械の名前（仮定の文と、律速の機械の名前に使う） */
@@ -81,6 +88,9 @@ export const RECIPE_MACHINE_NAMES: Readonly<Record<ProcessingRecipeType, string>
   smoking: '扇風機（燻す）',
   filling: 'スパウト',
   emptying: 'アイテムドレイン',
+  mechanical_crafting: 'メカニカルクラフター',
+  crafting_shaped: 'メカニカルクラフター',
+  crafting_shapeless: 'メカニカルクラフター',
 }
 
 // ---- 計算（純粋な関数）。回転数が 0 なら null（動かない） ----

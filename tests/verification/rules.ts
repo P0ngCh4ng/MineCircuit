@@ -163,6 +163,7 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'TP-RECIPE-TIME-FIELD': tp('foundation/recipe（0.5.1 は ProcessingRecipeSerializer の processingTime、6.0 は processing_time）'),
   'TP-RECIPE-INGREDIENTS': tp('foundation/recipe の材料の読み方、NeoForge の CompoundIngredient（6.0）'),
   'TP-RECIPE-TYPES': tp('AllRecipeTypes.java（milling・crushing・cutting・mixing・pressing・compacting）'),
+  'TP-RECIPE-CRAFTING': tp('kinetics/crafter/MechanicalCraftingRecipe.java（Serializer）、Minecraft の ShapedRecipe・ShapelessRecipe'),
   // どのレシピか
   'TP-RECIPE-BY-PATH': tpApp('このアプリの決め方（物の通り道で届く物）'),
   'TP-RECIPE-BY-CONTENTS': tpApp('このアプリの決め方（生データの入れ物の中身）'),
@@ -251,7 +252,9 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'TP-SPOUT': tp('fluids/spout/SpoutBlockEntity.java・FillingBySpout.java、fluids/transfer/GenericItemFilling.java、kinetics/belt/behaviour/BeltProcessingBehaviour.java'),
   'TP-SPOUT-FLUID': tpApp('このアプリの決めごと（スパウトの生データのタンクと、液体の管をたどって液体を決める）'),
   'TP-ITEM-DRAIN': tp('fluids/drain/ItemDrainBlockEntity.java の itemMovementPerTick・FILLING_TIME、fluids/transfer/GenericItemEmptying.java'),
-  'TP-CRAFTER': tp('kinetics/crafter/MechanicalCrafterBlockEntity.java の Phase・getCountDownSpeed'),
+  'TP-CRAFTER': tp('kinetics/crafter/MechanicalCrafterBlockEntity.java の Phase・getCountDownSpeed・tryInsert・eject'),
+  'TP-CRAFTER-GRID': tp('kinetics/crafter/RecipeGridHandler.java・ConnectedInputHandler.java・MechanicalCrafterBlock.getTargetDirection'),
+  'TP-CRAFTER-RECIPE': tp('kinetics/crafter/RecipeGridHandler.tryToApplyRecipe・MechanicalCraftingRecipe.java・MechanicalCraftingInput.java'),
   // 律速
   'TP-BOTTLENECK-USAGE': tpApp('このアプリの計算（使用率、#168）'),
   'TP-BOTTLENECK-CHOOSE': tpApp('このアプリの計算（律速の選び方）'),

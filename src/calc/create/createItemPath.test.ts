@@ -963,17 +963,17 @@ describe('物の通り道・物の動きの規則ごとの確かめ（#237）', 
     expect(messages(log)).not.toContain('create:item_vault を物の入れ物とみなした')
   })
 
-  it('[TP-BLOCK-UNKNOWN][TP-FAN][TP-CRAFTER] 表にない Create のブロック（扇風機・メカニカルクラフター）は、そこで止めて仮定に載せる（#235）', () => {
+  it('[TP-BLOCK-UNKNOWN][TP-FAN] 表にない Create のブロック（扇風機・鳩時計）は、そこで止めて仮定に載せる（#235）', () => {
     const fx = blueprintFixture()
       .place([0, 0, 0], 'create:encased_fan', { facing: 'up' })
-      .place([2, 0, 0], 'create:mechanical_crafter', { facing: 'north' })
+      .place([2, 0, 0], 'create:cuckoo_clock', { facing: 'north' })
     const { result, log } = trace(fx, [port([0, 0, 0], 'minecraft:stone'), port([2, 0, 0], 'minecraft:stone')], {
       '0,0,0': 64,
       '2,0,0': 64,
     })
     for (const [pos, id] of [
       ['0,0,0', 'create:encased_fan'],
-      ['2,0,0', 'create:mechanical_crafter'],
+      ['2,0,0', 'create:cuckoo_clock'],
     ] as const) {
       expect(rateOf(result, pos, 'minecraft:stone')).toBe(1)
       expect(at(result, pos)?.sinks).toEqual([])
@@ -1606,5 +1606,136 @@ describe('スパウトとアイテムドレイン（#235）', () => {
     expect(messages(none.log)).toEqual([
       'Modpack のレシピがないので、アイテムドレインで minecraft:honey_bottle から液体を抜けるか分からず、物は変わらないとした',
     ])
+  })
+})
+
+describe('メカニカルクラフター（#235）', () => {
+  const ing = (items: string[], tags: string[] = []) => ({ items, tags })
+  const shaped = (id: string, type: 'crafting_shaped' | 'mechanical_crafting', rows: (string | null)[][], result: string, mirrored = true): ProcessingRecipe => ({
+    ...recipe(id, type, [], 0, [out(result)]),
+    grid: { rows: rows.map((r) => r.map((c) => (c ? ing([c]) : null))), ingredients: [], mirrored },
+  })
+  const shapeless = (id: string, items: string[], result: string): ProcessingRecipe => ({
+    ...recipe(id, 'crafting_shapeless', [], 0, [out(result)]),
+    grid: { rows: null, ingredients: items.map((i) => ing([i])), mirrored: true },
+  })
+  const CRAFT_BOOK: RecipeBook = {
+    ...BOOK,
+    recipes: [
+      ...BOOK.recipes,
+      shaped('test:l', 'crafting_shaped', [['minecraft:iron_ingot', null], ['minecraft:iron_ingot', 'minecraft:gold_ingot']], 'test:l'),
+      shaped('create:mechanical_crafting/pair', 'mechanical_crafting', [['create:andesite_alloy', 'minecraft:iron_ingot']], 'test:pair', false),
+      shapeless('test:stick', ['minecraft:bamboo', 'minecraft:bamboo'], 'minecraft:stick'),
+      shapeless('test:cake', ['minecraft:milk_bucket', 'minecraft:sugar'], 'test:cake'),
+    ],
+  }
+  const crafter = (facing: string, pointing: string) => ({ facing, pointing, waterlogged: 'false' })
+  const covered = nbt.compound({ Cover: nbt.byte(1) })
+  const allAt = (positions: Vec3[], rpm: number) => Object.fromEntries(positions.map((p) => [p.join(','), rpm]))
+
+  /**
+   * 北向きの 2×2 のクラフター。(1,2,0)↓(1,1,0)→(0,1,0)↓チェスト (0,0,0)、(0,2,0)↓(0,1,0)。
+   * 北向きでは右が西なので、並びの左は x=1。(0,2,0) はカバー付き（空きのマス）
+   */
+  const square = () =>
+    blueprintFixture({ size: [2, 3, 1] })
+      .place([0, 0, 0], 'minecraft:chest', chest)
+      .place([0, 1, 0], 'create:mechanical_crafter', crafter('north', 'down'))
+      .place([1, 1, 0], 'create:mechanical_crafter', crafter('north', 'right'))
+      .place([0, 2, 0], 'create:mechanical_crafter', crafter('north', 'down'), covered)
+      .place([1, 2, 0], 'create:mechanical_crafter', crafter('north', 'down'))
+  const SQUARE: Vec3[] = [
+    [0, 1, 0],
+    [1, 1, 0],
+    [0, 2, 0],
+    [1, 2, 0],
+  ]
+
+  it('[TP-CRAFTER][TP-CRAFTER-GRID][TP-CRAFTER-RECIPE] 組のクラフターに材料がそろうと、並びに合うレシピで作り、矢印の先へ入れる', () => {
+    const ports = [port([1, 2, 0], 'minecraft:iron_ingot'), port([1, 1, 0], 'minecraft:iron_ingot'), port([0, 1, 0], 'minecraft:gold_ingot', 0.1)]
+    const { result, log } = trace(square(), ports, allAt(SQUARE, 32), CRAFT_BOOK)
+    expect(sinkOf(result, '0,0,0', 'test:l')).toBeCloseTo(0.1)
+    const applied = at(result, '0,1,0')?.recipes[0]
+    // 一番長い道は 3 台：2 × (1 + 32) + (1 + 63) = 130 tick
+    expect(applied?.choice.duration).toEqual({ value: 130, source: 'builtin', note: 'クラフター 3 台の道、速さ 32' })
+    expect(applied).toMatchObject({ type: 'crafting_shaped', input: 'minecraft:gold_ingot ×1、minecraft:iron_ingot ×2' })
+    expect(at(result, '0,1,0')?.notes).toContain('minecraft:iron_ingot のうち 0.9 個/秒は使われず、クラフターの前で詰まる')
+    expect(result.moves.find((m) => m.to.join(',') === '0,0,0')).toMatchObject({ from: [0, 1, 0], item: 'test:l' })
+    expect(messages(log)).toEqual([])
+    // 1回にかかる時間で作れる数より多くは作れない
+    const fast = trace(square(), ports.map((p) => ({ ...p, params: { rate: 5 } })), allAt(SQUARE, 32), CRAFT_BOOK)
+    expect(sinkOf(fast.result, '0,0,0', 'test:l')).toBeCloseTo(20 / 130)
+    // 左右を入れ替えた並びも合う（作業台の形のあるレシピ）
+    const mirrored = square()
+      .place([0, 2, 0], 'create:mechanical_crafter', crafter('north', 'down'))
+      .place([1, 2, 0], 'create:mechanical_crafter', crafter('north', 'down'), covered)
+    const m = trace(
+      mirrored,
+      [port([0, 2, 0], 'minecraft:iron_ingot'), port([0, 1, 0], 'minecraft:iron_ingot'), port([1, 1, 0], 'minecraft:gold_ingot')],
+      allAt(SQUARE, 32),
+      CRAFT_BOOK,
+    )
+    expect(sinkOf(m.result, '0,0,0', 'test:l')).toBeCloseTo(20 / 130)
+    // 並びが合わなければ作らない
+    const wrong = trace(square(), [port([1, 2, 0], 'minecraft:gold_ingot'), port([1, 1, 0], 'minecraft:iron_ingot'), port([0, 1, 0], 'minecraft:iron_ingot')], allAt(SQUARE, 32), CRAFT_BOOK)
+    expect(at(wrong.result, '0,1,0')?.notes).toContain('材料の並びに合うレシピがないので、材料は放り出される')
+    expect(at(wrong.result, '0,0,0')).toBeUndefined()
+  })
+
+  it('[TP-CRAFTER] 材料が届かないクラフター、止まっている組、Modpack がないときは組み立てない。カバー付きのクラフターは受け取らない', () => {
+    const iron = [port([1, 2, 0], 'minecraft:iron_ingot'), port([1, 1, 0], 'minecraft:iron_ingot')]
+    const missing = trace(square(), iron, allAt(SQUARE, 32), CRAFT_BOOK)
+    expect(messages(missing.log)).toEqual(['材料が届かないクラフター（(0, 1, 0)）があるので、組み立てない'])
+    const all = [...iron, port([0, 1, 0], 'minecraft:gold_ingot')]
+    const stopped = trace(square(), all, { ...allAt(SQUARE, 32), '0,2,0': 0 }, CRAFT_BOOK)
+    expect(at(stopped.result, '0,1,0')?.notes).toContain('止まっているので、組み立てない')
+    const noPack = trace(square(), all, allAt(SQUARE, 32), null)
+    expect(at(noPack.result, '0,1,0')?.recipesUnknown).toBe(true)
+    expect(messages(noPack.log)).toEqual(['Modpack のレシピがないので、メカニカルクラフターでできる物が分からず、物の通り道はクラフターで止まる'])
+    const cover = trace(square(), [port([0, 2, 0], 'minecraft:iron_ingot')], allAt(SQUARE, 32), CRAFT_BOOK)
+    expect(rateOf(cover.result, '0,2,0', 'minecraft:iron_ingot')).toBe(0)
+  })
+
+  it('[TP-CRAFTER-GRID] 入力をつないだクラフターは、どれに入れても組の空いたクラフターに入る。矢印の先が空気なら前に放り出す', () => {
+    // 南向き（右は東）。(0,1,0)→(1,1,0)↓ 空気 → 前（南）の (1,1,1) に放り出し、下のチェスト (1,0,1) へ
+    const controller = nbt.compound({
+      ConnectedInput: nbt.compound({
+        Controller: nbt.byte(1),
+        Data: nbt.list('compound', [nbt.compound({ X: nbt.int(0), Y: nbt.int(0), Z: nbt.int(0) }), nbt.compound({ X: nbt.int(1), Y: nbt.int(0), Z: nbt.int(0) })]),
+      }),
+    })
+    const member = nbt.compound({
+      ConnectedInput: nbt.compound({ Controller: nbt.byte(0), Data: nbt.list('compound', [nbt.compound({ X: nbt.int(-1), Y: nbt.int(0), Z: nbt.int(0) })]) }),
+    })
+    const fx = blueprintFixture({ size: [2, 2, 2] })
+      .place([0, 1, 0], 'create:mechanical_crafter', crafter('south', 'right'), controller)
+      .place([1, 1, 0], 'create:mechanical_crafter', crafter('south', 'down'), member)
+      .place([1, 0, 1], 'minecraft:chest', chest)
+    const speeds = allAt([[0, 1, 0], [1, 1, 0]], 256)
+    const { result, log } = trace(fx, [port([1, 1, 0], 'minecraft:bamboo')], speeds, CRAFT_BOOK)
+    // 1回に竹を2本使う
+    expect(sinkOf(result, '1,0,1', 'minecraft:stick')).toBeCloseTo(0.5)
+    expect(at(result, '1,1,0')?.notes).toContain('矢印の先にブロックがないので、できた物は前に放り出される')
+    expect(messages(log)).toEqual(['出す先（(1, 1, 1)）が空気なので、物は下の (1, 0, 1) に落ちるとした'])
+    // 2種類が届くと並びは分からないので、数と種類だけで決める。容器の残る材料はできた物と一緒に出る
+    const two = trace(fx, [port([1, 1, 0], 'minecraft:milk_bucket'), port([0, 1, 0], 'minecraft:sugar')], speeds, CRAFT_BOOK)
+    expect(sinkOf(two.result, '1,0,1', 'test:cake')).toBeCloseTo(1)
+    expect(sinkOf(two.result, '1,0,1', 'minecraft:bucket')).toBeCloseTo(1)
+    expect(at(two.result, '1,0,1')?.sinks[0]?.source).toBe('assumed')
+    expect(messages(two.log)).toContain('入力をつないだクラフターに2種類以上の物が届くので、並びは分からず、材料の数と種類だけでレシピを決めた')
+  })
+
+  it('[TP-CRAFTER-RECIPE] メカニカルクラフターのレシピは、左右の入れ替えを受け付けないものもある', () => {
+    // 南向き（右は東）：(0,1,0)→(1,1,0)↓ チェスト (1,0,0)。並びは 左 (0,1,0)、右 (1,1,0)
+    const fx = blueprintFixture({ size: [2, 2, 1] })
+      .place([0, 1, 0], 'create:mechanical_crafter', crafter('south', 'right'))
+      .place([1, 1, 0], 'create:mechanical_crafter', crafter('south', 'down'))
+      .place([1, 0, 0], 'minecraft:chest', chest)
+    const speeds = allAt([[0, 1, 0], [1, 1, 0]], 64)
+    const ok = trace(fx, [port([0, 1, 0], 'create:andesite_alloy'), port([1, 1, 0], 'minecraft:iron_ingot')], speeds, CRAFT_BOOK)
+    expect(sinkOf(ok.result, '1,0,0', 'test:pair')).toBeGreaterThan(0)
+    expect(at(ok.result, '1,1,0')?.recipes[0]?.type).toBe('mechanical_crafting')
+    const swapped = trace(fx, [port([1, 1, 0], 'create:andesite_alloy'), port([0, 1, 0], 'minecraft:iron_ingot')], speeds, CRAFT_BOOK)
+    expect(at(swapped.result, '1,1,0')?.notes).toContain('材料の並びに合うレシピがないので、材料は放り出される')
   })
 })
