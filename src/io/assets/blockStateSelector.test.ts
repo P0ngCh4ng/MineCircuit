@@ -81,6 +81,62 @@ describe('selectModels', () => {
     expect(r.notes[0]).toContain('合うもの')
   })
 
+  describe('足りない property を補う（#247）', () => {
+    // 古い版で保存したベルトのように、状態に waterlogged がない
+    const def: JsonValue = {
+      variants: {
+        'facing=north,part=end,waterlogged=false': { model: 'test:end_dry' },
+        'facing=north,part=end,waterlogged=true': { model: 'test:end_wet' },
+        'facing=south,part=end,waterlogged=false': { model: 'test:south' },
+      },
+    }
+
+    it('完全に合うキーがあればそれを選び、何も補わない', () => {
+      const r = selectModels(def, { facing: 'north', part: 'end', waterlogged: 'true' })
+      expect(r.refs?.[0]?.model).toBe('test:end_wet')
+      expect(r.notes).toEqual([])
+    })
+
+    it('状態にない property は問わずに選び、補ったことを notes に書く', () => {
+      const r = selectModels(def, { facing: 'south', part: 'end' })
+      expect(r.refs?.[0]?.model).toBe('test:south')
+      expect(r.notes).toEqual(['waterlogged がないので false とみなしました'])
+    })
+
+    it('候補が複数なら false を優先する（先に書いたかどうかによらない）', () => {
+      const wetFirst: JsonValue = {
+        variants: { 'part=end,waterlogged=true': { model: 'test:wet' }, 'part=end,waterlogged=false': { model: 'test:dry' } },
+      }
+      expect(selectModels(wetFirst, { part: 'end' }).refs?.[0]?.model).toBe('test:dry')
+      expect(selectModels(def, { facing: 'north', part: 'end' }).refs?.[0]?.model).toBe('test:end_dry')
+    })
+
+    it('false がなければ先に書かれた値。足りない property ごとに決める', () => {
+      const multi: JsonValue = {
+        variants: {
+          'axis=x,color=red,lit=true': { model: 'test:red_lit' },
+          'axis=x,color=blue,lit=false': { model: 'test:blue_unlit' },
+          'axis=x,color=red,lit=false': { model: 'test:red_unlit' },
+          'axis=y,color=green,lit=false': { model: 'test:other_axis' },
+        },
+      }
+      const r = selectModels(multi, { axis: 'x' })
+      expect(r.refs?.[0]?.model).toBe('test:red_unlit')
+      expect(r.notes).toEqual(['color がないので red とみなしました', 'lit がないので false とみなしました'])
+    })
+
+    it('状態にある property の値が違うキーは選ばない', () => {
+      const r = selectModels(def, { facing: 'east', part: 'end' })
+      expect(r.refs).toBeNull()
+      expect(r.notes).toEqual(['blockstates の variants に、この状態に合うものがありません'])
+    })
+
+    it('補って残った候補からは後に書いたもの', () => {
+      const loose: JsonValue = { variants: { 'lit=false': { model: 'test:a' }, 'axis=x,lit=false': { model: 'test:b' } } }
+      expect(selectModels(loose, { axis: 'x' }).refs?.[0]?.model).toBe('test:b')
+    })
+  })
+
   it('90 度単位でない回転は 0 にして書き残す。360 以上は回り直す', () => {
     const r = selectModels({ variants: { '': { model: 'test:a', x: 45, y: 450 } } }, {})
     expect(r.refs).toEqual([{ model: 'test:a', x: 0, y: 90, uvlock: false }])

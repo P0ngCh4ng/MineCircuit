@@ -909,13 +909,21 @@ flowchart LR
 
 | 段階 | 場所 | 決まり |
 | --- | --- | --- |
-| blockstates | `blockStateSelector.ts` | variants はキーの property がすべて同じなら合う（`""`・`normal` と、キーにない property は何でもよい）。複数合えば後に書いたもの（Minecraft と同じ）。重み付きの配列は先頭。multipart は when が合う部分をすべて重ねる（`a|b`、先頭の `!` で否定、`OR`・`AND`） |
+| blockstates | `blockStateSelector.ts` | variants はキーの property がすべて同じなら合う（`""`・`normal` と、キーにない property は何でもよい）。複数合えば後に書いたもの（Minecraft と同じ）。重み付きの配列は先頭。合うキーがないときは、状態にない property を補って選ぶ（下の「足りない property」）。multipart は when が合う部分をすべて重ねる（`a|b`、先頭の `!` で否定、`OR`・`AND`）。ない property は値 `""` とみなす |
 | モデルの JSON | `modelJson.ts` | namespace のない ID は `minecraft:`。uv のない面は要素の範囲を面に投影して決める（Minecraft と同じ）。読めない要素・面は飛ばして problems に書く |
 | 親の継承 | `modelResolver.ts` | `textures` は根から順に子が上書きする。`elements` と `ambientocclusion` は一番子に近いものを使う。変数（`#a` → `#b` → ID）が決まらない面は `minecraft:missingno`（アトラスでは紫と黒）にする。親の循環は止めて null |
 | OBJ のモデル | `objModel.ts` | 下の「OBJ のモデル」 |
 | 液体 | `fluidModel.ts` | 下の「液体」 |
 | 描けないもの | 同上 | `builtin/generated` まで親をたどったら null。`builtin/entity` まで親をたどったら、そこまでのテクスチャの変数で形のないモデルにする（ゲームでは描画のコードで描く。リソースパックがチェストをこれにすることがある。#217）。要素も OBJ の三角形も1つもない見た目（BlockEntityRenderer で描くブロック）は、液体なら液体の箱、particle のテクスチャが決まればそれを貼った箱（下の「形のないブロック」）、どちらでもなければ null にして色の箱で描く。空気は何もない見た目 |
 | 覚えておく | 同上 | ブロック状態の key ごと、モデルの ID ごと、ファイルのパスごとに結果を1つ持つ。同じ問題は1回だけ書く |
+
+**足りない property（#247）。** 古い版の Mod で保存した設計図は、今の版のブロックにある property を持たないことがある（Create のベルトの `waterlogged` など）。ゲームは設計図を読むとき、足りない property をブロックの初期値で埋めるので描かれるが、blockstates の variants は全部そろったキーで書かれているため、そのままでは合うキーがない。
+
+- variants で合うキーが1つもないときだけ、キーに出てくる property のうち状態にないものは問わずに、残りが合うキーを候補にする。状態にある property の値が違うキーは候補にしない。
+- 候補が複数あるときは、足りない property ごとに、キーに書かれた順に値を決めて候補を絞る：`false` の候補があれば `false`、なければ一番先に書かれた候補の値。Minecraft の初期値は Mod のコードにしかないので、多くの初期値（`waterlogged`・`powered` など）に合う `false` を優先し、ほかは blockstates の先頭に近いものにする。絞ったあとに残る候補からは、合うキーと同じく後に書いたものを選ぶ。
+- 補ったときは、見た目の問題に「`<property>` がないので `<値>` とみなしました」と書く（どの値で描いたか分かるように）。
+- 補うのは見た目を選ぶときだけ。設計図の `BlockState` は書き換えない。計算・書き出し・統計は、ファイルにある状態のまま扱う。
+- multipart は今のまま、ない property を値 `""` とみなす。multipart の条件は多くが `true` の面を足す形（柵・板ガラス・壁の `north=true` など）で、ない property は足さない（初期値 `false`・`none` と同じ）ことになるため。
 
 **OBJ のモデル。** Create などは、モデルの JSON に `"loader": "forge:obj"`（`neoforge:obj`・`porting_lib:obj` も同じ）と `"model": "<ns>:models/<パス>.obj"` を書き、形を Wavefront OBJ に置く（ブレイズバーナーの籠、粉砕ホイール、フライホイール、水車、バルブのハンドル、線路など）。`objModel.ts` で読み、`ResolvedModel.meshes`（テクスチャごとの三角形。`domain/blockModel.ts` の `ModelMesh`）にする。
 

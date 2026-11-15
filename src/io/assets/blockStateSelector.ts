@@ -37,6 +37,46 @@ export function variantKeyMatches(key: string, properties: Properties): boolean 
   return true
 }
 
+// variants のキーを property の名前 → 値にする。= のない部分は飛ばす
+function parseVariantKey(key: string): Map<string, string> {
+  const result = new Map<string, string>()
+  for (const part of key.split(',')) {
+    const eq = part.indexOf('=')
+    if (eq < 0) continue
+    const name = part.slice(0, eq).trim()
+    if (name !== '') result.set(name, part.slice(eq + 1).trim())
+  }
+  return result
+}
+
+/**
+ * 合うキーがないとき、状態にない property を補ってキーを選ぶ（#247。古い版で保存した設計図の waterlogged など）。
+ * 状態にある property はすべて合うキーを候補にし、足りない property ごとに、キーに出てくる順に値を決めて絞る：
+ * false の候補があれば false、なければ一番先に書かれた候補の値。残った候補からは後に書いたものを選ぶ。
+ * 補った値は notes に書く。候補がなければ null
+ */
+function fillMissingProperties(keys: readonly string[], properties: Properties, notes: string[]): string | null {
+  let candidates = keys
+    .map((key) => ({ key, values: parseVariantKey(key) }))
+    .filter(({ values }) => [...values].every(([name, value]) => properties[name] === undefined || properties[name] === value))
+  if (candidates.length === 0) return null
+
+  const missing: string[] = []
+  for (const { values } of candidates) {
+    for (const name of values.keys()) {
+      if (properties[name] === undefined && !missing.includes(name)) missing.push(name)
+    }
+  }
+  for (const name of missing) {
+    const withName = candidates.filter(({ values }) => values.has(name))
+    const chosen = withName.some(({ values }) => values.get(name) === 'false') ? 'false' : withName[0]!.values.get(name)!
+    // キーにこの property がない候補は、どの値にも合う
+    candidates = candidates.filter(({ values }) => !values.has(name) || values.get(name) === chosen)
+    notes.push(`${name} がないので ${chosen} とみなしました`)
+  }
+  return candidates[candidates.length - 1]!.key
+}
+
 // 条件の値。"north|south" は複数の値。true / 1 のように文字列でない値も文字列にする
 function conditionValues(v: JsonValue): string[] | null {
   if (typeof v === 'string') return v.split('|').map((s) => s.trim())
@@ -106,7 +146,10 @@ export function selectModels(definition: JsonValue, properties: Properties): Sel
     for (const key of Object.keys(definition.variants)) {
       if (variantKeyMatches(key, properties)) matched = key
     }
-    if (matched === null) return { refs: null, notes: ['blockstates の variants に、この状態に合うものがありません'] }
+    if (matched === null) {
+      matched = fillMissingProperties(Object.keys(definition.variants), properties, notes)
+      if (matched === null) return { refs: null, notes: ['blockstates の variants に、この状態に合うものがありません'] }
+    }
     const ref = parseApply(definition.variants[matched], `variants の "${matched}"`, notes)
     return { refs: ref ? [ref] : null, notes }
   }
