@@ -93,6 +93,39 @@ describe('runKubeJsScripts（1.18 の書き方）', () => {
     expect(out.recipes.some((r) => r.items.includes('minecraft:cod'))).toBe(false)
   })
 
+  it('[TP-KJS-RECIPE-CALLS][TP-RECIPE-CRAFTING] メカニカルクラフターのレシピ（#235）：shaped・shapeless・create.mechanical_crafting・createMechanicalCrafting', () => {
+    const out = run({
+      'craft.js': `
+        ServerEvents.recipes(event => {
+          event.shaped('4x minecraft:torch', ['C', 'S'], { C: ['minecraft:coal', 'minecraft:charcoal'], S: '#c:rods/wooden' }).id('pack:torch')
+          event.shapeless('minecraft:mushroom_stew', ['minecraft:bowl', '2x minecraft:red_mushroom', ['minecraft:brown_mushroom', 'minecraft:crimson_fungus']]).id('pack:stew')
+          event.recipes.create.mechanical_crafting('create:crushing_wheel', [' A ', 'AAA', ' A '], { A: 'create:andesite_alloy' }).id('pack:wheel')
+          event.recipes.createMechanicalCrafting('minecraft:diamond', ['AA'], { A: 'minecraft:coal' }).id('pack:diamond')
+          event.recipes.minecraft.crafting_shapeless('minecraft:stick', ['minecraft:bamboo', 'minecraft:bamboo']).id('pack:stick')
+        })
+      `,
+    })
+    expect(byId(out, 'pack:torch')).toMatchObject({
+      type: 'crafting_shaped',
+      results: [{ item: 'minecraft:torch', count: 4 }],
+      grid: {
+        rows: [[{ items: ['minecraft:coal', 'minecraft:charcoal'], tags: [] }], [{ items: [], tags: ['c:rods/wooden'] }]],
+        ingredients: [],
+        mirrored: true,
+      },
+    })
+    expect(byId(out, 'pack:stew')?.grid?.ingredients).toEqual([
+      { items: ['minecraft:bowl'], tags: [] },
+      { items: ['minecraft:red_mushroom'], tags: [] },
+      { items: ['minecraft:red_mushroom'], tags: [] },
+      { items: ['minecraft:brown_mushroom', 'minecraft:crimson_fungus'], tags: [] },
+    ])
+    expect(byId(out, 'pack:wheel')).toMatchObject({ type: 'mechanical_crafting', items: ['create:andesite_alloy'] })
+    expect(byId(out, 'pack:wheel')?.grid?.rows?.[0]).toEqual([null, { items: ['create:andesite_alloy'], tags: [] }, null])
+    expect(byId(out, 'pack:diamond')).toMatchObject({ type: 'mechanical_crafting' })
+    expect(byId(out, 'pack:stick')).toMatchObject({ type: 'crafting_shapeless' })
+  })
+
   it('[TP-KJS-RECIPE-CALLS] スパウト・ドレインのレシピ（#235）：create.filling は液体の材料（Fluid.of・{ fluidTag }）も持つ', () => {
     const out = run({
       'fluid.js': `
@@ -166,9 +199,11 @@ describe('runKubeJsScripts（1.19 からの書き方）', () => {
       ],
     })
     expect(out.recipes.find((r) => r.type === 'mixing')).toMatchObject({ items: ['minecraft:sand'], duration: 40 })
+    // 作業台のレシピは、パターンとキーがそろっていれば足す（メカニカルクラフター。#235）
+    expect(out.recipes.find((r) => r.type === 'crafting_shaped')).toMatchObject({ items: ['minecraft:oak_planks'], results: [{ item: 'minecraft:stick' }] })
     expect(out.itemTags['c:cobblestones'].values).toEqual(['minecraft:cobblestone'])
     expect(out.itemTags['c:x']).toBeUndefined()
-    expect(out.summary).toMatchObject({ added: 2, unsupported: [], errors: [] })
+    expect(out.summary).toMatchObject({ added: 3, unsupported: [], errors: [] })
   })
 
   it('[TP-KJS-ORDER] priority の大きいファイルの定数を、後のファイルから使える（大域は1つ）', () => {

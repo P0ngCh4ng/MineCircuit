@@ -26,12 +26,25 @@ interface Handler {
 /** レシピの種類の名前（`create:milling`、`minecraft:smelting`、`milling`）を短い名前にする。namespace がなければ Create の種類。読まない種類は null */
 function processingType(name: string): ProcessingRecipeType | null {
   if (name.includes(':')) return parseRecipeType(name)
-  return (CREATE_RECIPE_TYPES as readonly string[]).includes(name) ? (name as ProcessingRecipeType) : null
+  // `mechanicalCrafting` → `mechanical_crafting`
+  const snake = name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)
+  return (CREATE_RECIPE_TYPES as readonly string[]).includes(snake) ? (snake as ProcessingRecipeType) : null
+}
+
+/** 並びを持つレシピの種類（作業台とメカニカルクラフター。#235） */
+type GridRecipeType = 'crafting_shaped' | 'crafting_shapeless' | 'mechanical_crafting'
+function isGridType(type: ProcessingRecipeType): type is GridRecipeType {
+  return type === 'crafting_shaped' || type === 'crafting_shapeless' || type === 'mechanical_crafting'
 }
 
 /** `smelting` → 料理の種類。ほかは null */
 function cookingType(name: string): CookingRecipeType | null {
   return (COOKING_RECIPE_TYPES as readonly string[]).includes(name) ? (name as CookingRecipeType) : null
+}
+
+/** スクリプトの材料1つ分を、レシピ JSON の材料（ID と `#` 付きのタグの配列）にする */
+function ingredientJson(value: unknown): string[] {
+  return toScriptItems(value).map((s) => s.id)
 }
 
 /** `createMilling` → `milling` */
@@ -42,8 +55,6 @@ function legacyBuilderType(name: string): ProcessingRecipeType | null {
 
 /** 読まない種類のレシピを作る、よく使う呼び出し。何もしないが、再現しないものとしては数えない */
 const OTHER_RECIPE_METHODS = new Set([
-  'shaped',
-  'shapeless',
   'campfireCooking',
   'stonecutting',
   'smithing',
@@ -340,13 +351,44 @@ export class FakeKubeJs {
   /** `.processingTime(n)` を呼ばないときの処理時間。kubejs-create の初期値（1802 の ProcessingRecipeJS、2001 の ProcessingRecipeSchema） */
   private static readonly DEFAULT_PROCESSING_TIME = 100
 
-  private builderFor(type: ProcessingRecipeType): (outputs: unknown, inputs: unknown) => unknown {
+  private builderFor(type: ProcessingRecipeType): (outputs: unknown, inputs: unknown, key?: unknown) => unknown {
+    if (isGridType(type)) return this.gridBuilderFor(type)
     return (outputs, inputs) => {
       const { items, tags } = toIngredients(inputs)
       const duration = FakeKubeJs.DEFAULT_PROCESSING_TIME
       const recipe: ProcessingRecipe = { id: this.nextId(), type, items, tags, duration, results: toResults(outputs) }
       // スパウトのレシピは液体の材料も持つ（`Fluid.of('minecraft:water', 250)`。#235）
       return this.addRecipe(type === 'filling' ? { ...recipe, ...toFluidIngredients(inputs) } : recipe)
+    }
+  }
+
+  /**
+   * 作業台・メカニカルクラフターのレシピ（#235）。`event.shaped(出る物, パターン, キー)`・`event.shapeless(出る物, 材料)`・
+   * `event.recipes.create.mechanical_crafting(出る物, パターン, キー)`。レシピ JSON にして readProcessingRecipe で読む
+   */
+  private gridBuilderFor(type: GridRecipeType): (output: unknown, inputs: unknown, key?: unknown) => unknown {
+    return (output, inputs, key) => {
+      const result = toScriptItems(output).find((s) => !s.id.startsWith('#'))
+      const json: Record<string, unknown> = { type: recipeTypeId(type), result: result ? { item: result.id, count: result.count } : null }
+      if (type === 'crafting_shapeless') {
+        // 1つの要素が1マス（`2x minecraft:stick` は2マス、配列はそのどれか）
+        const slots: string[][] = []
+        for (const v of Array.isArray(inputs) ? inputs : [inputs]) {
+          if (Array.isArray(v)) {
+            slots.push(ingredientJson(v))
+            continue
+          }
+          for (const s of toScriptItems(v)) for (let i = 0; i < s.count; i++) slots.push([s.id])
+        }
+        json.ingredients = slots
+      } else {
+        json.pattern = toPlainJson(inputs)
+        const keys: Record<string, string[]> = {}
+        if (typeof key === 'object' && key !== null) for (const [k, v] of Object.entries(key)) keys[k] = ingredientJson(v)
+        json.key = keys
+      }
+      const recipe = readProcessingRecipe(this.nextId(), json)
+      return recipe ? this.addRecipe(recipe) : NOOP
     }
   }
 
@@ -359,12 +401,14 @@ export class FakeKubeJs {
   }
 
   private recipeEvent(): unknown {
-    // `event.recipes.minecraft.smelting(…)`
+    // `event.recipes.minecraft.smelting(…)`・`event.recipes.minecraft.crafting_shaped(…)`
     const minecraft = new Proxy(Object.create(null) as Record<string, unknown>, {
       get: (_t, key) => {
         if (typeof key !== 'string') return undefined
         const type = cookingType(key)
-        return type ? this.cookingBuilderFor(type) : NOOP
+        if (type) return this.cookingBuilderFor(type)
+        if (key === 'crafting_shaped' || key === 'crafting_shapeless') return this.gridBuilderFor(key)
+        return NOOP
       },
     })
     // `event.recipes.create.milling(…)`
@@ -444,6 +488,8 @@ export class FakeKubeJs {
     }
     for (const name of OTHER_RECIPE_METHODS) methods[name] = () => NOOP
     for (const type of COOKING_RECIPE_TYPES) methods[type] = this.cookingBuilderFor(type)
+    methods.shaped = this.gridBuilderFor('crafting_shaped')
+    methods.shapeless = this.gridBuilderFor('crafting_shapeless')
     return this.eventObject('レシピのイベント', methods)
   }
 

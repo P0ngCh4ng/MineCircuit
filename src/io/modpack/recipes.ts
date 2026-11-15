@@ -17,15 +17,18 @@ export type CreateRecipeType =
   | 'haunting'
   | 'filling'
   | 'emptying'
+  | 'mechanical_crafting'
 /** Minecraft の料理のレシピの種類（`minecraft:` を外した名前）。扇風機で燻す・焼くのに使う（#235） */
 export type CookingRecipeType = 'smelting' | 'blasting' | 'smoking'
+/** Minecraft の作業台のレシピの種類。メカニカルクラフターに使う（#235） */
+export type CraftingRecipeType = 'crafting_shaped' | 'crafting_shapeless'
 /**
  * 読むレシピの種類。
  * pressing はベルト・デポの上のプレス、compacting はバスンの上のプレス（圧縮）。この2つはふつう処理時間を書かない。
  * splashing・haunting と料理の3つは扇風機の処理（docs/create-throughput.md「扇風機」）。
- * filling・emptying はスパウトとアイテムドレイン（#235）
+ * filling・emptying はスパウトとアイテムドレイン、mechanical_crafting と作業台の2つはメカニカルクラフター（#235）
  */
-export type ProcessingRecipeType = CreateRecipeType | CookingRecipeType
+export type ProcessingRecipeType = CreateRecipeType | CookingRecipeType | CraftingRecipeType
 export const CREATE_RECIPE_TYPES: readonly CreateRecipeType[] = [
   'milling',
   'crushing',
@@ -37,20 +40,28 @@ export const CREATE_RECIPE_TYPES: readonly CreateRecipeType[] = [
   'haunting',
   'filling',
   'emptying',
+  'mechanical_crafting',
 ]
 export const COOKING_RECIPE_TYPES: readonly CookingRecipeType[] = ['smelting', 'blasting', 'smoking']
-export const PROCESSING_RECIPE_TYPES: readonly ProcessingRecipeType[] = [...CREATE_RECIPE_TYPES, ...COOKING_RECIPE_TYPES]
+export const CRAFTING_RECIPE_TYPES: readonly CraftingRecipeType[] = ['crafting_shaped', 'crafting_shapeless']
+/** `minecraft:` の種類 */
+const MINECRAFT_RECIPE_TYPES: readonly string[] = [...COOKING_RECIPE_TYPES, ...CRAFTING_RECIPE_TYPES]
+export const PROCESSING_RECIPE_TYPES: readonly ProcessingRecipeType[] = [
+  ...CREATE_RECIPE_TYPES,
+  ...COOKING_RECIPE_TYPES,
+  ...CRAFTING_RECIPE_TYPES,
+]
 
 /** 種類の ID（`create:milling`、`minecraft:smelting`） */
 export function recipeTypeId(type: ProcessingRecipeType): string {
-  return (COOKING_RECIPE_TYPES as readonly string[]).includes(type) ? `minecraft:${type}` : `create:${type}`
+  return MINECRAFT_RECIPE_TYPES.includes(type) ? `minecraft:${type}` : `create:${type}`
 }
 
 /** 種類の ID（`create:milling`、`minecraft:smelting`）を短い名前にする。読まない種類なら null */
 export function parseRecipeType(id: string): ProcessingRecipeType | null {
   const m = /^(create|minecraft):(\w+)$/.exec(id)
   if (!m) return null
-  const list: readonly string[] = m[1] === 'create' ? CREATE_RECIPE_TYPES : COOKING_RECIPE_TYPES
+  const list: readonly string[] = m[1] === 'create' ? CREATE_RECIPE_TYPES : MINECRAFT_RECIPE_TYPES
   return list.includes(m[2]!) ? (m[2] as ProcessingRecipeType) : null
 }
 
@@ -71,6 +82,24 @@ export interface ProcessingRecipe {
   readonly fluids?: string[]
   /** 液体の材料のタグ（`c:honey`、`#` なし）。filling だけが持つ（#235） */
   readonly fluidTags?: string[]
+  /** 材料の並び。作業台とメカニカルクラフターのレシピだけが持つ（#235） */
+  readonly grid?: CraftingGrid
+}
+
+/** 1マス分の材料。どれか1つが合えばよい */
+export interface CraftingIngredient {
+  readonly items: string[]
+  readonly tags: string[]
+}
+
+/** 作業台・メカニカルクラフターのレシピの材料の並び（docs/create-throughput.md `TP-RECIPE-CRAFTING`） */
+export interface CraftingGrid {
+  /** 形のあるレシピの並び（上の行から、左から）。null は空き。形のないレシピなら null */
+  readonly rows: (CraftingIngredient | null)[][] | null
+  /** 形のないレシピの材料（1つが1マス）。形のあるレシピなら空 */
+  readonly ingredients: CraftingIngredient[]
+  /** 左右を入れ替えた並びも受け付ける */
+  readonly mirrored: boolean
 }
 
 /** レシピの結果1つ分 */
@@ -110,6 +139,9 @@ export function readProcessingRecipe(id: string, data: unknown): ProcessingRecip
   if (!type) return null
   const items = new Set<string>()
   const tags = new Set<string>()
+  if (type === 'crafting_shaped' || type === 'crafting_shapeless' || type === 'mechanical_crafting') {
+    return readCraftingRecipe(id, type, data)
+  }
   if ((COOKING_RECIPE_TYPES as readonly string[]).includes(type)) {
     // 料理のレシピ：材料は ingredient、できる物は result（1.18 は文字列、1.21 は { id, count }）。cookingtime は使わない
     collectIngredients(data.ingredient, items, tags)
@@ -132,6 +164,59 @@ export function readProcessingRecipe(id: string, data: unknown): ProcessingRecip
   const fluidTags = new Set<string>()
   collectFluidIngredients(data.ingredients, fluids, fluidTags)
   return { ...recipe, fluids: [...fluids], fluidTags: [...fluidTags] }
+}
+
+/** 作業台・メカニカルクラフターのレシピを読む（TP-RECIPE-CRAFTING）。並びが読めなければ null */
+function readCraftingRecipe(
+  id: string,
+  type: 'crafting_shaped' | 'crafting_shapeless' | 'mechanical_crafting',
+  data: Record<string, unknown>,
+): ProcessingRecipe | null {
+  const results = readResults([data.result])
+  if (results.length === 0) return null
+  let grid: CraftingGrid
+  if (type === 'crafting_shapeless') {
+    if (!Array.isArray(data.ingredients)) return null
+    const ingredients = data.ingredients.map(readIngredient)
+    if (ingredients.length === 0 || ingredients.some((i) => i === null)) return null
+    grid = { rows: null, ingredients: ingredients as CraftingIngredient[], mirrored: true }
+  } else {
+    const pattern = data.pattern
+    const key = data.key
+    if (!Array.isArray(pattern) || !pattern.every((r) => typeof r === 'string') || !isObject(key)) return null
+    const rows: (CraftingIngredient | null)[][] = []
+    for (const row of pattern as string[]) {
+      const cells: (CraftingIngredient | null)[] = []
+      for (const c of row) {
+        if (c === ' ') {
+          cells.push(null)
+          continue
+        }
+        const ing = readIngredient(key[c])
+        if (!ing) return null
+        cells.push(ing)
+      }
+      rows.push(cells)
+    }
+    if (rows.length === 0) return null
+    const mirror = data.accept_mirrored ?? data.acceptMirrored
+    grid = { rows, ingredients: [], mirrored: type !== 'mechanical_crafting' || mirror !== false }
+  }
+  const items = new Set<string>()
+  const tags = new Set<string>()
+  for (const ing of [...grid.ingredients, ...(grid.rows ?? []).flat()]) {
+    for (const i of ing?.items ?? []) items.add(i)
+    for (const t of ing?.tags ?? []) tags.add(t)
+  }
+  return { id, type, items: [...items], tags: [...tags], duration: 0, results, grid }
+}
+
+/** 1マス分の材料を読む。読めなければ null */
+function readIngredient(value: unknown): CraftingIngredient | null {
+  const items = new Set<string>()
+  const tags = new Set<string>()
+  collectIngredients(value, items, tags)
+  return items.size + tags.size > 0 ? { items: [...items], tags: [...tags] } : null
 }
 
 /**

@@ -4,6 +4,7 @@ import { CREATE_RECIPE_TYPES, mergeRecipes, PROCESSING_RECIPE_TYPES, readProcess
 describe('readProcessingRecipe', () => {
   it('[TP-RECIPE-TYPES] 石臼・粉砕・ソー・ミキサー・プレス・圧縮・洗う・憑依のレシピを読む。種類は create: を外した名前', () => {
     for (const type of CREATE_RECIPE_TYPES) {
+      if (type === 'mechanical_crafting') continue
       const r = readProcessingRecipe(`create:${type}/x`, { type: `create:${type}`, ingredients: [{ item: 'minecraft:wheat' }] })
       const fluids = type === 'filling' ? { fluids: [], fluidTags: [] } : {}
       expect(r).toEqual({ id: `create:${type}/x`, type, items: ['minecraft:wheat'], tags: [], duration: 0, results: [], ...fluids })
@@ -19,12 +20,83 @@ describe('readProcessingRecipe', () => {
       'haunting',
       'filling',
       'emptying',
+      'mechanical_crafting',
       'smelting',
       'blasting',
       'smoking',
+      'crafting_shaped',
+      'crafting_shapeless',
     ])
+    expect(recipeTypeId('crafting_shaped')).toBe('minecraft:crafting_shaped')
     expect(recipeTypeId('milling')).toBe('create:milling')
     expect(recipeTypeId('smoking')).toBe('minecraft:smoking')
+  })
+
+  it('[TP-RECIPE-CRAFTING] 作業台・メカニカルクラフターのレシピ（#235）：パターンとキー、形のない材料、左右の入れ替え', () => {
+    // 1.18 の形のあるレシピ（材料の配列はそのどれか）
+    expect(
+      readProcessingRecipe('minecraft:torch', {
+        type: 'minecraft:crafting_shaped',
+        pattern: ['X', '#'],
+        key: { '#': { item: 'minecraft:stick' }, X: [{ item: 'minecraft:coal' }, { item: 'minecraft:charcoal' }] },
+        result: { item: 'minecraft:torch', count: 4 },
+      }),
+    ).toEqual({
+      id: 'minecraft:torch',
+      type: 'crafting_shaped',
+      items: ['minecraft:coal', 'minecraft:charcoal', 'minecraft:stick'],
+      tags: [],
+      duration: 0,
+      results: [{ item: 'minecraft:torch', count: 4, chance: 1 }],
+      grid: {
+        rows: [[{ items: ['minecraft:coal', 'minecraft:charcoal'], tags: [] }], [{ items: ['minecraft:stick'], tags: [] }]],
+        ingredients: [],
+        mirrored: true,
+      },
+    })
+    // 1.21 の形のないレシピ（文字列の材料、{ id, count } のできる物）
+    expect(
+      readProcessingRecipe('minecraft:bone_meal', {
+        type: 'minecraft:crafting_shapeless',
+        ingredients: ['minecraft:bone', '#c:dyes/white'],
+        result: { id: 'minecraft:bone_meal', count: 3 },
+      }),
+    ).toMatchObject({
+      tags: ['c:dyes/white'],
+      results: [{ item: 'minecraft:bone_meal', count: 3 }],
+      grid: { rows: null, ingredients: [{ items: ['minecraft:bone'], tags: [] }, { items: [], tags: ['c:dyes/white'] }], mirrored: true },
+    })
+    // メカニカルクラフター：空きのマス、左右の入れ替え（6.0 は accept_mirrored、1.18 は acceptMirrored）
+    const mech = (mirror: Record<string, unknown>) =>
+      readProcessingRecipe('create:mechanical_crafting/x', {
+        type: 'create:mechanical_crafting',
+        pattern: ['A ', 'AA'],
+        key: { A: { tag: 'c:plates/iron' } },
+        result: { item: 'create:x' },
+        ...mirror,
+      })?.grid
+    expect(mech({ accept_mirrored: false })).toEqual({
+      rows: [
+        [{ items: [], tags: ['c:plates/iron'] }, null],
+        [{ items: [], tags: ['c:plates/iron'] }, { items: [], tags: ['c:plates/iron'] }],
+      ],
+      ingredients: [],
+      mirrored: false,
+    })
+    expect(mech({ acceptMirrored: false })?.mirrored).toBe(false)
+    expect(mech({})?.mirrored).toBe(true)
+    // 並びの読めないレシピは読まない
+    for (const bad of [
+      { type: 'minecraft:crafting_shaped', pattern: ['A'], key: { A: { item: 'x:a' } } },
+      { type: 'minecraft:crafting_shaped', pattern: ['B'], key: { A: { item: 'x:a' } }, result: { item: 'x:b' } },
+      { type: 'minecraft:crafting_shaped', pattern: 'A', key: {}, result: { item: 'x:b' } },
+      { type: 'minecraft:crafting_shaped', pattern: [], key: {}, result: { item: 'x:b' } },
+      { type: 'minecraft:crafting_shapeless', ingredients: [{ fluid: 'x' }], result: { item: 'x:b' } },
+      { type: 'minecraft:crafting_shapeless', ingredients: 'x:a', result: { item: 'x:b' } },
+      { type: 'minecraft:crafting_shapeless', ingredients: [], result: { item: 'x:b' } },
+    ]) {
+      expect(readProcessingRecipe('x:bad', bad)).toBeNull()
+    }
   })
 
   it('[TP-RECIPE-INGREDIENTS] スパウトのレシピ（#235）は液体の材料を別に持つ。1.18 の fluid・fluidTag と 1.21 の neoforge:single・neoforge:tag', () => {

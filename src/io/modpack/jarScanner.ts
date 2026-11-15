@@ -68,8 +68,8 @@ const ASSET_INDEX_PATH = /^assets\/[^/]+\/(models|blockstates|textures)\/.*[^/]$
 /** 残す翻訳のキー。`種類.namespace.path` の3つに分かれるものだけ（説明文などは捨てる） */
 const NAME_KEY = /^(block|item|entity|fluid)\.[^.]+\.[^.]+$/
 
-/** 読むかもしれないレシピの JSON（中身を読む前の絞り込み）。Create のものか、料理の種類のもの */
-const MAYBE_READ_RECIPE = /"create:|"minecraft:(smelting|blasting|smoking)"/
+/** 読むかもしれないレシピの JSON（中身を読む前の絞り込み）。Create のものか、料理・作業台の種類のもの */
+const MAYBE_READ_RECIPE = /"create:|"minecraft:(smelting|blasting|smoking|crafting_shaped|crafting_shapeless)"/
 
 const METADATA_FILES = new Set([FORGE_MODS_TOML, NEOFORGE_MODS_TOML, FABRIC_MOD_JSON, MANIFEST])
 
@@ -251,7 +251,7 @@ function summarize(jar: string, files: Record<string, Uint8Array>, namespaces: S
     }
     const recipe = RECIPE_PATH.exec(name)
     if (recipe) {
-      // Create の処理のレシピと、扇風機に使う料理のレシピ（#235）だけを残す。ほかのレシピは中身を見ずに捨てる。
+      // Create の処理のレシピと、扇風機に使う料理のレシピ・メカニカルクラフターに使う作業台のレシピ（#235）だけを残す。ほかのレシピは中身を見ずに捨てる。
       // 読めないレシピは問題にしない（計算は初期値で続く）
       const source = text(data)
       if (!MAYBE_READ_RECIPE.test(source)) continue
