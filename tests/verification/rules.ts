@@ -149,6 +149,7 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'TP-BELT-RATE': tp('kinetics/belt/BeltBlockEntity.java の getBeltMovementSpeed、belt/transport/BeltInventory.java（間隔）'),
   'TP-ARM-RATE': tp('kinetics/mechanicalArm/ArmBlockEntity.java の chasedPointProgress、ArmInteractionPoint.java の extract'),
   'TP-FUNNEL-RATE': tp('logistics/funnel/FunnelBlockEntity.java の getAmountToExtract・extractionCooldown、FilteringBehaviour の FilterAmount'),
+  'TP-FILTER': tp('logistics/filter/FilterItemStack.java の ListFilterItemStack.test、FilterItem.testDirect'),
   'TP-CHUTE-RATE': tp('logistics/chute/ChuteBlockEntity.java の getItemMotion'),
   // 機械の処理時間
   'TP-PRESS-TIME': tp('kinetics/press/PressingBehaviour.java の CYCLE・getRunningTickSpeed'),
@@ -210,9 +211,11 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'TP-BLOCK-SAW': tp('kinetics/saw/SawBlockEntity.java（出す向き）'),
   'TP-BLOCK-BASIN': tp('processing/basin/BasinBlockEntity.java・BasinOperatingBlockEntity'),
   'TP-BLOCK-FUNNEL-INSERT': tp('logistics/funnel/FunnelBlockEntity.java・FunnelBlock'),
-  'TP-BLOCK-FUNNEL-EXTRACT': tp('logistics/funnel/FunnelBlockEntity.java の activeExtract'),
+  'TP-BLOCK-FUNNEL-EXTRACT': tp('logistics/funnel/FunnelBlockEntity.java の activateExtractor（放り出す位置）'),
   'TP-BLOCK-ARM': tp('kinetics/mechanicalArm/ArmBlockEntity.java の InteractionPoints'),
+  'TP-BLOCK-ARM-BELT': tp('kinetics/mechanicalArm/AllArmInteractionPointTypes.java の BeltPoint.keepAlive'),
   'TP-BLOCK-INVENTORY': tpApp('このアプリの仮定（ほかのブロックは入れ物）'),
+  'TP-BLOCK-DOUBLE-CHEST': tp('Minecraft の ChestBlock.getConnectedDirection（ラージチェスト）'),
   'TP-BLOCK-BLAZE-BURNER': tp('processing/burner/BlazeBurnerBlock・BlazeBurnerBlockEntity（燃料）'),
   'TP-BLOCK-UNKNOWN': tpApp('このアプリの仮定（表にないブロック）'),
   // 物の動き
@@ -237,7 +240,8 @@ export const RULES: Readonly<Record<string, Rule>> = {
   // 足すブロック
   'TP-EJECTOR': tp('logistics/depot/EjectorBlockEntity.java の getWindUpSpeed・tick、EntityLauncher.java'),
   'TP-ANDESITE-TUNNEL': tp('kinetics/belt/transport/BeltTunnelInteractionHandler.java の flapTunnelsAndCheckIfStuck'),
-  'TP-BRASS-TUNNEL': tp('logistics/tunnel/BrassTunnelBlockEntity.java の SelectionMode・distributionProgress'),
+  'TP-BRASS-TUNNEL': tp('logistics/tunnel/BrassTunnelBlockEntity.java の SelectionMode・distributionProgress・hasDistributionBehaviour・addValidOutputsOf'),
+  'TP-BRASS-TUNNEL-FILTER': tp('kinetics/belt/transport/BeltTunnelInteractionHandler.java の stuckAtTunnel、BrassTunnelBlockEntity.java の canInsert・testFlapFilter'),
   'TP-HOPPER': tp('Minecraft の HopperBlockEntity（8 tick の間隔）'),
   'TP-FAN': tp('kinetics/fan/AirCurrent.java・IAirCurrentSource.java・processing/FanProcessing.java'),
   'TP-SPOUT': tp('fluids/spout/SpoutBlockEntity.java、kinetics/belt/behaviour/BeltProcessingBehaviour.java'),

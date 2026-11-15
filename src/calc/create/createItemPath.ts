@@ -5,12 +5,13 @@
 
 import type { BlockState } from '../../domain/blockState'
 import type { Blueprint } from '../../domain/blueprint'
-import { directionVector, isDirection, oppositeDirection, type Direction } from '../../domain/direction'
+import { DIRECTIONS, directionVector, isDirection, oppositeDirection, type Direction } from '../../domain/direction'
+import type { NbtCompound } from '../../domain/nbt'
 import { addVec3, equalsVec3, type Vec3 } from '../../domain/vec3'
 import type { ProcessingRecipeType, RecipeBook } from '../../io/modpack/recipes'
 import type { AssumptionLog } from '../assumptionLog'
 import type { CalcIssue, CalcItemMove, CalcSummaryItem } from '../calcPlugin'
-import { nbtNumber, nbtPos, nbtString } from '../nbtValues'
+import { nbtBoolean, nbtCompound, nbtNumber, nbtPos, nbtString } from '../nbtValues'
 import { resolved, type Provenance } from '../provenance'
 import type { VirtualPort } from '../virtualPort'
 import {
@@ -27,7 +28,8 @@ import {
   type RecipeChoice,
 } from './createThroughput'
 import { arcPath, blockCenter, ejectorPath, throwPath, type MotionPath } from './itemMotion'
-import { axisDirections, directionAxis } from './kineticBlocks'
+import { testFilter } from './itemFilter'
+import { axisDirections, clockwise, directionAxis } from './kineticBlocks'
 import { ITEM_INPUT_PORT_KIND, nextBeltSegment, weakerSource } from './kineticGraph'
 
 /** たどる場所の数の上限（1つの物の入口ごと） */
@@ -405,32 +407,43 @@ class ItemTracer {
    * ベルトの区間 start から先を進む。ベルトのファンネル・2段上の機械・端の先。
    * entryFrom は区間 start に物が来た元（2段上の機械で止まる時間を、その動きに付ける）
    */
-  private walkBelt(segments: readonly Vec3[], start: number, flow: Flow, move: Direction, entryFrom: Vec3 | null): void {
+  private walkBelt(segments: readonly Vec3[], start: number, entering: Flow, move: Direction, entryFrom: Vec3 | null): void {
+    let flow = entering
     for (let i = start; i < segments.length; i++) {
       const seg = segments[i]!
       const prev = i === start ? entryFrom : segments[i - 1]!
-      const funnel = this.beltFunnelTaking(seg, move)
+      const funnel = this.beltFunnelTaking(seg, move, flow.item)
       if (funnel) {
         this.handOff(funnel.from, funnel.to, flow, null, funnel.via)
         return
       }
       if ((this.env.bp.get(seg)?.properties.slope ?? 'horizontal') === 'horizontal') {
-        const tunnel = this.env.bp.get(addVec3(seg, [0, 1, 0]))?.id.toString()
+        const tpos = addVec3(seg, [0, 1, 0])
+        const tunnel = this.env.bp.get(tpos)?.id.toString()
         if (tunnel === 'create:brass_tunnel') {
-          this.brassTunnel(segments, i, flow, move, prev)
-          return
+          if (this.tunnelDistributes(tpos)) {
+            this.brassTunnel(segments, i, flow, move, prev)
+            return
+          }
+          // 分けないトンネル（TP-BRASS-TUNNEL）：預からずに、そのまま先へ進む
+          this.recordArrival(tpos, flow, seg)
         }
         if (tunnel === 'create:andesite_tunnel') this.andesiteTunnel(seg, flow, move)
         const result = this.processAbove(seg, flow, prev)
         if (result === null) return
         if (result !== 'pass') {
           for (const out of result) {
-            this.beltStep(segments, i, out)
-            this.walkBelt(segments, i + 1, out, move, seg)
+            const left = this.leaveSegment(segments, i, out, move)
+            if (!left) continue
+            this.beltStep(segments, i, left)
+            this.walkBelt(segments, i + 1, left, move, seg)
           }
           return
         }
       }
+      const left = this.leaveSegment(segments, i, flow, move)
+      if (!left) return
+      flow = left
       this.beltStep(segments, i, flow)
     }
     // 端の1つ先（高さは端の区間と同じ）。ベルトの速さのまま進み、空気なら落ちる
@@ -494,7 +507,7 @@ class ItemTracer {
    * ベルトの区間の1段上の、下を通る物を取り込むベルトのファンネル。`shape=pulling`、
    * または押し出さない形で `facing` が進む向きの逆なら取り込み、`facing` の反対側の入れ物に入れる
    */
-  private beltFunnelTaking(seg: Vec3, move: Direction): Destination | null {
+  private beltFunnelTaking(seg: Vec3, move: Direction, item: string): Destination | null {
     const f = addVec3(seg, [0, 1, 0])
     const s = this.env.bp.get(f)
     if (!s || !BELT_FUNNELS.has(s.id.toString()) || s.properties.powered === 'true') return null
@@ -502,6 +515,8 @@ class ItemTracer {
     if (!facing) return null
     const shape = s.properties.shape
     if (shape !== 'pulling' && !(facing === oppositeDirection(move) && shape !== 'pushing')) return null
+    // フィルターに合わない物は下を通り過ぎる（TP-FILTER）
+    if (!this.blockFilterPasses(f, item)) return null
     // 区間の真ん中を過ぎたときに取り込み、後ろの入れ物に入れる（移動しない受け渡し）
     return { to: addVec3(f, directionVector(oppositeDirection(facing))), face: null, via: f, from: seg, carry: INSTANT }
   }
@@ -518,28 +533,95 @@ class ItemTracer {
     this.hold(seg, prev, flow, BRASS_TUNNEL_TICKS)
     const speed = beltSpeed(this.env.rpmAt(seg) ?? 0)
     const carry = (to: Vec3): Carry => ({ seconds: speed > 0 ? distance(seg, to) / speed : 0, dropVy: 0, moveFrom: seg })
-    // ほかの出口：組のほかのトンネルの先のベルトと、組の端の横の口
+    // ほかの出口：組のほかのトンネルの先のベルトと、組の端の横の口。口（Sides）とフィルターで使えない出口は除く
     const others: { from: Vec3; to: Vec3; face: Direction }[] = []
     for (const side of sideDirections(move)) {
       let cur = seg
       for (let k = 0; k < MAX_TUNNEL_GROUP; k++) {
         const next = addVec3(cur, directionVector(side))
         if (this.isTunnelBelt(next, move)) {
-          others.push({ from: next, to: addVec3(next, directionVector(move)), face: oppositeDirection(move) })
+          if (this.tunnelOutputOpen(addVec3(next, [0, 1, 0]), move, flow.item)) {
+            others.push({ from: next, to: addVec3(next, directionVector(move)), face: oppositeDirection(move) })
+          }
           cur = next
           continue
         }
-        if (this.env.bp.get(next)) others.push({ from: cur, to: next, face: oppositeDirection(side) })
+        if (this.env.bp.get(next) && this.tunnelOutputOpen(addVec3(cur, [0, 1, 0]), side, flow.item)) {
+          others.push({ from: cur, to: next, face: oppositeDirection(side) })
+        }
         break
       }
     }
+    const forward = this.tunnelOutputOpen(tpos, move, flow.item)
+    if (!forward && others.length === 0) {
+      this.stop(seg, '真鍮のトンネルに物を出せる口がないので、物はここで止まる')
+      return
+    }
     const mode = nbtNumber(this.env.bp.blockEntityAt(tpos), 'ScrollValue') ?? 0
-    const outputs = mode === PREFER_NEAREST ? 0 : others.length
-    const share: Flow = { ...flow, rate: flow.rate / (outputs + 1) }
-    this.beltStep(segments, i, share)
-    this.walkBelt(segments, i + 1, share, move, seg)
+    const outputs = forward && mode === PREFER_NEAREST ? 0 : others.length
+    const share: Flow = { ...flow, rate: flow.rate / (outputs + (forward ? 1 : 0)) }
+    if (forward) {
+      this.beltStep(segments, i, share)
+      this.walkBelt(segments, i + 1, share, move, seg)
+    }
     if (outputs === 0) return
     for (const o of others) this.handOff(o.from, o.to, share, o.face, null, carry(o.to))
+  }
+
+  /**
+   * 真鍮のトンネルが物を分けるか（TP-BRASS-TUNNEL）。ベルトの軸と違う向きの口（Flaps）があるか、横のトンネルと
+   * つながっているときだけ分ける。生データに Flaps がなければ分ける（#253 より前と同じ）
+   */
+  private tunnelDistributes(tpos: Vec3): boolean {
+    const be = this.env.bp.blockEntityAt(tpos)
+    const flaps = tunnelDirections(be, 'Flaps')
+    if (flaps === null) return true
+    if (nbtBoolean(be, 'ConnectedLeft') || nbtBoolean(be, 'ConnectedRight')) return true
+    const axis = this.env.bp.get(tpos)?.properties.axis
+    return flaps.some((d) => directionAxis(d) !== axis)
+  }
+
+  /** 真鍮のトンネルの side の向きの出口が使えるか。口（Sides）にあり、その面のフィルターに合うこと（TP-BRASS-TUNNEL-FILTER） */
+  private tunnelOutputOpen(tpos: Vec3, side: Direction, item: string): boolean {
+    const be = this.env.bp.blockEntityAt(tpos)
+    const sides = tunnelDirections(be, 'Sides')
+    if (sides !== null && !sides.includes(side)) return false
+    return this.filterPasses(tunnelSideFilter(be, side), item, tpos)
+  }
+
+  /**
+   * 区間 next の上の真鍮のトンネルが、move の向きに進んできた物を入れないか（TP-BRASS-TUNNEL-FILTER）。
+   * 入る側（move の反対）のフィルターに合わない物は、手前の区間で止まる
+   */
+  private tunnelRefuses(next: Vec3, move: Direction, item: string): boolean {
+    if ((this.env.bp.get(next)?.properties.slope ?? 'horizontal') !== 'horizontal') return false
+    const tpos = addVec3(next, [0, 1, 0])
+    if (this.env.bp.get(tpos)?.id.toString() !== 'create:brass_tunnel') return false
+    return !this.filterPasses(tunnelSideFilter(this.env.bp.blockEntityAt(tpos), oppositeDirection(move)), item, tpos)
+  }
+
+  /**
+   * ベルトの区間 i を出て先へ進む物。区間を TAKE の点にする機械アームが取る分（TP-BLOCK-ARM-BELT）と、
+   * 次の区間の真鍮のトンネルに入れない物（TP-BRASS-TUNNEL-FILTER）を除く。先へ進む物がなければ null
+   */
+  private leaveSegment(segments: readonly Vec3[], i: number, flow: Flow, move: Direction): Flow | null {
+    const seg = segments[i]!
+    const next = segments[i + 1]
+    const blocked = next !== undefined && this.tunnelRefuses(next, move, flow.item)
+    const arms = this.armDestinations(seg)
+    if (blocked) {
+      if (arms.length === 0) {
+        this.stop(seg, '次の区間の真鍮のトンネルのフィルターに合わないので、物はここで止まる')
+        return null
+      }
+      this.dispatch(seg, arms, { ...flow, rate: flow.rate / arms.length })
+      return null
+    }
+    if (arms.length === 0) return flow
+    this.env.log.add('機械アームがベルトの区間から取る数は、先へ進む物と等しく分けるとした', seg)
+    const share: Flow = { ...flow, rate: flow.rate / (arms.length + 1) }
+    this.dispatch(seg, arms, share)
+    return share
   }
 
   /** p が、上に真鍮のトンネルがある、move と同じ向きに進む水平のベルトか */
@@ -823,6 +905,10 @@ class ItemTracer {
       this.refuse(pos, 'ファンネルにレッドストーンの信号が入っていて動かないので、物はここで止まる')
       return
     }
+    if (!this.blockFilterPasses(pos, flow.item)) {
+      this.refuse(pos, `${flow.item} はファンネルのフィルターに合わないので、ファンネルは受け取らず、物はここで止まる`)
+      return
+    }
     this.arrive(pos, flow, from, carry)
     const container = addVec3(pos, directionVector(oppositeDirection(facing)))
     if (!this.env.bp.get(container)) {
@@ -888,6 +974,33 @@ class ItemTracer {
     return rpm < 0 !== (axis === 'x') ? negative : positive
   }
 
+  /** ラージチェストのもう片方の半分（TP-BLOCK-DOUBLE-CHEST）。ラージチェストでなければ null */
+  private chestPartner(pos: Vec3): Vec3 | null {
+    const s = this.env.bp.get(pos)
+    if (!s || !CHESTS.has(s.id.toString())) return null
+    const type = s.properties.type
+    const facing = horizontalFacing(s)
+    if (!facing || (type !== 'left' && type !== 'right')) return null
+    // left なら facing を時計回り、right なら反時計回りに回した向きの隣
+    const side = type === 'left' ? clockwise(facing) : oppositeDirection(clockwise(facing))
+    const p = addVec3(pos, directionVector(side))
+    const o = this.env.bp.get(p)
+    if (!o || o.id.toString() !== s.id.toString() || horizontalFacing(o) !== facing) return null
+    return o.properties.type === (type === 'left' ? 'right' : 'left') ? p : null
+  }
+
+  /** pos のブロックの生データのフィルター（Filter）が item を通すか（TP-FILTER） */
+  private blockFilterPasses(pos: Vec3, item: string): boolean {
+    return this.filterPasses(nbtCompound(this.env.bp.blockEntityAt(pos), 'Filter'), item, pos)
+  }
+
+  /** フィルターが item を通すか。読めないフィルターは通すとして仮定に載せる */
+  private filterPasses(filter: NbtCompound | null, item: string, pos: Vec3): boolean {
+    const t = testFilter(filter, item)
+    if (t.unknown !== null) this.env.log.add(`フィルター ${t.unknown} の中身は読めないので、物を通すとした`, pos)
+    return t.pass
+  }
+
   /** ほかのブロック（チェストなど）。入れ物とみなし、取り出すファンネルと機械アームで先へ */
   private inventory(pos: Vec3, id: string, flow: Flow, from: Vec3 | null, carry: Carry): void {
     this.arrive(pos, flow, from, carry)
@@ -914,10 +1027,34 @@ class ItemTracer {
       const f = addVec3(pos, [0, 1, 0])
       const s = bp.get(f)
       const facing = s ? horizontalFacing(s) : null
-      if (s && facing && BELT_FUNNELS.has(s.id.toString()) && s.properties.shape === 'pulling' && s.properties.powered !== 'true') {
+      if (
+        s &&
+        facing &&
+        BELT_FUNNELS.has(s.id.toString()) &&
+        s.properties.shape === 'pulling' &&
+        s.properties.powered !== 'true' &&
+        this.blockFilterPasses(f, flow.item)
+      ) {
         dests.push({ to: addVec3(f, directionVector(oppositeDirection(facing))), face: null, via: f, from: f, carry: INSTANT })
       }
     }
+    // ラージチェストは、もう片方の半分に付いたものからも出す（TP-BLOCK-DOUBLE-CHEST）
+    const partner = this.chestPartner(pos)
+    for (const p of partner ? [pos, partner] : [pos]) dests.push(...this.containerOutputs(p, flow.item))
+    if (dests.length === 0) {
+      this.sink(pos, flow)
+      return
+    }
+    this.dispatch(pos, dests, { ...flow, rate: flow.rate / dests.length })
+  }
+
+  /**
+   * 入れ物 pos から取り出すもの：下のホッパー、取り出すファンネル・押し出すベルトのファンネル（フィルターに合う物だけ）、
+   * TAKE の点がここの機械アーム
+   */
+  private containerOutputs(pos: Vec3, item: string): Destination[] {
+    const dests: Destination[] = []
+    const bp = this.env.bp
     // 下のホッパーは、上の入れ物から吸い込む
     const below = addVec3(pos, [0, -1, 0])
     if (bp.get(below)?.id.toString() === 'minecraft:hopper') dests.push({ to: below, face: null, via: null, from: pos, carry: INSTANT })
@@ -928,17 +1065,29 @@ class ItemTracer {
       // 押し出すベルトのファンネル：取り出して真下のベルト・デポに置く（移動しない受け渡し）
       const beltFacing = s && BELT_FUNNELS.has(s.id.toString()) ? horizontalFacing(s) : null
       if (s && beltFacing && equalsVec3(addVec3(n, directionVector(oppositeDirection(beltFacing))), pos) && this.beltFunnelPushing(n, s)) {
-        dests.push({ to: addVec3(n, [0, -1, 0]), face: 'up', via: n, from: n, carry: INSTANT })
+        if (this.blockFilterPasses(n, item)) dests.push({ to: addVec3(n, [0, -1, 0]), face: 'up', via: n, from: n, carry: INSTANT })
         continue
       }
       if (!s || !FUNNELS.has(s.id.toString()) || s.properties.extracting !== 'true' || s.properties.powered === 'true') continue
       const facing = s.properties.facing
       if (!facing || !isDirection(facing)) continue
       if (!equalsVec3(addVec3(n, directionVector(oppositeDirection(facing))), pos)) continue
-      // 口の前に置く。前が空気なら放り出す
-      dests.push({ to: addVec3(n, directionVector(facing)), face: oppositeDirection(facing), via: n, from: n, carry: { seconds: 0, dropVy: 0 } })
+      if (!this.blockFilterPasses(n, item)) continue
+      if (facing === 'up' || facing === 'down') {
+        // 口の前に置く。前が空気なら放り出す
+        dests.push({ to: addVec3(n, directionVector(facing)), face: oppositeDirection(facing), via: n, from: n, carry: { seconds: 0, dropVy: 0 } })
+      } else {
+        // 水平の口：物はファンネルの中に出て、真下のブロックに落ちる（TP-BLOCK-FUNNEL-EXTRACT）
+        dests.push({ to: addVec3(n, [0, -1, 0]), face: 'up', via: n, from: n, carry: { seconds: 0, dropVy: 0 } })
+      }
     }
-    // 機械アーム：TAKE の点がここなら、すべての DEPOSIT の点へ
+    dests.push(...this.armDestinations(pos))
+    return dests
+  }
+
+  /** 機械アーム：TAKE の点が pos なら、すべての DEPOSIT の点へ（TP-BLOCK-ARM） */
+  private armDestinations(pos: Vec3): Destination[] {
+    const dests: Destination[] = []
     for (const arm of this.arms) {
       if (!arm.take.some((t) => equalsVec3(t, pos)) || arm.deposit.length === 0) continue
       const ticks = armMoveTicks(this.env.rpmAt(arm.pos) ?? 0)
@@ -953,11 +1102,11 @@ class ItemTracer {
         dests.push({ to: dep, face: null, via: arm.pos, from: arm.pos, carry: { seconds: motion.seconds, motion, moveFrom: pos } })
       }
     }
-    if (dests.length === 0) {
-      this.sink(pos, flow)
-      return
-    }
-    const share: Flow = { ...flow, rate: flow.rate / dests.length }
+    return dests
+  }
+
+  /** pos から出す先それぞれへ、share ずつ渡す */
+  private dispatch(pos: Vec3, dests: readonly Destination[], share: Flow): void {
     for (const d of dests) {
       if (d.via) {
         // 機械アームへは物の動きを記録しない（動きは取る点から置く点へ）
@@ -1294,6 +1443,33 @@ const PREFER_NEAREST = 4
 const DRAIN_SPEED = TICKS_PER_SECOND / 8
 /** ホッパーが1個送る間隔（tick） */
 const HOPPER_TICKS = 8
+
+/** 2つ並べるとラージチェストになるブロック */
+const CHESTS = new Set(['minecraft:chest', 'minecraft:trapped_chest'])
+
+/** 真鍮のトンネルの生データの向きの一覧（Flaps・Sides。値は Minecraft の 3D の番号）。項目がなければ null */
+function tunnelDirections(be: NbtCompound | null, key: string): Direction[] | null {
+  const tag = be?.value.get(key)
+  if (tag?.type !== 'list') return null
+  const dirs: Direction[] = []
+  for (const e of tag.value) {
+    if (e.type !== 'int' && e.type !== 'byte' && e.type !== 'short') continue
+    const d = DIRECTIONS[e.value]
+    if (d) dirs.push(d)
+  }
+  return dirs
+}
+
+/** 真鍮のトンネルの side の面のフィルター（Filters の Side と Filter）。なければ null */
+function tunnelSideFilter(be: NbtCompound | null, side: Direction): NbtCompound | null {
+  const tag = be?.value.get('Filters')
+  if (tag?.type !== 'list') return null
+  const index = DIRECTIONS.indexOf(side)
+  for (const e of tag.value) {
+    if (e.type === 'compound' && nbtNumber(e, 'Side') === index) return nbtCompound(e, 'Filter')
+  }
+  return null
+}
 
 /** move に直角な、水平の2つの向き */
 function sideDirections(move: Direction): Direction[] {

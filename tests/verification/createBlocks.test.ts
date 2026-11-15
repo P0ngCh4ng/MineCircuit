@@ -37,7 +37,8 @@ describe('ブロックの一覧', () => {
     }
     Object.keys({ ...DEFAULT_IMPACT, ...DEFAULT_CAPACITY }).forEach((n) => names.add(n))
     // ブロックではない名前（レシピの種類、エンティティなど）は除く
-    const notBlocks = new Set(['air', 'super_glue'])
+    // フィルターの物と、その data component の名前（itemFilter.ts。#253）も除く
+    const notBlocks = new Set(['air', 'super_glue', 'filter', 'filter_items', 'filter_items_blacklist'])
     const missing = [...names].filter((n) => !notBlocks.has(n) && !ALL_BLOCK_IDS.has(`create:${n}`))
     expect(missing).toEqual([])
   })
