@@ -57,8 +57,9 @@ describe('flowLinks（#207）', () => {
   it('物の入口があれば、通り道に沿ってベルトの外（ファンネル・ベイスン・デポ）へもつなぐ（#211）', async () => {
     const chest = nbt.compound({ Items: nbt.list('compound') })
     const fx = blueprintFixture({ size: [9, 6, 3] })
-      .place([0, 1, 1], 'minecraft:chest', chest)
-      .place([1, 1, 1], 'create:andesite_funnel', { facing: 'east', extracting: 'true', powered: 'false' })
+      // 水平の取り出すファンネルは、真下のベルトの始めに落とす（#253）
+      .place([1, 2, 1], 'minecraft:chest', chest)
+      .place([2, 2, 1], 'create:andesite_funnel', { facing: 'east', extracting: 'true', powered: 'false' })
       .place([2, 1, 0], 'create:creative_motor', { facing: 'south' }, scroll(-64))
       .place([2, 1, 1], 'create:belt', { facing: 'east', slope: 'horizontal', part: 'start' })
       .place([3, 1, 1], 'create:belt', { facing: 'east', slope: 'horizontal', part: 'end' })
@@ -83,7 +84,7 @@ describe('flowLinks（#207）', () => {
     })
     const port: VirtualPort = {
       id: 'p',
-      pos: [0, 1, 1],
+      pos: [1, 2, 1],
       pluginId: 'create-stress',
       kind: 'item-input',
       params: { rate: 0.1 },
@@ -94,7 +95,7 @@ describe('flowLinks（#207）', () => {
       ports: [port],
     })
     // ベルトの端の先（ベイスン）は、ベルトのつながりと通り道で重なるので1本
-    expect(text(result.links, 'item')).toEqual(['2,1,1>3,1,1', '3,1,1>4,1,1', '0,1,1>1,1,1', '1,1,1>2,1,1', '4,1,1>5,0,1'])
+    expect(text(result.links, 'item')).toEqual(['2,1,1>3,1,1', '3,1,1>4,1,1', '1,2,1>2,2,1', '2,2,1>2,1,1', '4,1,1>5,0,1'])
     expect(structuredClone(result)).toEqual(result)
   })
 })

@@ -67,6 +67,20 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 - 回転とは関係ないので、回転数がなくても出す。
 - 出典：`content/logistics/funnel/FunnelBlockEntity.java`（`getAmountToExtract`、`extractionCooldown`）、`foundation/blockEntity/behaviour/filtering/FilteringBehaviour.java`（`FilterAmount`）
 
+### フィルター（#253）
+
+`TP-FILTER`
+
+- 真鍮のファンネル・真鍮のベルトのファンネルは生データの `Filter`、真鍮のトンネルは面ごとの `Filters`（`TP-BRASS-TUNNEL-FILTER`）に、フィルターの物（アイテムスタック）を持つ。安山岩のファンネルにはフィルターがない。
+- 空（`id` がない・`minecraft:air`・数（`Count` か `count`）が 0）なら、何でも通す。
+- ふつうの物なら、ID が同じ物だけを通す。NBT は比べない（NBT も比べる設定は、この版では扱わない）。
+- リストフィルター（`create:filter`）なら、中の物のどれかに合えば通す。通さない一覧（ブラックリスト）なら逆。中の物がなければ、`create:filter` そのものだけを通す。中の物もフィルターとして同じ読み方をする。
+  - 1.18.2（0.5.1）：`tag.Items.Items` の各 `id`、`tag.Blacklist`。
+  - 1.21.1（6.0）：`components` の `create:filter_items` の各 `item.id`、`create:filter_items_blacklist`。
+- 属性フィルター（`create:attribute_filter`）など、ほかのフィルターは読めないので、何でも通すとして仮定に載せる。
+- 使う所：入れるファンネル（合わない物は受け取らない）、取り出すファンネル・押し出すベルトのファンネル（合う物だけを取り出す）、取り込むベルトのファンネル（合わない物は下を通り過ぎる）、真鍮のトンネル。
+- 出典：`content/logistics/filter/FilterItemStack.java`（`ListFilterItemStack.test`）、`content/logistics/filter/FilterItem.java`（`testDirect`）
+
 ### シュート（`create:chute`, `create:smart_chute`）
 
 `TP-CHUTE-RATE`
@@ -242,18 +256,20 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 | --- | --- | --- | --- |
 | `TP-BLOCK-BELT` | ベルト（`slope` が `horizontal`・`upward`・`downward`） | どの面からでも | 進む向きに、つながったベルトの端まで進む。進む向きは `facing` の軸の上で、(回転数 < 0) XOR (軸が X) なら負の向き。端の1つ先（高さは端の区間と同じ）のブロックが受け取るなら渡す。空気なら、その下（3段まで）の最初のブロックに落ちるとして、仮定に載せる |
 | `TP-BLOCK-BELT-MACHINE` | ベルトの上の機械 | — | 水平の区間の **2段上** のプレス（ベルトの上の押し方、`create:pressing`）・デプロイヤー（`facing=down`。物は変えず、通ったことだけ出す）。間の1段に当たり判定のあるブロックがあれば処理しない |
-| `TP-BLOCK-BELT-FUNNEL` | ベルトのファンネル（ベルトの区間の1段上） | — | `shape=pulling`、または平行の形で `facing` が進む向きの逆なら、下を通る物を取り込み、`facing` の反対側の入れ物に入れる |
-| `TP-BLOCK-BELT-FUNNEL-PUSH` | ベルトのファンネル（ベルトの区間かデポの1段上。#251） | — | `shape=pushing`、または平行の形（`retracted`・`extended`）で下のベルトの進む向きが `facing` と同じなら、`facing` の反対側の入れ物から取り出し、真下のベルト・デポに置く。真下がベルトでもデポでもなければ取り出さない。`powered=true` なら動かない（`FunnelBlockEntity.determineCurrentMode`・`activateExtractingBeltFunnel`） |
+| `TP-BLOCK-BELT-FUNNEL` | ベルトのファンネル（ベルトの区間の1段上） | — | `shape=pulling`、または平行の形で `facing` が進む向きの逆なら、下を通る物のうちフィルター（`TP-FILTER`）に合う物を取り込み、`facing` の反対側の入れ物に入れる |
+| `TP-BLOCK-BELT-FUNNEL-PUSH` | ベルトのファンネル（ベルトの区間かデポの1段上。#251） | — | `shape=pushing`、または平行の形（`retracted`・`extended`）で下のベルトの進む向きが `facing` と同じなら、`facing` の反対側の入れ物からフィルター（`TP-FILTER`）に合う物を取り出し、真下のベルト・デポに置く。真下がベルトでもデポでもなければ取り出さない。`powered=true` なら動かない（`FunnelBlockEntity.determineCurrentMode`・`activateExtractingBeltFunnel`） |
 | `TP-BLOCK-DEPOT` | デポ（`create:depot`） | どの面からでも | 2段上のプレス・デプロイヤーで処理する。そのあと、1段上の `pulling` のベルトのファンネル、取り出すファンネル、機械アームで先へ |
 | `TP-BLOCK-CHUTE` | シュート（`create:chute`、`smart_chute`） | 上から | 真下のブロックへ（斜めのシュートは `pos.below().relative(facing の反対)`）。扇風機があるときは仮定に載せ、下へ流れるものとする |
 | `TP-BLOCK-MILLSTONE` | 石臼 | どの面からでも | `create:milling`。できた物は下のシュート、取り出すファンネル、機械アームで先へ |
 | `TP-BLOCK-CRUSHING` | 粉砕ホイールの中心（`crushing_wheel_controller`） | 上から（`facing=down`） | `create:crushing`。真下のブロックへ。水平の `facing` の中心（ベルトの上の粉砕）はこの版では扱わない |
 | `TP-BLOCK-SAW` | ソー（`facing=up`） | どの面からでも | `create:cutting`。回転軸が Z（`axis_along_first=false`）なら回転数 > 0 で +X、軸が X なら回転数 > 0 で −Z の隣のブロックへ |
 | `TP-BLOCK-BASIN` | ベイスン（`create:basin`） | どの面からでも | 2段上がミキサーなら `create:mixing`、プレスなら `create:compacting`。材料が2つ以上のレシピは、届いた物を材料に持つものを選び、ほかの材料はあるものとして仮定に載せる。`facing` が水平なら `pos.relative(facing).below()` へ、`down` なら取り出すファンネル・機械アーム・下のシュートで先へ |
-| `TP-BLOCK-FUNNEL-INSERT` | ファンネル（`extracting=false`） | 口（`facing`）の前から | `facing` の反対側の入れ物に入れる |
-| `TP-BLOCK-FUNNEL-EXTRACT` | ファンネル（`extracting=true`、`powered=false`） | — | `facing` の反対側の入れ物から取り出し、口の前に置く。口の前のブロックが受け取るなら渡し、空気ならその下に落ちる |
+| `TP-BLOCK-FUNNEL-INSERT` | ファンネル（`extracting=false`） | 口（`facing`）の前から。フィルター（`TP-FILTER`）に合わない物は受け取らない | `facing` の反対側の入れ物に入れる |
+| `TP-BLOCK-FUNNEL-EXTRACT` | ファンネル（`extracting=true`、`powered=false`） | — | `facing` の反対側の入れ物から、フィルター（`TP-FILTER`）に合う物を取り出して放り出す。`facing` が上か下なら口の前のブロックへ（前が空気ならその下に落ちる）。水平なら、物はファンネルの中心から口の側へ 0.25、下へ 0.45 の所に出て、ファンネルの真下のブロックに落ちる（口の前のブロックには入らない。#253）（`FunnelBlockEntity.activateExtractor`） |
 | `TP-BLOCK-ARM` | 機械アーム | — | 生データの `InteractionPoints`（`Pos` はアームからの相対座標、`Mode` は `TAKE`・`DEPOSIT`）。物がある `TAKE` の点から、すべての `DEPOSIT` の点へ |
+| `TP-BLOCK-ARM-BELT` | 機械アーム（`TAKE` の点がベルトの区間。#253） | — | その区間を通る物を1つずつ止めて取る（`mechanicalArm/AllArmInteractionPointTypes.java` の `BeltPoint.keepAlive`）。計算では、アームの手が空いている間だけ止めるので、区間の先へ進む物と、`DEPOSIT` の点1つずつを、同じ重みの行き先として分け（`TP-PATH-SPLIT`）、仮定に載せる。次の区間の真鍮のトンネルに入れずに止まった物（`TP-BRASS-TUNNEL-FILTER`）は、全部取る |
 | `TP-BLOCK-INVENTORY` | ほかのブロック（チェスト、`create:item_vault` など） | 入れ物とみなす。ブロックエンティティのないブロックを入れ物とみなしたときは仮定に載せる | 取り出すファンネルと機械アームで先へ。どちらもなければ、そこで止まる（物が溜まる所） |
+| `TP-BLOCK-DOUBLE-CHEST` | ラージチェスト（`minecraft:chest`・`trapped_chest` の `type=left`・`right`。#253） | もう片方の半分と1つの入れ物 | もう片方は `type=left` なら `facing` を時計回りに、`right` なら反時計回りに回した向きの隣（同じブロックで `type` が逆のとき）。両方の半分に付いた取り出すファンネル・機械アーム・下のホッパーで先へ（Minecraft の `ChestBlock.getConnectedDirection`） |
 | 下の節 | 重さ付きイジェクター・トンネル・ホッパー・スパウト・アイテムドレイン | — | 下の「物の動き（#233）」の「足すブロック」 |
 | `TP-BLOCK-DEPLOYER-HAND` | デプロイヤーの手（機械アーム・ファンネルなどが入れたとき。#251） | どの面からでも | 生データの `Mode` が `USE`（なければ `USE`）なら、手の物を2つ先（`pos + 2 × facing`）のブロックに使う。そこがブレイズバーナーなら、燃料として渡す（`TP-BLOCK-BLAZE-BURNER`）。ほかのブロックに使ったときの結果と、`PUNCH` は扱わず、そこで止めて仮定に載せる。1回の動作で1個使うので、処理できる数は `TP-DEPLOYER-TIME` の1分あたりの回数（`DeployerBlockEntity.activate`、`BlazeBurnerBlock.use`） |
 | `TP-BLOCK-BLAZE-BURNER` | ブレイズバーナー（`create:blaze_burner`） | どの面からでも（燃料として） | 燃やすので、物はそこでなくなる。先へ送らず、溜まる物にも出る数にも入れない。仮定には載せない |
@@ -348,8 +364,17 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 - 入った山をいったん預かり、`brassTunnelTimer`（10 tick）ごとに、組の出口（各トンネルの先のベルトと、横の開いた口）へ分ける。
 - 分け方は生データの `ScrollValue`：0 分ける、1 必ず分ける、2 順番、3 必ず順番、4 近い方、5 ランダム、6 そろえる。一定の流れとしては、4 は受け取れる限り一番近い出口へ全部、ほかは出口の数で等しく分ける。
 - 動き：トンネルの区間で 10 tick 待ってから、それぞれの出口のベルトに移る。
-- 計算では：組は、横（ベルトに直角）に並んだ、上に真鍮のトンネルがある同じ軸の水平のベルト（8 つまで）。出口は、各トンネルの区間の次の区間（ベルトの端なら端の先）と、組の両端のトンネルの区間の横のマスにあるブロック。横の口が開いているか（トンネルの `shape`）は見ず、ブロックがあれば口とする。
-- 出典：`logistics/tunnel/BrassTunnelBlockEntity.java`（`SelectionMode`、`distributionProgress`）、設定の `logistics.brassTunnelTimer`
+- 分けるのは、ベルトの軸と違う向きの口（生データの `Flaps`）があるか、横のトンネルとつながっている（`ConnectedLeft`・`ConnectedRight`）ときだけ。そうでなければ預からずに、物はそのまま先へ進む（`hasDistributionBehaviour`）。
+- 出口にするのは、口（生データの `Sides`）にある向きだけ。入ってきた向きには戻さない（`addValidOutputsOf`）。
+- 計算では：組は、横（ベルトに直角）に並んだ、上に真鍮のトンネルがある同じ軸の水平のベルト（8 つまで）。出口は、各トンネルの区間の次の区間（ベルトの端なら端の先）と、組の両端のトンネルの区間の横のマスにあるブロック。生データに `Sides` があれば、その向きにない出口は使わない。`Flaps`・`Sides` がなければ、ブロックがあれば口とする（#253 より前と同じ）。
+- 出典：`logistics/tunnel/BrassTunnelBlockEntity.java`（`SelectionMode`、`distributionProgress`、`hasDistributionBehaviour`、`addValidOutputsOf`）、設定の `logistics.brassTunnelTimer`
+
+`TP-BRASS-TUNNEL-FILTER`
+
+- 面ごとにフィルター（生データの `Filters` の、`Side` と `Filter`。`Side` は 2 北・3 南・4 西・5 東）を付けられる。中身は `TP-FILTER` と同じ読み方。
+- 入る側（ベルトが進んできた側）のフィルターに合わない物は、トンネルに入れず、手前の区間の端で止まる（`BeltTunnelInteractionHandler.stuckAtTunnel`、`canInsert`）。分けないトンネルでも同じ。
+- 出る側のフィルターに合わない物は、その出口に分けない（`testFlapFilter`）。
+- 計算では：止まった物は、手前の区間を `TAKE` の点にする機械アームがあれば全部取られ（`TP-BLOCK-ARM-BELT`）、なければそこで止まる。面にフィルターがないとき、隣のブロックのフィルターを使う決まり（`testFlapFilter`）は扱わない。
 
 #### ホッパー（`minecraft:hopper`）
 

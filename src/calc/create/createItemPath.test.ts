@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { blueprintFixture, type BlueprintFixture } from '../../../tests/fixtures/blueprintFixture'
-import { nbt } from '../../domain/nbt'
+import { nbt, type NbtCompound } from '../../domain/nbt'
 import type { Vec3 } from '../../domain/vec3'
 import type { ProcessingRecipe, RecipeBook, RecipeResult } from '../../io/modpack/recipes'
 import { AssumptionLog } from '../assumptionLog'
@@ -221,21 +221,23 @@ describe('物の通り道', () => {
     expect(at(result, '2,0,0')?.arrivals[0]?.from).toEqual([1, 0, 0])
   })
 
-  it('[TP-MOTION-FUNNEL-EXTRACT][TP-MOTION-THROWN] 物の動き：取り出すファンネルの前が空気なら、口の前から放物線で落ちる（#233）', () => {
-    const fx = blueprintFixture({ size: [4, 3, 3] })
-      .place([3, 2, 0], 'minecraft:chest', chest)
-      .place([3, 2, 1], 'create:andesite_funnel', { facing: 'south', extracting: 'true', powered: 'false' })
-      .place([3, 0, 2], 'create:depot')
-    const { result } = trace(fx, [port([3, 2, 0], 'minecraft:stone')])
-    const drop = result.moves.find((m) => m.to.join(',') === '3,0,2')!
-    expect(drop.from).toEqual([3, 2, 1])
-    expect(drop.path![0]!.pos).toEqual([3.5, 2.5, 1.5])
-    expect(drop.path![1]!.pos).toEqual([3.5, 2.5, 2.5])
-    expect(drop.path![drop.path!.length - 1]!.pos).toEqual([3.5, 0.5, 2.5])
-    // 2 ブロック落ちるのに、速さ 0 から 1 tick に 0.04 ずつ加速して（0.98 を掛けながら）10 tick
+  it('[TP-MOTION-FUNNEL-EXTRACT][TP-MOTION-THROWN] 物の動き：水平の取り出すファンネルの下が空気なら、ファンネルの下から放物線で落ちる（#233、#253）', () => {
+    const fx = blueprintFixture({ size: [4, 4, 3] })
+      .place([3, 3, 0], 'minecraft:chest', chest)
+      .place([3, 3, 1], 'create:andesite_funnel', { facing: 'south', extracting: 'true', powered: 'false' })
+      .place([3, 0, 1], 'create:depot')
+    const { result } = trace(fx, [port([3, 3, 0], 'minecraft:stone')])
+    const drop = result.moves.find((m) => m.to.join(',') === '3,0,1')!
+    expect(drop.from).toEqual([3, 3, 1])
+    expect(drop.path![0]!.pos).toEqual([3.5, 3.5, 1.5])
+    expect(drop.path![1]!.pos).toEqual([3.5, 2.5, 1.5])
+    expect(drop.path![drop.path!.length - 1]!.pos).toEqual([3.5, 0.5, 1.5])
+    // ファンネルの下のマスから 2 ブロック落ちるのに、速さ 0 から 1 tick に 0.04 ずつ加速して（0.98 を掛けながら）10 tick
     expect(drop.seconds).toBeCloseTo(10 / 20)
+    // 口の前（南）のマスには出さない
+    expect(result.moves.some((m) => m.to[2] === 2)).toBe(false)
     // 入れ物から取り出すファンネルへは、移動しない受け渡し
-    expect(result.moves.find((m) => m.to.join(',') === '3,2,1')?.seconds).toBe(0)
+    expect(result.moves.find((m) => m.to.join(',') === '3,3,1')?.seconds).toBe(0)
   })
 
   it('[TP-EJECTOR] イジェクター：生データの距離のマスへ放物線で投げる。距離がなければ横 1 と仮定、止まっていれば投げない（#233）', () => {
@@ -426,10 +428,9 @@ describe('物の通り道', () => {
       .place([1, 2, 0], 'create:chute', { facing: 'east' })
       .place([0, 1, 0], 'minecraft:chest', chest)
       .place([1, 4, 0], 'create:encased_fan', { facing: 'down' })
-      // 横から入れる：チェスト (3,2,0) から取り出すファンネル (2,2,0) が、口の前のシュート (1,2,0) に西向きに出す
-      .place([3, 2, 0], 'minecraft:chest', chest)
-      .place([2, 2, 0], 'create:andesite_funnel', { facing: 'west', extracting: 'true', powered: 'false' })
-    const { result, log } = trace(fx, [port([1, 3, 0], 'minecraft:stone'), port([3, 2, 0], 'minecraft:dirt')])
+    // 横から入れる：西へ進むベルト (3,2,0)→(2,2,0) の端の先がシュート (1,2,0) の東の面
+    belt(fx, 2, 0, [3, 2], 'west')
+    const { result, log } = trace(fx, [port([1, 3, 0], 'minecraft:stone'), port([3, 2, 0], 'minecraft:dirt')], { '3,2,0': 64, '2,2,0': 64 })
     expect(sinkOf(result, '0,1,0', 'minecraft:stone')).toBe(1)
     expect(at(result, '0,1,0')?.sinks[0]?.source).toBe('assumed')
     expect(messages(log)).toContain('シュートに扇風機がつながっているが、物は下へ流れるとした')
@@ -482,7 +483,7 @@ describe('物の通り道', () => {
       .place([3, 1, 0], 'create:basin', { facing: 'down' })
       .place([3, 3, 0], 'create:mechanical_press', { facing: 'north' })
       .place([4, 1, 0], 'create:andesite_funnel', { facing: 'east', extracting: 'true', powered: 'false' })
-      .place([5, 1, 0], 'minecraft:chest', chest)
+      .place([4, 0, 0], 'minecraft:chest', chest)
     const { result, log } = trace(
       fx,
       // ミキサーは 256 RPM で1分に 21 回なので、入る数はそれより少なくする
@@ -493,29 +494,29 @@ describe('物の通り道', () => {
     expect(messages(log)).toContain('レシピ create:mixing/andesite_alloy のほかの材料は、あるものとした')
     expect(at(result, '3,1,0')?.recipes[0]?.type).toBe('compacting')
     expect(rateOf(result, '4,1,0', 'minecraft:granite')).toBe(1)
-    expect(sinkOf(result, '5,1,0', 'minecraft:granite')).toBe(1)
+    expect(sinkOf(result, '4,0,0', 'minecraft:granite')).toBe(1)
   })
 
-  it('[TP-BLOCK-FUNNEL-INSERT][TP-BLOCK-FUNNEL-EXTRACT] ファンネル：入れるファンネルは口の前からだけ受け取り、後ろの入れ物へ。取り出すファンネルの先が空気なら落ちる', () => {
-    const fx = blueprintFixture({ size: [4, 3, 3] })
-      .place([1, 0, 0], 'minecraft:chest', chest)
-      .place([1, 0, 1], 'create:brass_funnel', { facing: 'south', extracting: 'false', powered: 'false' })
-      .place([2, 0, 0], 'create:andesite_funnel', { facing: 'east', extracting: 'true', powered: 'false' })
-      .place([3, 0, 0], 'create:depot')
-      .place([3, 2, 0], 'minecraft:chest', chest)
-      .place([3, 2, 1], 'create:andesite_funnel', { facing: 'south', extracting: 'true', powered: 'false' })
-      // 横から入れる：チェスト (3,0,1) から取り出すファンネル (2,0,1) が、入れるファンネル (1,0,1) の東の面に出す
-      .place([3, 0, 1], 'minecraft:chest', chest)
-      .place([2, 0, 1], 'create:andesite_funnel', { facing: 'west', extracting: 'true', powered: 'false' })
-    const { result, log } = trace(fx, [port([1, 0, 1], 'minecraft:stone'), port([3, 0, 1], 'minecraft:dirt')])
-    // ファンネル → 後ろの入れ物 (1,0,0) → 取り出すファンネル (2,0,0) → 口の前のデポ
-    expect(rateOf(result, '1,0,0', 'minecraft:stone')).toBe(1)
-    expect(sinkOf(result, '3,0,0', 'minecraft:stone')).toBe(1)
+  it('[TP-BLOCK-FUNNEL-INSERT][TP-BLOCK-FUNNEL-EXTRACT] ファンネル：入れるファンネルは口の前からだけ受け取り、後ろの入れ物へ。水平の取り出すファンネルは真下に落とす（#253）', () => {
+    const fx = blueprintFixture({ size: [4, 4, 3] })
+      .place([1, 1, 0], 'minecraft:chest', chest)
+      .place([1, 1, 1], 'create:brass_funnel', { facing: 'south', extracting: 'false', powered: 'false' })
+      .place([2, 1, 0], 'create:andesite_funnel', { facing: 'east', extracting: 'true', powered: 'false' })
+      .place([2, 0, 0], 'create:depot')
+      .place([3, 1, 0], 'create:depot')
+      .place([0, 3, 1], 'minecraft:chest', chest)
+      .place([0, 3, 2], 'create:andesite_funnel', { facing: 'south', extracting: 'true', powered: 'false' })
+    // 横から入れる：西へ進むベルト (3,1,1)→(2,1,1) の端の先が、入れるファンネル (1,1,1) の東の面
+    belt(fx, 1, 1, [3, 2], 'west')
+    const { result, log } = trace(fx, [port([1, 1, 1], 'minecraft:stone'), port([3, 1, 1], 'minecraft:dirt')], { '3,1,1': 64, '2,1,1': 64 })
+    // ファンネル → 後ろの入れ物 (1,1,0) → 取り出すファンネル (2,1,0) → 真下のデポ。口の前のデポ (3,1,0) には出さない
+    expect(rateOf(result, '1,1,0', 'minecraft:stone')).toBe(1)
+    expect(sinkOf(result, '2,0,0', 'minecraft:stone')).toBe(1)
+    expect(at(result, '3,1,0')).toBeUndefined()
     expect(messages(log)).toContain('ファンネルは口の前からしか受け取らないので、物はここで止まる')
 
-    const fall = trace(fx, [port([3, 2, 0], 'minecraft:stone')])
-    expect(sinkOf(fall.result, '3,0,0', 'minecraft:stone')).toBe(0)
-    expect(messages(fall.log)).toContain('出す先（(3, 2, 2)）が空気で、3 段下までにブロックがないので、その先はたどらない')
+    const fall = trace(fx, [port([0, 3, 1], 'minecraft:stone')])
+    expect(messages(fall.log)).toContain('出す先（(0, 2, 2)）が空気で、3 段下までにブロックがないので、その先はたどらない')
   })
 
   it('[TP-BLOCK-ARM][TP-PATH-SPLIT] 機械アーム：TAKE の点から、すべての DEPOSIT の点へ等しく分ける', () => {
@@ -881,13 +882,13 @@ describe('物の通り道・物の動きの規則ごとの確かめ（#237）', 
 
   it('[TP-MOTION-INVENTORY] 物の動き：入れ物の中は描かない。入った物は、取り出すファンネルの所から出る', () => {
     const fx = blueprintFixture({ size: [4, 3, 3] })
-      .place([1, 0, 0], 'minecraft:chest', chest)
-      .place([2, 0, 0], 'create:andesite_funnel', { facing: 'east', extracting: 'true', powered: 'false' })
-      .place([3, 0, 0], 'create:depot')
-    const { result } = trace(fx, [port([1, 0, 0], 'minecraft:stone')])
-    expect(result.moves.filter((m) => m.to.join(',') === '1,0,0')).toEqual([])
-    expect(moveOf(result, '1,0,0', '2,0,0')).toMatchObject({ seconds: 0, hold: 0 })
-    expect(moveOf(result, '2,0,0', '3,0,0')).toBeDefined()
+      .place([1, 1, 0], 'minecraft:chest', chest)
+      .place([2, 1, 0], 'create:andesite_funnel', { facing: 'east', extracting: 'true', powered: 'false' })
+      .place([2, 0, 0], 'create:depot')
+    const { result } = trace(fx, [port([1, 1, 0], 'minecraft:stone')])
+    expect(result.moves.filter((m) => m.to.join(',') === '1,1,0')).toEqual([])
+    expect(moveOf(result, '1,1,0', '2,1,0')).toMatchObject({ seconds: 0, hold: 0 })
+    expect(moveOf(result, '2,1,0', '2,0,0')).toBeDefined()
   })
 
   it('[TP-MOTION-STOPPED] 物の動き：回転数が 0 のベルト・石臼は動かさない', () => {
@@ -1178,5 +1179,168 @@ describe('物の通り道の分かれ道（#237）', () => {
     const stopped = trace(fx, [port([0, 0, 0], 'minecraft:stone')]).result
     expect(at(stopped, '1,0,0')?.notes).toContain('止まっているので、物を運ばない')
     expect(sinkOf(stopped, '0,0,0', 'minecraft:stone')).toBe(1)
+  })
+})
+
+describe('ラージチェスト・フィルター・真鍮のトンネル・ベルトから取る機械アーム（#253）', () => {
+  /** 1.18.2 のアイテムスタック（フィルターの物） */
+  const stack = (id: string) => nbt.compound({ id: nbt.string(id), Count: nbt.byte(1) })
+  const filterOf = (id: string) => nbt.compound({ Filter: stack(id), FilterAmount: nbt.int(64) })
+  /** 真鍮のトンネルの生データ。sides・flaps は Minecraft の 3D の番号（2 北・3 南・4 西・5 東） */
+  const tunnel = (flaps: number[], sides: number[], filters: { side: number; filter: NbtCompound }[] = []) =>
+    nbt.compound({
+      Flaps: nbt.list('int', flaps.map((d) => nbt.int(d))),
+      Sides: nbt.list('int', sides.map((d) => nbt.int(d))),
+      ConnectedLeft: nbt.byte(0),
+      ConnectedRight: nbt.byte(0),
+      Filters: nbt.list(
+        'compound',
+        filters.map((f) => nbt.compound({ Side: nbt.int(f.side), Filter: f.filter, FilterAmount: nbt.int(64) })),
+      ),
+    })
+  const blacklist = (id: string) =>
+    nbt.compound({
+      id: nbt.string('create:filter'),
+      Count: nbt.byte(1),
+      tag: nbt.compound({
+        Blacklist: nbt.byte(1),
+        Items: nbt.compound({ Items: nbt.list('compound', [nbt.compound({ Slot: nbt.int(0), id: nbt.string(id), Count: nbt.byte(1) })]) }),
+      }),
+    })
+
+  it('[TP-BLOCK-DOUBLE-CHEST] ラージチェストは2つの半分で1つの入れ物。片方に入れた物を、もう片方のファンネルが取り出す', () => {
+    // 西向きのラージチェスト：left (1,1,1) の時計回り（北）に right (1,1,0)
+    const fx = () =>
+      blueprintFixture({ size: [3, 2, 3] })
+        .place([1, 1, 1], 'minecraft:chest', { facing: 'west', type: 'left', waterlogged: 'false' }, chest)
+        .place([1, 1, 2], 'create:andesite_funnel', { facing: 'south', extracting: 'true', powered: 'false' })
+        .place([1, 0, 2], 'create:depot')
+    const half = (props: Record<string, string>) => fx().place([1, 1, 0], 'minecraft:chest', { waterlogged: 'false', ...props }, chest)
+    const paired = trace(half({ facing: 'west', type: 'right' }), [port([1, 1, 0], 'minecraft:stone')]).result
+    expect(sinkOf(paired, '1,0,2', 'minecraft:stone')).toBe(1)
+    expect(sinkOf(paired, '1,1,0', 'minecraft:stone')).toBe(0)
+    // 向きか type が合わなければ別の入れ物
+    expect(sinkOf(trace(half({ facing: 'west', type: 'single' }), [port([1, 1, 0], 'minecraft:stone')]).result, '1,1,0', 'minecraft:stone')).toBe(1)
+    expect(sinkOf(trace(half({ facing: 'east', type: 'right' }), [port([1, 1, 0], 'minecraft:stone')]).result, '1,1,0', 'minecraft:stone')).toBe(1)
+    // 取り出すファンネルの付いた半分に入れても同じ
+    expect(sinkOf(trace(half({ facing: 'west', type: 'right' }), [port([1, 1, 1], 'minecraft:stone')]).result, '1,0,2', 'minecraft:stone')).toBe(1)
+  })
+
+  it('[TP-FILTER] ファンネルのフィルター：入れるファンネルは合わない物を受け取らず、取り出すファンネルは合う物だけを取り出す', () => {
+    const fx = blueprintFixture({ size: [4, 4, 3] })
+      // 取り出すファンネルが真下の入れるファンネル（上向き）に落とす。銅のインゴットだけを受け取る
+      .place([1, 3, 0], 'minecraft:chest', chest)
+      .place([1, 3, 1], 'create:andesite_funnel', { facing: 'south', extracting: 'true', powered: 'false' })
+      .place([1, 2, 1], 'create:brass_funnel', { facing: 'up', extracting: 'false', powered: 'false' }, filterOf('minecraft:copper_ingot'))
+      .place([1, 1, 1], 'minecraft:chest', chest)
+      // 石だけを取り出すファンネル
+      .place([3, 3, 0], 'minecraft:chest', chest)
+      .place([3, 3, 1], 'create:brass_funnel', { facing: 'south', extracting: 'true', powered: 'false' }, filterOf('minecraft:stone'))
+      .place([3, 2, 1], 'create:depot')
+    expect(sinkOf(trace(fx, [port([1, 3, 0], 'minecraft:copper_ingot')]).result, '1,1,1', 'minecraft:copper_ingot')).toBe(1)
+    const raw = trace(fx, [port([1, 3, 0], 'minecraft:raw_copper')])
+    expect(sinkOf(raw.result, '1,1,1', 'minecraft:raw_copper')).toBe(0)
+    expect(messages(raw.log)).toContain('minecraft:raw_copper はファンネルのフィルターに合わないので、ファンネルは受け取らず、物はここで止まる')
+    expect(sinkOf(trace(fx, [port([3, 3, 0], 'minecraft:stone')]).result, '3,2,1', 'minecraft:stone')).toBe(1)
+    // 合わない物は取り出さないので、入れ物に溜まる
+    expect(sinkOf(trace(fx, [port([3, 3, 0], 'minecraft:dirt')]).result, '3,3,0', 'minecraft:dirt')).toBe(1)
+  })
+
+  it('[TP-FILTER] ベルトのファンネルのフィルター：取り込むファンネルは合わない物を通り過ぎさせ、押し出すファンネルは合う物だけを置く', () => {
+    const fx = () => {
+      const f = blueprintFixture({ size: [5, 3, 3] })
+      belt(f, 0, 1, [0, 1, 2], 'east')
+      return f
+        .place([1, 1, 1], 'create:brass_belt_funnel', { facing: 'north', shape: 'pulling', powered: 'false' }, filterOf('minecraft:stone'))
+        .place([1, 1, 2], 'minecraft:chest', chest)
+        .place([3, 0, 1], 'minecraft:chest', chest)
+    }
+    const speeds = { '0,0,1': -24, '1,0,1': -24, '2,0,1': -24 }
+    expect(sinkOf(trace(fx(), [port([0, 0, 1], 'minecraft:stone')], speeds).result, '1,1,2', 'minecraft:stone')).toBe(1)
+    const dirt = trace(fx(), [port([0, 0, 1], 'minecraft:dirt')], speeds).result
+    expect(sinkOf(dirt, '1,1,2', 'minecraft:dirt')).toBe(0)
+    expect(sinkOf(dirt, '3,0,1', 'minecraft:dirt')).toBe(1)
+
+    // 押し出すベルトのファンネル（平行の形、ベルトは東へ）：西のデポから溶岩のバケツだけを取り出して下のベルトへ
+    const push = () => {
+      const f = blueprintFixture({ size: [5, 3, 3] })
+      belt(f, 0, 1, [1, 2], 'east')
+      return f
+        .place([0, 1, 1], 'create:depot')
+        .place([1, 1, 1], 'create:brass_belt_funnel', { facing: 'east', shape: 'retracted', powered: 'false' }, filterOf('minecraft:lava_bucket'))
+        .place([3, 0, 1], 'minecraft:chest', chest)
+    }
+    const pushSpeeds = { '1,0,1': -24, '2,0,1': -24 }
+    expect(sinkOf(trace(push(), [port([0, 1, 1], 'minecraft:lava_bucket')], pushSpeeds).result, '3,0,1', 'minecraft:lava_bucket')).toBe(1)
+    expect(sinkOf(trace(push(), [port([0, 1, 1], 'minecraft:bucket')], pushSpeeds).result, '0,1,1', 'minecraft:bucket')).toBe(1)
+  })
+
+  it('[TP-BRASS-TUNNEL] 真鍮のトンネル：ベルトの軸の口（Flaps）しかなければ分けずに素通りし、口（Sides）にない横には分けない（#253）', () => {
+    const fx = (be: NbtCompound) => {
+      const f = blueprintFixture({ size: [4, 2, 3] })
+      belt(f, 0, 1, [0, 1, 2], 'east')
+      return f
+        .place([1, 1, 1], 'create:brass_tunnel', { axis: 'x', shape: 'straight' }, be)
+        .place([1, 0, 0], 'create:depot')
+        .place([3, 0, 1], 'minecraft:chest', chest)
+    }
+    const speeds = { '0,0,1': -24, '1,0,1': -24, '2,0,1': -24 }
+    const run = (be: NbtCompound) => trace(fx(be), [port([0, 0, 1], 'minecraft:stone')], speeds).result
+    const straight = run(tunnel([4, 5], [4, 5]))
+    expect(sinkOf(straight, '3,0,1', 'minecraft:stone')).toBe(1)
+    expect(sinkOf(straight, '1,0,0', 'minecraft:stone')).toBe(0)
+    // 預からないので 10 tick 待たない
+    expect(straight.moves.find((m) => m.to.join(',') === '1,0,1')?.hold ?? 0).toBe(0)
+    expect(rateOf(straight, '1,1,1', 'minecraft:stone')).toBe(1)
+    // 北に口があれば分ける
+    const open = run(tunnel([2, 4, 5], [2, 4, 5]))
+    expect(sinkOf(open, '3,0,1', 'minecraft:stone')).toBe(0.5)
+    expect(sinkOf(open, '1,0,0', 'minecraft:stone')).toBe(0.5)
+    // 口（Sides）に北がなければ、北のデポには分けない
+    const closed = run(tunnel([2, 4, 5], [4, 5]))
+    expect(sinkOf(closed, '3,0,1', 'minecraft:stone')).toBe(1)
+    expect(sinkOf(closed, '1,0,0', 'minecraft:stone')).toBe(0)
+    // 出る側のフィルターに合わない出口には分けない。先（東）がだめなら横へ全部
+    const eastFiltered = run(tunnel([2, 4, 5], [2, 4, 5], [{ side: 5, filter: stack('minecraft:dirt') }]))
+    expect(sinkOf(eastFiltered, '1,0,0', 'minecraft:stone')).toBe(1)
+    expect(sinkOf(eastFiltered, '3,0,1', 'minecraft:stone')).toBe(0)
+    // どこにも出せなければ止まる
+    const none = run(tunnel([2, 4, 5], [4, 5], [{ side: 5, filter: stack('minecraft:dirt') }]))
+    expect(at(none, '1,0,1')?.notes).toContain('真鍮のトンネルに物を出せる口がないので、物はここで止まる')
+  })
+
+  it('[TP-BRASS-TUNNEL-FILTER][TP-BLOCK-ARM-BELT] トンネルの入る側のフィルターに合わない物は手前の区間で止まり、そこを取る機械アームが全部取る', () => {
+    const points = nbt.list('compound', [
+      nbt.compound({ Pos: nbt.intArray([0, -1, -1]), Mode: nbt.string('TAKE') }),
+      nbt.compound({ Pos: nbt.intArray([0, -1, 1]), Mode: nbt.string('DEPOSIT') }),
+    ])
+    const fx = (arm: boolean) => {
+      const f = blueprintFixture({ size: [5, 3, 4] })
+      belt(f, 0, 1, [0, 1, 2, 3], 'east')
+      f.place([2, 1, 1], 'create:brass_tunnel', { axis: 'x', shape: 'straight' }, tunnel([4, 5], [4, 5], [{ side: 4, filter: blacklist('minecraft:lava_bucket') }]))
+      f.place([4, 0, 1], 'minecraft:chest', chest)
+      if (arm) {
+        f.place([1, 1, 2], 'create:mechanical_arm', { ceiling: 'false' }, nbt.compound({ InteractionPoints: points }))
+        f.place([1, 0, 3], 'create:blaze_burner', { blaze: 'kindled', facing: 'west' })
+      }
+      return f
+    }
+    const speeds = { '0,0,1': -24, '1,0,1': -24, '2,0,1': -24, '3,0,1': -24, '1,1,2': 64 }
+    // 合う物はトンネルを通る
+    expect(sinkOf(trace(fx(false), [port([0, 0, 1], 'minecraft:stone')], speeds).result, '4,0,1', 'minecraft:stone')).toBe(1)
+    // 合わない物は手前の区間 (1,0,1) で止まる
+    const stuck = trace(fx(false), [port([0, 0, 1], 'minecraft:lava_bucket')], speeds).result
+    expect(sinkOf(stuck, '4,0,1', 'minecraft:lava_bucket')).toBe(0)
+    expect(rateOf(stuck, '2,0,1', 'minecraft:lava_bucket')).toBe(0)
+    expect(at(stuck, '1,0,1')?.notes).toContain('次の区間の真鍮のトンネルのフィルターに合わないので、物はここで止まる')
+    // 手前の区間を取る機械アームが全部取り、バーナーへ
+    const taken = trace(fx(true), [port([0, 0, 1], 'minecraft:lava_bucket')], speeds).result
+    expect(rateOf(taken, '1,0,3', 'minecraft:lava_bucket')).toBe(1)
+    expect(taken.moves.some((m) => m.from.join(',') === '1,0,1' && m.to.join(',') === '1,0,3')).toBe(true)
+    // 止まらない物は、先へ進む物とアームで等しく分ける
+    const { result: shared, log } = trace(fx(true), [port([0, 0, 1], 'minecraft:stone')], speeds)
+    expect(rateOf(shared, '1,0,3', 'minecraft:stone')).toBe(0.5)
+    expect(sinkOf(shared, '4,0,1', 'minecraft:stone')).toBe(0.5)
+    expect(messages(log)).toContain('機械アームがベルトの区間から取る数は、先へ進む物と等しく分けるとした')
   })
 })
