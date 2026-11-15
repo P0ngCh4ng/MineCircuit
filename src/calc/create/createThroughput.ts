@@ -38,6 +38,12 @@ export const DEFAULT_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, numb
   // プレスは処理時間を使わない（押す動きの速さだけで決まる）
   pressing: 0,
   compacting: 0,
+  // 扇風機は処理時間を使わない（いつも fanProcessingTime。TP-FAN-RECIPE）
+  splashing: 0,
+  haunting: 0,
+  smelting: 0,
+  blasting: 0,
+  smoking: 0,
 }
 
 /** 処理時間にレシピの時間を使う機械か（プレス・圧縮は押す動きの速さだけで決まる） */
@@ -48,6 +54,11 @@ const USES_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, boolean>> = {
   mixing: true,
   pressing: false,
   compacting: false,
+  splashing: false,
+  haunting: false,
+  smelting: false,
+  blasting: false,
+  smoking: false,
 }
 
 /** 機械の名前（仮定の文と、律速の機械の名前に使う） */
@@ -58,6 +69,11 @@ export const RECIPE_MACHINE_NAMES: Readonly<Record<ProcessingRecipeType, string>
   mixing: 'ミキサー',
   pressing: 'プレス',
   compacting: 'プレス（圧縮）',
+  splashing: '扇風機（洗う）',
+  haunting: '扇風機（憑依）',
+  smelting: '扇風機（焼く）',
+  blasting: '扇風機（焼く）',
+  smoking: '扇風機（燻す）',
 }
 
 // ---- 計算（純粋な関数）。回転数が 0 なら null（動かない） ----

@@ -32,7 +32,8 @@ export interface ModpackProblem {
 
 /**
  * スクリプトを当てはめる前のレシピとアイテムのタグ。
- * レシピは jar（名前順）→ kubejs/data/ の順に、同じ ID なら後のものを使う（Minecraft 本体の jar のレシピは使わない）。
+ * レシピは Minecraft 本体の jar → jar（名前順）→ kubejs/data/ の順に、同じ ID なら後のものを使う
+ * （本体の jar から読むのは、扇風機に使う料理のレシピ。#235）。
  * タグは Minecraft 本体の jar → jar（名前順）→ kubejs/data/ の順にまとめる（入れ子はたどらない）
  */
 export function baseRecipeSources(
@@ -41,7 +42,7 @@ export function baseRecipeSources(
   kubejsRecipes: Pick<KubeJsRecipes, 'recipes' | 'itemTags'> | null,
 ): { recipes: ProcessingRecipe[]; itemTags: ItemTagFiles } {
   return {
-    recipes: mergeRecipes(...summaries.map((s) => s.recipes), kubejsRecipes?.recipes ?? []),
+    recipes: mergeRecipes(vanilla?.assets?.summary.recipes ?? [], ...summaries.map((s) => s.recipes), kubejsRecipes?.recipes ?? []),
     itemTags: [vanilla?.assets?.summary.itemTags, ...summaries.map((s) => s.itemTags), kubejsRecipes?.itemTags].reduce<ItemTagFiles>(
       (all, tags) => (tags ? mergeItemTagFiles(all, tags) : all),
       {},
@@ -90,7 +91,7 @@ export class Modpack {
    * jar より優先度の高い資産とブロック状態の定義にする（kubejs/assets/ の本物のファイルはさらに優先）。
    * machines は Custom Machinery の機械の ID → 見た目のブロック（customMachinery.ts）。
    * kubejsRecipes は kubejs/data/ のレシピとスクリプトの有無（kubejsRecipes.ts）。jar のレシピより優先する。
-   * Minecraft 本体の jar のレシピは使わない。
+   * Minecraft 本体の jar のレシピ（扇風機に使う料理のレシピ）は、どの jar よりも優先度を低くする。
    * アイテムのタグは、Minecraft 本体の jar → jar（名前順）→ kubejs/data/ の順にまとめ、入れ子のタグをたどって平らにする。
    * scripts は KubeJS のスクリプトを動かした結果（#145）。失敗していなければ、そのレシピとタグを使う。
    */

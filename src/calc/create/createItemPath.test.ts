@@ -1344,3 +1344,148 @@ describe('ラージチェスト・フィルター・真鍮のトンネル・ベ�
     expect(messages(log)).toContain('機械アームがベルトの区間から取る数は、先へ進む物と等しく分けるとした')
   })
 })
+
+describe('扇風機の処理（#235）', () => {
+  const stack = (id: string) => nbt.compound({ id: nbt.string(id), Count: nbt.byte(1) })
+  const filterOf = (id: string) => nbt.compound({ Filter: stack(id), FilterAmount: nbt.int(64) })
+  const moveOf = (r: ItemPathResult, from: string, to: string, item: string) =>
+    r.moves.find((m) => m.from.join(',') === from && m.to.join(',') === to && m.item === item)
+  const FAN_BOOK: RecipeBook = {
+    ...BOOK,
+    recipes: [
+      ...BOOK.recipes,
+      recipe('minecraft:copper_ingot_from_smelting_raw_copper', 'smelting', ['minecraft:raw_copper'], 0, [out('minecraft:copper_ingot')]),
+      recipe('minecraft:iron_ingot_from_blasting_iron_ore', 'blasting', ['minecraft:iron_ore'], 0, [out('minecraft:iron_ingot')]),
+      recipe('minecraft:cooked_beef', 'smelting', ['minecraft:beef'], 0, [out('minecraft:cooked_beef')]),
+      recipe('minecraft:cooked_beef_from_smoking', 'smoking', ['minecraft:beef'], 0, [out('minecraft:cooked_beef')]),
+      recipe('create:splashing/gravel', 'splashing', ['minecraft:gravel'], 0, [out('minecraft:flint', 1, 0.25), out('minecraft:iron_nugget', 1, 0.125)]),
+      recipe('create:haunting/sand', 'haunting', ['minecraft:sand'], 0, [out('minecraft:soul_sand')]),
+    ],
+  }
+  const FAN_TICKS = 151
+
+  /**
+   * 真鍮製造機の形：チェスト (1,2,1) → 取り出すファンネル (1,2,2)（南向き）が真下の上向きのファンネル (1,1,2) に落とす。
+   * 上向きのファンネルはインゴットだけを通し、下のチェスト (1,0,2) へ。扇風機 (0,1,2) は東向きで、溶岩 (2,1,2)
+   */
+  function brassMaker(): BlueprintFixture {
+    return blueprintFixture({ size: [8, 3, 3] })
+      .place([1, 2, 1], 'minecraft:chest', chest)
+      .place([1, 2, 2], 'create:andesite_funnel', { facing: 'south', extracting: 'true', powered: 'false' })
+      .place([1, 1, 2], 'create:brass_funnel', { facing: 'up', extracting: 'false', powered: 'false' }, filterOf('minecraft:copper_ingot'))
+      .place([1, 0, 2], 'minecraft:chest', chest)
+      .place([0, 1, 2], 'create:encased_fan', { facing: 'east' })
+      .place([2, 1, 2], 'minecraft:lava', { level: '0' })
+  }
+
+  it('[TP-FAN-DROPPED][TP-FAN-RECIPE] 落ちた物がファンネルのフィルターに断られて風の中にとどまると、焼いてからもう一度渡す', () => {
+    // -32 RPM の東向きは引く風。溶岩から扇風機の方のマス（上向きのファンネル）が焼く
+    const { result, log } = trace(brassMaker(), [port([1, 2, 1], 'minecraft:raw_copper')], { '0,1,2': -32 }, FAN_BOOK)
+    expect(sinkOf(result, '1,0,2', 'minecraft:copper_ingot')).toBe(1)
+    expect(sinkOf(result, '1,0,2', 'minecraft:raw_copper')).toBe(0)
+    const funnel = at(result, '1,1,2')!
+    expect(funnel.arrivals.map((a) => a.item)).toEqual(['minecraft:raw_copper', 'minecraft:copper_ingot'])
+    expect(funnel.recipes).toMatchObject([{ type: 'smelting', input: 'minecraft:raw_copper', outputs: [{ item: 'minecraft:copper_ingot', rate: 1 }] }])
+    // 落ちる動きのあと、焼く間 151 tick とどまる
+    expect(moveOf(result, '1,2,2', '1,1,2', 'minecraft:raw_copper')?.hold).toBeCloseTo(FAN_TICKS / 20)
+    expect(messages(log).some((m) => m.includes('フィルターに合わない'))).toBe(false)
+
+    // 押す風では、溶岩より遠い方だけが焼く。ファンネルのマスは風の中だが何もしないので、断られて止まる
+    const pushed = trace(brassMaker(), [port([1, 2, 1], 'minecraft:raw_copper')], { '0,1,2': 32 }, FAN_BOOK)
+    expect(sinkOf(pushed.result, '1,0,2', 'minecraft:copper_ingot')).toBe(0)
+    expect(messages(pushed.log)).toContain('minecraft:raw_copper はファンネルのフィルターに合わないので、ファンネルは受け取らず、物はここで止まる')
+
+    // Modpack がなければ、できる物が分からないので変わらないとする
+    const noPack = trace(brassMaker(), [port([1, 2, 1], 'minecraft:raw_copper')], { '0,1,2': -32 }, null)
+    expect(messages(noPack.log)).toContain('Modpack のレシピがないので、扇風機で焼くとできる物が分からず、物は変わらないとした')
+    expect(messages(noPack.log)).toContain('minecraft:raw_copper はファンネルのフィルターに合わないので、ファンネルは受け取らず、物はここで止まる')
+  })
+
+  it('[TP-FAN-DROPPED] 受け取るブロックがそのまま受け取る物は処理しない', () => {
+    // フィルターに合うインゴットは、ファンネルがすぐ吸い込む
+    const { result } = trace(brassMaker(), [port([1, 2, 1], 'minecraft:copper_ingot')], { '0,1,2': -32 }, FAN_BOOK)
+    expect(sinkOf(result, '1,0,2', 'minecraft:copper_ingot')).toBe(1)
+    expect(at(result, '1,1,2')?.recipes).toEqual([])
+  })
+
+  /** 東向きの扇風機 (0,1,0) の前に触媒 (1,1,0)、1段下にデポ (2,0,0) */
+  function depotUnder(catalyst: string, props: Record<string, string>): BlueprintFixture {
+    return blueprintFixture({ size: [5, 2, 1] })
+      .place([0, 1, 0], 'create:encased_fan', { facing: 'east' })
+      .place([1, 1, 0], catalyst, props)
+      .place([2, 0, 0], 'create:depot')
+  }
+
+  it('[TP-FAN-ON-BELT][TP-FAN-RECIPE] 水平の風の1段下のデポの物を処理し、151 tick とどまる。洗う・燻す・憑依', () => {
+    const wash = trace(depotUnder('minecraft:water', { level: '0' }), [port([2, 0, 0], 'minecraft:gravel')], { '0,1,0': 64 }, FAN_BOOK)
+    expect(sinkOf(wash.result, '2,0,0', 'minecraft:flint')).toBe(0.25)
+    expect(sinkOf(wash.result, '2,0,0', 'minecraft:iron_nugget')).toBe(0.125)
+    expect(sinkOf(wash.result, '2,0,0', 'minecraft:gravel')).toBe(0)
+    expect(moveOf(wash.result, '2,0,0', '2,0,0', 'minecraft:gravel')?.hold).toBeCloseTo(FAN_TICKS / 20)
+
+    const smoke = trace(
+      depotUnder('minecraft:campfire', { lit: 'true', waterlogged: 'false' }),
+      [port([2, 0, 0], 'minecraft:beef')],
+      { '0,1,0': 64 },
+      FAN_BOOK,
+    )
+    expect(sinkOf(smoke.result, '2,0,0', 'minecraft:cooked_beef')).toBe(1)
+    expect(at(smoke.result, '2,0,0')?.recipes[0]?.type).toBe('smoking')
+
+    const haunt = trace(depotUnder('minecraft:soul_fire', {}), [port([2, 0, 0], 'minecraft:sand')], { '0,1,0': 64 }, FAN_BOOK)
+    expect(sinkOf(haunt.result, '2,0,0', 'minecraft:soul_sand')).toBe(1)
+
+    // レシピのない物は変わらない
+    const plain = trace(depotUnder('minecraft:water', { level: '0' }), [port([2, 0, 0], 'minecraft:stone')], { '0,1,0': 64 }, FAN_BOOK)
+    expect(sinkOf(plain.result, '2,0,0', 'minecraft:stone')).toBe(1)
+    expect(at(plain.result, '2,0,0')?.notes).toContain('minecraft:stone を洗うレシピがないので、物は変わらない')
+    // 扇風機が止まっていれば処理しない
+    const stopped = trace(depotUnder('minecraft:water', { level: '0' }), [port([2, 0, 0], 'minecraft:gravel')], {}, FAN_BOOK)
+    expect(sinkOf(stopped.result, '2,0,0', 'minecraft:gravel')).toBe(1)
+  })
+
+  it('[TP-FAN-RECIPE] 焼く：smelting、なければ blasting。燻すレシピが同じ物を作る物と、レシピのない物は焼けてなくなる', () => {
+    const lava = depotUnder('minecraft:lava', { level: '0' })
+    const run = (item: string) => trace(lava, [port([2, 0, 0], item)], { '0,1,0': 64 }, FAN_BOOK)
+    const copper = run('minecraft:raw_copper')
+    expect(sinkOf(copper.result, '2,0,0', 'minecraft:copper_ingot')).toBe(1)
+    expect(at(copper.result, '2,0,0')?.recipes[0]?.type).toBe('smelting')
+    const iron = run('minecraft:iron_ore')
+    expect(sinkOf(iron.result, '2,0,0', 'minecraft:iron_ingot')).toBe(1)
+    expect(at(iron.result, '2,0,0')?.recipes[0]?.type).toBe('blasting')
+
+    const beef = run('minecraft:beef')
+    expect(at(beef.result, '2,0,0')?.sinks).toEqual([])
+    expect(at(beef.result, '2,0,0')?.notes).toContain('minecraft:beef は扇風機の風で焼けてなくなる')
+    const stick = run('minecraft:stick')
+    expect(at(stick.result, '2,0,0')?.sinks).toEqual([])
+    expect(messages(stick.log)).toContain('minecraft:stick を焼くレシピがないので、燃えない物ではないとして、焼けてなくなるとした')
+  })
+
+  it('[TP-FAN-ON-BELT] ベルトの物は止まらず、風の中を続けて通った時間が 151 tick に届いた区間で変わる。届かなければ変わらない', () => {
+    // 東向きの扇風機 (0,1,0) の前に水 (1,1,0)。1段下に東へ進むベルト x = 2..9、端の先にチェスト (10,0,0)
+    const fx = blueprintFixture({ size: [11, 2, 1] })
+      .place([0, 1, 0], 'create:encased_fan', { facing: 'east' })
+      .place([1, 1, 0], 'minecraft:water', { level: '0' })
+      .place([10, 0, 0], 'minecraft:chest', chest)
+    belt(fx, 0, 0, [2, 3, 4, 5, 6, 7, 8, 9], 'east')
+    const speeds = (beltRpm: number): Record<string, number> => {
+      const s: Record<string, number> = { '0,1,0': 256 }
+      for (let x = 2; x <= 9; x++) s[`${x},0,0`] = beltRpm
+      return s
+    }
+    // −16 RPM（X 軸のベルトは負の回転数で東へ進む）：区間1つ 30 tick。6 つ目の区間（x = 7）で 180 tick になって洗う
+    const slow = trace(fx, [port([2, 0, 0], 'minecraft:gravel')], speeds(-16), FAN_BOOK)
+    expect(at(slow.result, '7,0,0')?.recipes[0]).toMatchObject({ type: 'splashing', input: 'minecraft:gravel' })
+    expect(sinkOf(slow.result, '10,0,0', 'minecraft:flint')).toBe(0.25)
+    expect(sinkOf(slow.result, '10,0,0', 'minecraft:gravel')).toBe(0)
+    expect(rateOf(slow.result, '10,0,0', 'minecraft:flint')).toBe(0.25)
+    // ベルトの上では止まらない
+    expect(slow.result.moves.every((m) => m.hold === 0)).toBe(true)
+
+    // −32 RPM：区間1つ 15 tick、8 区間で 120 tick。届かないので変わらない
+    const fast = trace(fx, [port([2, 0, 0], 'minecraft:gravel')], speeds(-32), FAN_BOOK)
+    expect(sinkOf(fast.result, '10,0,0', 'minecraft:gravel')).toBe(1)
+    expect(at(fast.result, '9,0,0')?.notes).toContain('風の中を通る時間が 120 tick で、洗うのにかかる 151 tick に届かないので、物は変わらずに通り過ぎる')
+  })
+})

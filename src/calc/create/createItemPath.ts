@@ -27,6 +27,7 @@ import {
   TICKS_PER_SECOND,
   type RecipeChoice,
 } from './createThroughput'
+import { FAN_PROCESSING_NAMES, findFanCurrents, type FanCell, type FanCurrents, type FanProcessingKind } from './fanCurrent'
 import { arcPath, blockCenter, ejectorPath, throwPath, type MotionPath } from './itemMotion'
 import { testFilter } from './itemFilter'
 import { axisDirections, clockwise, directionAxis } from './kineticBlocks'
@@ -163,6 +164,16 @@ interface Carry {
   readonly motion?: MotionPath
   /** 物の動きの始めの位置。なければ渡す元（機械アームは、届く物の「どこから」はアーム、動きは取る点から） */
   readonly moveFrom?: Vec3
+  /** 扇風機の風で処理してできた物（同じ所でもう一度は処理しない。TP-FAN-DROPPED） */
+  readonly fanDone?: boolean
+}
+
+/** ベルトの上の物が、風の中を続けて通った時間（TP-FAN-ON-BELT） */
+interface FanOnBelt {
+  kind: FanProcessingKind | null
+  ticks: number
+  /** 処理し終えた（またはレシピがなく処理しない）種類。同じ種類の風ではもう処理しない */
+  done: FanProcessingKind | null
 }
 
 /** 移動しない受け渡し */
@@ -265,6 +276,7 @@ class ItemTracer {
   private readonly records = new Map<string, ItemPathRecord>()
   private readonly moves = new Map<string, CalcItemMove>()
   private readonly arms: ArmInfo[]
+  private readonly fans: FanCurrents
   /** いまたどっている道の上の「位置|物」。同じものにまた届いたら輪になっている */
   private readonly ancestors = new Set<string>()
   private steps = 0
@@ -273,6 +285,7 @@ class ItemTracer {
 
   constructor(private readonly env: ItemPathEnv) {
     this.arms = findArms(env.bp)
+    this.fans = findFanCurrents(env.bp, env.rpmAt)
   }
 
   /** 物の入口から pos のブロックに入れる。面は問わない（入れ物に直接入れるのと同じ。#195） */
@@ -407,7 +420,14 @@ class ItemTracer {
    * ベルトの区間 start から先を進む。ベルトのファンネル・2段上の機械・端の先。
    * entryFrom は区間 start に物が来た元（2段上の機械で止まる時間を、その動きに付ける）
    */
-  private walkBelt(segments: readonly Vec3[], start: number, entering: Flow, move: Direction, entryFrom: Vec3 | null): void {
+  private walkBelt(
+    segments: readonly Vec3[],
+    start: number,
+    entering: Flow,
+    move: Direction,
+    entryFrom: Vec3 | null,
+    fan: FanOnBelt = { kind: null, ticks: 0, done: null },
+  ): void {
     let flow = entering
     for (let i = start; i < segments.length; i++) {
       const seg = segments[i]!
@@ -415,6 +435,17 @@ class ItemTracer {
       const funnel = this.beltFunnelTaking(seg, move, flow.item)
       if (funnel) {
         this.handOff(funnel.from, funnel.to, flow, null, funnel.via)
+        return
+      }
+      const fanned = this.fanOnBelt(segments, i, flow, fan)
+      if (fanned) {
+        // 風の中で処理し終えた区間から、できた物が先へ進む。同じ種類の風ではもう処理しない
+        for (const out of fanned.outs) {
+          const left = this.leaveSegment(segments, i, out, move)
+          if (!left) continue
+          this.beltStep(segments, i, left)
+          this.walkBelt(segments, i + 1, left, move, seg, { kind: null, ticks: 0, done: fanned.kind })
+        }
         return
       }
       if ((this.env.bp.get(seg)?.properties.slope ?? 'horizontal') === 'horizontal') {
@@ -750,12 +781,19 @@ class ItemTracer {
     return this.process(mpos, 'pressing', flow, 'mechanical_press', rpm, { pos: base, from: baseFrom })
   }
 
-  /** デポ。2段上のプレス・デプロイヤーで処理し、1段上の pulling のベルトのファンネル・取り出すファンネル・機械アームで先へ */
+  /**
+   * デポ。風の中なら扇風機で処理し（TP-FAN-ON-BELT）、2段上のプレス・デプロイヤーで処理し、
+   * 1段上の pulling のベルトのファンネル・取り出すファンネル・機械アームで先へ
+   */
   private depot(pos: Vec3, flow: Flow, from: Vec3 | null, carry: Carry): void {
     this.arrive(pos, flow, from, carry)
-    const result = this.processAbove(pos, flow, from)
-    if (result === null) return
-    for (const out of result === 'pass' ? [flow] : result) this.emit(pos, out, { beltFunnelAbove: true })
+    const kind = fanKindOf(this.fans.handlersAt(pos))
+    const flows = kind ? (this.fanProcess(pos, kind, flow, { pos, from }) ?? [flow]) : [flow]
+    for (const f of flows) {
+      const result = this.processAbove(pos, f, from)
+      if (result === null) continue
+      for (const out of result === 'pass' ? [f] : result) this.emit(pos, out, { beltFunnelAbove: true })
+    }
   }
 
   /** シュート。上から受け取り、真下（斜めなら pos.below().relative(facing の反対)）へ */
@@ -888,25 +926,29 @@ class ItemTracer {
 
   /** ファンネル。入れるファンネルは口の前から受け取り、facing の反対側の入れ物に入れる */
   private funnel(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, face: Direction | null, carry: Carry): void {
+    // 断られて落ちた物がとどまり、風の中なら処理してからもう一度渡す（TP-FAN-DROPPED）
+    const refuse = (message: string): void => {
+      if (!this.fanDropped(pos, flow, from, face, carry)) this.refuse(pos, message)
+    }
     const facing = state.properties.facing
     if (!facing || !isDirection(facing)) {
-      this.refuse(pos, 'ファンネルの向きが分からないので、物はここで止まる')
+      refuse('ファンネルの向きが分からないので、物はここで止まる')
       return
     }
     if (state.properties.extracting === 'true') {
-      this.refuse(pos, '取り出すファンネルは物を受け取らないので、物はここで止まる')
+      refuse('取り出すファンネルは物を受け取らないので、物はここで止まる')
       return
     }
     if (face !== null && face !== facing) {
-      this.refuse(pos, 'ファンネルは口の前からしか受け取らないので、物はここで止まる')
+      refuse('ファンネルは口の前からしか受け取らないので、物はここで止まる')
       return
     }
     if (state.properties.powered === 'true') {
-      this.refuse(pos, 'ファンネルにレッドストーンの信号が入っていて動かないので、物はここで止まる')
+      refuse('ファンネルにレッドストーンの信号が入っていて動かないので、物はここで止まる')
       return
     }
     if (!this.blockFilterPasses(pos, flow.item)) {
-      this.refuse(pos, `${flow.item} はファンネルのフィルターに合わないので、ファンネルは受け取らず、物はここで止まる`)
+      refuse(`${flow.item} はファンネルのフィルターに合わないので、ファンネルは受け取らず、物はここで止まる`)
       return
     }
     this.arrive(pos, flow, from, carry)
@@ -1210,6 +1252,125 @@ class ItemTracer {
     return outs
   }
 
+  // ---- 扇風機（docs/create-throughput.md「扇風機」） ----
+
+  /**
+   * ベルトの区間 i が風の中なら、続けて風の中にいた時間を足し、処理にかかる時間に届いたら処理する（TP-FAN-ON-BELT）。
+   * 処理したら、種類とできる物。処理しなければ null
+   */
+  private fanOnBelt(segments: readonly Vec3[], i: number, flow: Flow, fan: FanOnBelt): { kind: FanProcessingKind; outs: Flow[] } | null {
+    const seg = segments[i]!
+    const kind = fanKindOf(this.fans.handlersAt(seg))
+    if (!kind || kind === fan.done) {
+      fan.kind = null
+      fan.ticks = 0
+      return null
+    }
+    if (fan.kind !== kind) {
+      fan.kind = kind
+      fan.ticks = 0
+    }
+    const speed = beltSpeed(this.env.rpmAt(seg) ?? 0)
+    if (speed <= 0) return null
+    fan.ticks += TICKS_PER_SECOND / speed
+    if (fan.ticks + EPSILON < FAN_PROCESSING_TICKS) {
+      const next = segments[i + 1]
+      if (!next || fanKindOf(this.fans.handlersAt(next)) !== kind) {
+        this.note(
+          seg,
+          `風の中を通る時間が ${formatRate(fan.ticks)} tick で、${FAN_PROCESSING_NAMES[kind]}のにかかる ${FAN_PROCESSING_TICKS} tick に届かないので、物は変わらずに通り過ぎる`,
+        )
+      }
+      return null
+    }
+    const outs = this.fanProcess(seg, kind, flow, null)
+    if (outs === null) {
+      fan.done = kind
+      return null
+    }
+    return { kind, outs }
+  }
+
+  /**
+   * 落ちた物が受け取るブロックに断られてとどまり、そのマスか1つ上のマスが風の中なら、処理してからできた物をもう一度渡す
+   * （TP-FAN-DROPPED）。処理したら true
+   */
+  private fanDropped(pos: Vec3, flow: Flow, from: Vec3 | null, face: Direction | null, carry: Carry): boolean {
+    if (carry.dropVy === undefined || carry.fanDone) return false
+    const kind = fanKindOf([...this.fans.cellsAt(pos), ...this.fans.cellsAt(addVec3(pos, [0, 1, 0]))])
+    if (!kind) return false
+    this.arrive(pos, flow, from, carry)
+    const outs = this.fanProcess(pos, kind, flow, { pos, from })
+    if (outs === null) return false
+    for (const out of outs) this.deliver(pos, out, pos, face, { seconds: 0, dropVy: 0, fanDone: true })
+    return true
+  }
+
+  /**
+   * 扇風機の風で処理する（TP-FAN-RECIPE）。できる物を返す（焼けてなくなるなら空）。レシピがなく変わらないなら null。
+   * holdAt は物の流れの表示で、処理する間（151 tick）止まる所（ベルトの上は止まらないので null）
+   */
+  private fanProcess(
+    pos: Vec3,
+    kind: FanProcessingKind,
+    flow: Flow,
+    holdAt: { readonly pos: Vec3; readonly from: Vec3 | null } | null,
+  ): Flow[] | null {
+    const book = this.env.recipes
+    const name = FAN_PROCESSING_NAMES[kind]
+    if (!book) {
+      this.env.log.add(`Modpack のレシピがないので、扇風機で${name}とできる物が分からず、物は変わらないとした`, pos)
+      return null
+    }
+    if (book.scriptsChangeRecipes) {
+      this.env.log.add('KubeJS のスクリプトがレシピを変えているが、スクリプトのレシピは読めないので、物の通り道に入れていない')
+    }
+    const item = flow.item
+    let type: ProcessingRecipeType = kind === 'blasting' ? 'smelting' : kind
+    let choice = chooseRecipe(type, [item], book)
+    let burn = false
+    if (kind === 'blasting') {
+      if (!choice.recipe) {
+        const b = chooseRecipe('blasting', [item], book)
+        if (b.recipe) {
+          type = 'blasting'
+          choice = b
+        }
+      }
+      if (!choice.recipe) {
+        burn = true
+        this.env.log.add(`${item} を焼くレシピがないので、燃えない物ではないとして、焼けてなくなるとした`, pos)
+      } else {
+        // 燻すレシピが同じ物を作るなら（食べ物）、焼けてなくなる
+        const smoking = chooseRecipe('smoking', [item], book).recipe
+        if (smoking && smoking.results[0]?.item === choice.recipe.results[0]?.item) burn = true
+      }
+    }
+    const recipe = choice.recipe
+    if (!recipe && !burn) {
+      this.note(pos, `${item} を${name}レシピがないので、物は変わらない`)
+      return null
+    }
+    if (holdAt) this.hold(holdAt.pos, holdAt.from, flow, FAN_PROCESSING_TICKS)
+    if (burn || !recipe) {
+      this.note(pos, `${item} は扇風機の風で焼けてなくなる`)
+      return []
+    }
+    if (choice.assumption) this.env.log.add(choice.assumption, pos)
+    const rec = this.record(pos)
+    const source = weakerSource(flow.source, choice.duration.source)
+    const outs: ItemOutput[] = []
+    for (const r of recipe.results) addOutput(outs, { item: r.item, rate: flow.rate * r.count * r.chance, source })
+    const kept = outs.filter((o) => o.rate > EPSILON)
+    const existing = rec.recipes.find((a) => a.choice.recipe?.id === recipe.id && a.input === item)
+    if (existing) {
+      for (const o of kept) addOutput(existing.outputs, o)
+    } else {
+      rec.recipes.push({ type, input: item, choice, outputs: kept.map((o) => ({ ...o })) })
+    }
+    return kept
+  }
+
   // ---- 記録 ----
 
   private record(pos: Vec3): ItemPathRecord {
@@ -1299,6 +1460,11 @@ class ItemTracer {
   private refuse(pos: Vec3, message: string): void {
     this.env.log.add(message, pos)
   }
+}
+
+/** 風のうち、処理する種類のある最初のもの。なければ null */
+function fanKindOf(cells: readonly FanCell[]): FanProcessingKind | null {
+  return cells.find((c) => c.kind !== null)?.kind ?? null
 }
 
 function addOutput(list: ItemOutput[], flow: ItemOutput): void {
@@ -1433,6 +1599,8 @@ function distance(a: Vec3, b: Vec3): number {
 
 /** スパウトが液体を入れる間の tick（FILLING_TIME） */
 const SPOUT_FILL_TICKS = 20
+/** 扇風機で1個を処理する時間。fanProcessingTime（150）× (⌊(1 − 1) / 16⌋ + 1) + 1（TP-FAN-RECIPE） */
+const FAN_PROCESSING_TICKS = 151
 /** 真鍮のトンネルが分けるまで待つ tick（設定の brassTunnelTimer の初期値） */
 const BRASS_TUNNEL_TICKS = 10
 /** 真鍮のトンネルの組を探す、横の数の上限 */

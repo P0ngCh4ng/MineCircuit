@@ -91,7 +91,7 @@ describe('scanJar のレシピ', () => {
   const milling = (item: string, processingTime?: number): string =>
     JSON.stringify({ type: 'create:milling', ingredients: [{ item }], results: [{ item: 'x:y' }], processingTime })
 
-  it('data/<namespace>/recipes/ と 1.21 の recipe/ の Create の処理のレシピを読む。ほかのレシピは捨てる', () => {
+  it('data/<namespace>/recipes/ と 1.21 の recipe/ の Create の処理のレシピと料理のレシピ（#235）を読む。ほかのレシピは捨てる', () => {
     const s = scanJar('create.jar', fakeJar({
       files: {
         'data/create/recipes/milling/wheat.json': milling('minecraft:wheat', 150),
@@ -102,12 +102,24 @@ describe('scanJar のレシピ', () => {
         }),
         'data/create/recipes/mechanical_crafting/iron.json': JSON.stringify({ type: 'create:mechanical_crafting', key: {} }),
         'data/minecraft/recipes/bread.json': JSON.stringify({ type: 'minecraft:crafting_shaped', key: {} }),
+        'data/minecraft/recipes/copper_ingot.json': JSON.stringify({
+          type: 'minecraft:smelting',
+          ingredient: { item: 'minecraft:raw_copper' },
+          result: 'minecraft:copper_ingot',
+          cookingtime: 200,
+        }),
+        'data/minecraft/recipes/cooked_cod_from_campfire_cooking.json': JSON.stringify({
+          type: 'minecraft:campfire_cooking',
+          ingredient: { item: 'minecraft:cod' },
+          result: 'minecraft:cooked_cod',
+        }),
         'data/create/tags/items/x.json': JSON.stringify({ type: 'create:milling' }),
       },
     }))
     expect(s.recipes).toMatchObject([
       { id: 'create:crushing/ore', type: 'crushing', items: [], tags: ['c:ores/iron'], duration: 250 },
       { id: 'create:milling/wheat', type: 'milling', items: ['minecraft:wheat'], tags: [], duration: 150 },
+      { id: 'minecraft:copper_ingot', type: 'smelting', items: ['minecraft:raw_copper'], results: [{ item: 'minecraft:copper_ingot' }] },
     ])
     expect(s.problems).toEqual([])
   })

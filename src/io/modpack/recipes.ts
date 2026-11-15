@@ -5,19 +5,49 @@
 
 import type { ScriptRunSummary } from './kubejsScripts/scriptTypes'
 
+/** Create の処理のレシピの種類（`create:` を外した名前） */
+export type CreateRecipeType =
+  | 'milling'
+  | 'crushing'
+  | 'cutting'
+  | 'mixing'
+  | 'pressing'
+  | 'compacting'
+  | 'splashing'
+  | 'haunting'
+/** Minecraft の料理のレシピの種類（`minecraft:` を外した名前）。扇風機で燻す・焼くのに使う（#235） */
+export type CookingRecipeType = 'smelting' | 'blasting' | 'smoking'
 /**
- * 読むレシピの種類（`create:` を外した名前）。
- * pressing はベルト・デポの上のプレス、compacting はバスンの上のプレス（圧縮）。この2つはふつう処理時間を書かない
+ * 読むレシピの種類。
+ * pressing はベルト・デポの上のプレス、compacting はバスンの上のプレス（圧縮）。この2つはふつう処理時間を書かない。
+ * splashing・haunting と料理の3つは扇風機の処理（docs/create-throughput.md「扇風機」）
  */
-export type ProcessingRecipeType = 'milling' | 'crushing' | 'cutting' | 'mixing' | 'pressing' | 'compacting'
-export const PROCESSING_RECIPE_TYPES: readonly ProcessingRecipeType[] = [
+export type ProcessingRecipeType = CreateRecipeType | CookingRecipeType
+export const CREATE_RECIPE_TYPES: readonly CreateRecipeType[] = [
   'milling',
   'crushing',
   'cutting',
   'mixing',
   'pressing',
   'compacting',
+  'splashing',
+  'haunting',
 ]
+export const COOKING_RECIPE_TYPES: readonly CookingRecipeType[] = ['smelting', 'blasting', 'smoking']
+export const PROCESSING_RECIPE_TYPES: readonly ProcessingRecipeType[] = [...CREATE_RECIPE_TYPES, ...COOKING_RECIPE_TYPES]
+
+/** 種類の ID（`create:milling`、`minecraft:smelting`） */
+export function recipeTypeId(type: ProcessingRecipeType): string {
+  return (COOKING_RECIPE_TYPES as readonly string[]).includes(type) ? `minecraft:${type}` : `create:${type}`
+}
+
+/** 種類の ID（`create:milling`、`minecraft:smelting`）を短い名前にする。読まない種類なら null */
+export function parseRecipeType(id: string): ProcessingRecipeType | null {
+  const m = /^(create|minecraft):(\w+)$/.exec(id)
+  if (!m) return null
+  const list: readonly string[] = m[1] === 'create' ? CREATE_RECIPE_TYPES : COOKING_RECIPE_TYPES
+  return list.includes(m[2]!) ? (m[2] as ProcessingRecipeType) : null
+}
 
 /** レシピ1つ分。IndexedDB に保存し、Worker にも送るので、ただのデータだけにする */
 export interface ProcessingRecipe {
@@ -67,17 +97,22 @@ export const RECIPE_PATH = /^data\/([^/]+)\/recipes?\/(.+)\.json$/
  */
 export function readProcessingRecipe(id: string, data: unknown): ProcessingRecipe | null {
   if (!isObject(data)) return null
-  const type = typeof data.type === 'string' ? data.type : ''
-  const m = /^create:(milling|crushing|cutting|mixing|pressing|compacting)$/.exec(type)
-  if (!m) return null
+  const type = parseRecipeType(typeof data.type === 'string' ? data.type : '')
+  if (!type) return null
   const items = new Set<string>()
   const tags = new Set<string>()
+  if ((COOKING_RECIPE_TYPES as readonly string[]).includes(type)) {
+    // 料理のレシピ：材料は ingredient、できる物は result（1.18 は文字列、1.21 は { id, count }）。cookingtime は使わない
+    collectIngredients(data.ingredient, items, tags)
+    const result = typeof data.result === 'string' ? [{ item: data.result }] : [data.result]
+    return { id, type, items: [...items], tags: [...tags], duration: 0, results: readResults(result) }
+  }
   collectIngredients(data.ingredients, items, tags)
   // 1.18 は processingTime、1.21（Create 6.0）は processing_time
   const time = data.processingTime ?? data.processing_time
   return {
     id,
-    type: m[1] as ProcessingRecipeType,
+    type,
     items: [...items],
     tags: [...tags],
     duration: typeof time === 'number' && Number.isFinite(time) && time > 0 ? Math.floor(time) : 0,
