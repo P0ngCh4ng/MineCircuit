@@ -521,6 +521,10 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
   - 1秒に作る数は、材料ごとの「届く数 ÷ 1回に使う数」の一番小さいものと、1回にかかる時間で作れる数の小さい方。速さは組のうち一番遅いクラフターのもの。使われない材料は、クラフターの前で詰まる（メモに書く）。
   - 材料が届かないクラフター（カバーのないもの）があれば、組み立てない（仮定に載せる）。
   - 律速の機械には入れない（届く物と作る物の数え方が違うため）。
+- 動き（`TP-MOTION-CRAFTER`）：
+  - 材料は、矢印に沿って次のクラフターへまっすぐ移る。1台ごとに、組み立てと渡す段階の合計（1 + ⌊1000 / s⌋ + 1 tick）かかる。前のクラフターから受け取った材料も、自分の材料と一緒に次へ渡す。最後の1台に着いた材料は消える。
+  - できた物は、最後の1台で作る段階（1 + ⌊2000 / s⌋ + 1 tick）だけその場にとどまり、矢印の先へ移る（入れ物なら時間 0、放り出すなら `TP-MOTION-THROWN`）。
+  - 入力をつないだクラフターへ配る動き（`ConnectedInputHandler`）は、ゲームでも見えないので描かない。
 - 出典：`kinetics/crafter/MechanicalCrafterBlockEntity.java`（`Phase`、`getCountDownSpeed`、`tryInsert`、`eject`）、`RecipeGridHandler.java`、`ConnectedInputHandler.java`、`MechanicalCraftingRecipe.java`、`MechanicalCraftingInput.java`
 
 #### この版で扱わないもの

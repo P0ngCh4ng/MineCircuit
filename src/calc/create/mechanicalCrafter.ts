@@ -135,11 +135,19 @@ function phaseTicks(n: number, s: number): number {
   return Math.floor(n / s) + 1
 }
 
+/** 1台が次のクラフターへ渡すまでの時間（tick）。組み立てと渡す段階の合計 */
+export function crafterPassTicks(s: number): number {
+  return 1 + phaseTicks(1000, s)
+}
+
+/** 最後の1台で作る時間（tick）。組み立てと作る段階の合計 */
+export function crafterCraftTicks(s: number): number {
+  return 1 + phaseTicks(2000, s)
+}
+
 /** 1回にかかる時間（tick）。最後の1台までの一番長い道の段階の合計（Create 6.0） */
 export function crafterCycleTicks(longest: number, s: number): number {
-  const pass = 1 + phaseTicks(1000, s)
-  const craft = 1 + phaseTicks(2000, s)
-  return (longest - 1) * pass + craft
+  return (longest - 1) * crafterPassTicks(s) + crafterCraftTicks(s)
 }
 
 /** 並びの位置（最後の1台から見た [右, 上]） */

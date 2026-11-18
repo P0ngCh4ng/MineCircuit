@@ -31,11 +31,14 @@ import { emptyItem, FILLING_TICKS, fillItem, spoutFluid, type FluidProcess } fro
 import {
   CRAFTER_ID,
   crafterCovered,
+  crafterCraftTicks,
   crafterCycleTicks,
   crafterGroup,
   crafterInputController,
   crafterOutput,
+  crafterPassTicks,
   crafterSpeed,
+  crafterTarget,
   craftingRemainder,
   gridCoord,
   matchCrafting,
@@ -878,9 +881,20 @@ class ItemTracer {
       },
       outputs: kept.map((o) => ({ ...o })),
     })
+    // 材料が矢印に沿って最後の1台まで渡る動き（TP-MOTION-CRAFTER）
+    const pass: Carry = { seconds: crafterPassTicks(s) / TICKS_PER_SECOND }
+    slots.forEach((slot, i) => {
+      const flow: Flow = { item: match.items[i]!, rate, source }
+      // 組のどのクラフターも、矢印をたどると最後の1台に着く（輪の組でも、最後の1台は輪の中）
+      for (let p = slot.pos; !equalsVec3(p, final); ) {
+        const next = crafterTarget(bp, p)!
+        this.addMove(p, next, flow, pass)
+        p = next
+      }
+    })
     const out = crafterOutput(bp, final)
     for (const o of kept) {
-      this.hold(final, null, o, cycle)
+      this.hold(final, null, o, crafterCraftTicks(s))
       if (out.ejected) {
         this.note(final, '矢印の先にブロックがないので、できた物は前に放り出される')
         this.handOff(final, out.to, o, 'up', null, { seconds: 0, dropVy: 0 })

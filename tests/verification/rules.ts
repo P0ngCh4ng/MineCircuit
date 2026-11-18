@@ -238,6 +238,7 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'TP-MOTION-CRUSHING': tp('kinetics/crusher/CrushingWheelControllerBlockEntity.java'),
   'TP-MOTION-SAW': tp('kinetics/saw/SawBlockEntity.java（出す動き）'),
   'TP-MOTION-BASIN': tp('processing/basin/BasinBlockEntity.java'),
+  'TP-MOTION-CRAFTER': tp('kinetics/crafter/MechanicalCrafterBlockEntity.java（EXPORTING・CRAFTING の段階）・RecipeGridHandler.java'),
   // 足すブロック
   'TP-EJECTOR': tp('logistics/depot/EjectorBlockEntity.java の getWindUpSpeed・tick、EntityLauncher.java'),
   'TP-ANDESITE-TUNNEL': tp('kinetics/belt/transport/BeltTunnelInteractionHandler.java の flapTunnelsAndCheckIfStuck'),

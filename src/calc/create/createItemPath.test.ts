@@ -1662,6 +1662,12 @@ describe('メカニカルクラフター（#235）', () => {
     expect(at(result, '0,1,0')?.notes).toContain('minecraft:iron_ingot のうち 0.9 個/秒は使われず、クラフターの前で詰まる')
     expect(result.moves.find((m) => m.to.join(',') === '0,0,0')).toMatchObject({ from: [0, 1, 0], item: 'test:l' })
     expect(messages(log)).toEqual([])
+    // [TP-MOTION-CRAFTER] 材料は矢印に沿って 1 台ごとに (1 + 32) tick で渡り、受け取った材料も一緒に次へ渡す。できた物は作る間 (1 + 63) tick とどまる
+    const pass = (from: string, to: string, item: string) => result.moves.find((m) => m.from.join(',') === from && m.to.join(',') === to && m.item === item)
+    expect(pass('1,2,0', '1,1,0', 'minecraft:iron_ingot')).toMatchObject({ rate: 0.1, seconds: 33 / 20, hold: 0 })
+    expect(pass('1,1,0', '0,1,0', 'minecraft:iron_ingot')).toMatchObject({ rate: 0.2, seconds: 33 / 20, hold: 0 })
+    expect(result.moves.filter((m) => m.item === 'minecraft:gold_ingot')).toEqual([])
+    expect(pass('0,1,0', '0,1,0', 'test:l')).toMatchObject({ seconds: 0, hold: 64 / 20 })
     // 1回にかかる時間で作れる数より多くは作れない
     const fast = trace(square(), ports.map((p) => ({ ...p, params: { rate: 5 } })), allAt(SQUARE, 32), CRAFT_BOOK)
     expect(sinkOf(fast.result, '0,0,0', 'test:l')).toBeCloseTo(20 / 130)
