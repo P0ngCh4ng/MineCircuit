@@ -284,6 +284,62 @@ describe('KineticGraph：つながりの規則', () => {
     expect(evaluate(build('create:clutch', 'true')).speed([2, 0, 0])).toBe(0)
   })
 
+  it('[ST-FACE-OWN-SPEED] ギアボックス・ギアシフト自身の回転数は、回転が入ってきた面の回転数', () => {
+    // 例5 と同じ並び。西から +16 が入る。面ごとの回転数は例5 のまま、ギアボックス自身はゲームと同じ +16
+    const fromWest = blueprintFixture()
+      .place([0, 0, 1], 'create:creative_motor', { facing: 'east' }, scroll(16))
+      .place([1, 0, 1], 'create:gearbox', { axis: 'y' })
+      .place([2, 0, 1], 'create:shaft', { axis: 'x' })
+      .place([1, 0, 0], 'create:shaft', { axis: 'z' })
+      .place([1, 0, 2], 'create:shaft', { axis: 'z' })
+      .toBlueprint()
+    const west = evaluate(fromWest)
+    expect(west.speed([1, 0, 1])).toBe(16)
+    expect(west.speed([2, 0, 1])).toBe(-16)
+    expect(west.speed([1, 0, 2])).toBe(16)
+    expect(west.ev.nodes[west.graph.nodes.findIndex((n) => n.id === 'create:gearbox')].theoreticalSpeed).toBe(16)
+
+    // 南から入ると、同じ回転のまとまりでもギアボックス自身は南の面の回転数になる
+    const fromSouth = blueprintFixture()
+      .place([1, 0, 3], 'create:creative_motor', { facing: 'north' }, scroll(16))
+      .place([1, 0, 2], 'create:shaft', { axis: 'z' })
+      .place([1, 0, 1], 'create:gearbox', { axis: 'y' })
+      .place([2, 0, 1], 'create:shaft', { axis: 'x' })
+      .toBlueprint()
+    const south = evaluate(fromSouth)
+    // north を向いたモーターは軸の負の向きなので、南のシャフトは −16。面の係数は南 −1・東 +1 なので C = 16
+    expect(south.speed([1, 0, 2])).toBe(-16)
+    expect(south.speed([1, 0, 1])).toBe(-16)
+    expect(south.speed([2, 0, 1])).toBe(16)
+
+    // 信号の入ったギアシフトに負の側（西）から入る。出る側（東）は逆回り、ギアシフト自身は入ってきた側と同じ
+    const gearshift = blueprintFixture()
+      .place([0, 0, 0], 'create:creative_motor', { facing: 'east' }, scroll(16))
+      .place([1, 0, 0], 'create:gearshift', { axis: 'x', powered: 'true' })
+      .place([2, 0, 0], 'create:shaft', { axis: 'x' })
+      .toBlueprint()
+    const shift = evaluate(gearshift)
+    expect(shift.speed([1, 0, 0])).toBe(16)
+    expect(shift.speed([2, 0, 0])).toBe(-16)
+  })
+
+  it('[ST-FACE-OWN-SPEED] 面のないところから回るギアボックス（そのブロックに付けた仮の動力源）は、計算の値のまま', () => {
+    const bp = blueprintFixture()
+      .place([1, 0, 1], 'create:gearbox', { axis: 'y' })
+      .place([0, 0, 1], 'create:shaft', { axis: 'x' })
+      .toBlueprint()
+    const port: VirtualPort = {
+      id: 'p',
+      pos: [1, 0, 1],
+      pluginId: 'create-stress',
+      kind: 'rotation-source',
+      params: { rpm: 16, capacity: 1024 },
+    }
+    const r = evaluate(bp, [port])
+    expect(r.speed([1, 0, 1])).toBe(16)
+    expect(r.speed([0, 0, 1])).toBe(-16)
+  })
+
   it('[ST-LINK-BELT] ベルトはブロック状態だけで区間をたどる', () => {
     const bp = blueprintFixture()
       .place([0, 0, 0], 'create:creative_motor', { facing: 'south' }, scroll(32))

@@ -371,6 +371,37 @@ export class KineticGraph {
   }
 
   /** 回転数・応力・容量を求める */
+  /**
+   * 面の係数を持つブロック自身の回転数に掛ける値（ST-FACE-OWN-SPEED）。入ってきた面の係数。ほかのブロックは 1。
+   * 入ってきた面は、まとまりの動力源から幅優先でたどって初めて着いたときの、隣のブロックの側の面
+   */
+  private ownSpeedFactors(
+    groups: readonly (readonly number[])[],
+    root: readonly number[],
+    adjacency: readonly (readonly { to: number }[])[],
+  ): number[] {
+    const factors = new Array<number>(this.nodes.length).fill(1)
+    groups.forEach((members, g) => {
+      if (root[g] === -1 || !members.some((m) => this.nodes[m].shape.faceFactors)) return
+      const seen = new Set([root[g]])
+      const queue = [root[g]]
+      for (let i = 0; i < queue.length; i++) {
+        const a = queue[i]
+        for (const { to } of adjacency[a]) {
+          if (seen.has(to)) continue
+          seen.add(to)
+          queue.push(to)
+          const node = this.nodes[to]
+          if (!node.shape.faceFactors) continue
+          const from = this.nodes[a].pos
+          const face = unitDirection([from[0] - node.pos[0], from[1] - node.pos[1], from[2] - node.pos[2]])
+          if (face) factors[to] = faceFactor(node.shape, face)
+        }
+      }
+    })
+    return factors
+  }
+
   evaluate(settings: KineticSettings): KineticEvaluation {
     const n = this.nodes.length
     const issues: CalcIssue[] = [...this.buildIssues]
@@ -437,14 +468,16 @@ export class KineticGraph {
     const factor = new Array<number>(groups.length).fill(0)
     const factorSource = new Array<Provenance>(groups.length).fill('builtin')
     const solved = new Array<boolean>(groups.length).fill(false)
+    /** まとまりの回転数を決めた動力源のノード（ST-FACE-OWN-SPEED） */
+    const root = new Array<number>(groups.length).fill(-1)
     for (const g of order) {
       solved[g] = true
       if (broken[g]) continue
-      const candidates: { x: number; source: Provenance; pos: Vec3; flippable: boolean }[] = []
+      const candidates: { x: number; source: Provenance; pos: Vec3; flippable: boolean; node: number }[] = []
       for (const m of groups[g]) {
         const src = this.nodes[m].source
         if (!src || src.speed.value === 0 || k[m] === 0) continue
-        candidates.push({ x: src.speed.value / k[m], source: src.speed.source, pos: this.nodes[m].pos, flippable: src.flippable === true })
+        candidates.push({ x: src.speed.value / k[m], source: src.speed.source, pos: this.nodes[m].pos, flippable: src.flippable === true, node: m })
       }
       for (const { link, reverse, from: input } of incoming[g]) {
         if (!solved[input] || input === g) continue
@@ -457,6 +490,7 @@ export class KineticGraph {
           source: weakerSource(link.target.source, factorSource[input]),
           pos: this.nodes[driven].pos,
           flippable: false,
+          node: driven,
         })
       }
       if (candidates.length === 0) continue
@@ -476,8 +510,10 @@ export class KineticGraph {
       for (const c of candidates) if (Math.abs(c.x) > Math.abs(best.x)) best = c
       factor[g] = best.x
       factorSource[g] = best.source
+      root[g] = best.node
     }
     const theoretical = k.map((kn, i) => factor[group[i]] * kn)
+    const ownFactor = this.ownSpeedFactors(groups, root, adjacency)
 
     // 8. 速度の上限
     for (let i = 0; i < n; i++) {
@@ -555,10 +591,11 @@ export class KineticGraph {
 
     const nodes: NodeResult[] = this.nodes.map((_node, i) => {
       const net = networks[nodeNetwork[i]]
-      const speed = net.overloaded ? 0 : theoretical[i]
+      const own = theoretical[i] * ownFactor[i]
+      const speed = net.overloaded ? 0 : own
       return {
         speed,
-        theoreticalSpeed: theoretical[i],
+        theoreticalSpeed: own,
         stress: stressOf(i),
         network: nodeNetwork[i],
         speedSource: factorSource[group[i]],
