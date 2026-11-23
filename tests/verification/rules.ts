@@ -94,6 +94,7 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'ST-FACE-GEARSHIFT': stress('content/kinetics/transmission/GearshiftBlockEntity.java の getRotationSpeedModifier', ABC),
   'ST-FACE-CLUTCH': stress('content/kinetics/transmission/ClutchBlockEntity.java の getRotationSpeedModifier', ABC),
   'ST-FACE-SEQUENCED-GEARSHIFT': stress('content/kinetics/transmission/sequencer/SequencedGearshiftBlockEntity.java の getRotationSpeedModifier', ABC),
+  'ST-FACE-OWN-SPEED': stress('content/kinetics/RotationPropagator.java の getAxisModifier、content/kinetics/base/DirectionalShaftHalvesBlockEntity の getSourceFacing（GearboxBlockEntity・SplitShaftBlockEntity）', ABC),
   // 動力源
   'ST-SOURCE-CREATIVE-MOTOR': stress('content/kinetics/motor/CreativeMotorBlockEntity.java の getGeneratedSpeed', ABC),
   'ST-SOURCE-WATER-WHEEL': stress('content/kinetics/waterwheel/WaterWheelBlockEntity.java の getGeneratedSpeed', ABC),
