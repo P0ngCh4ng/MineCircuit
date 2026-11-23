@@ -13,6 +13,8 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { CalcMode, CalcModpack, CalcResult } from '../../src/calc/calcPlugin'
 import { runCreateStress } from '../../src/calc/create/createStressPlugin'
+import { CREATE_STRESS_PLUGIN_ID } from '../../src/calc/create/kineticGraph'
+import type { VirtualPort } from '../../src/calc/virtualPort'
 import type { Blueprint } from '../../src/domain/blueprint'
 import type { Vec3 } from '../../src/domain/vec3'
 import { ModpackLoader } from '../../src/io/modpack/modpackLoader'
@@ -28,6 +30,8 @@ const REPORT = process.env.MINECIRCUIT_REPORT ?? ''
 const DATA_VERSION_1_19 = 3105
 /** 報告に場所を並べる問題の数 */
 const MAX_LISTED = 20
+/** 1つの設計図に付ける、保存された回転数の仮の動力源の上限 */
+const MAX_SAVED_SOURCES = 100
 
 function findBlueprints(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -80,23 +84,50 @@ function problems(bp: Blueprint, result: CalcResult): string[] {
 
 /**
  * ゲームが生データに保存した回転数（Speed）と、計算の回転数を比べる。
- * 設計図の外から回されていたブロック（範囲外は空気とみなす）や、保存のあとで変えた設計図では違ってよいので、失敗にはしない
+ * 設計図の外から回されていたまとまり（計算では止まるのに、保存では回っているブロックがある）には、そのブロックに保存された回転数の
+ * 仮の動力源を付けて計算し直し、ほかのブロックの回転数を比べる（docs/verification.md「実在の設計図で確かめる（C）」）。
+ * 保存のあとで変えた設計図などでは違ってよいので、失敗にはしない
  */
-function savedSpeeds(bp: Blueprint, result: CalcResult): { same: number; differ: string[] } {
+async function compareSavedSpeeds(bp: Blueprint, pack: CalcModpack | null, first: CalcResult): Promise<SavedSpeeds> {
+  const saved = (pos: Vec3): number | null => {
+    const tag = bp.blockEntityAt(pos)?.value.get('Speed')
+    return tag?.type === 'float' || tag?.type === 'double' ? tag.value : null
+  }
+  const ports: VirtualPort[] = []
+  let result = first
+  for (let i = 0; i < MAX_SAVED_SOURCES; i++) {
+    const stopped = (result.rotations ?? []).find((r) => r.rpm === 0 && (saved(r.pos) ?? 0) !== 0)
+    if (!stopped) break
+    ports.push({
+      id: `saved-${i}`,
+      pos: stopped.pos,
+      pluginId: CREATE_STRESS_PLUGIN_ID,
+      kind: 'rotation-source',
+      params: { rpm: saved(stopped.pos)!, capacity: Number.MAX_SAFE_INTEGER },
+    })
+    result = await runCreateStress(bp, { pack, ports, mode: 'saved' })
+  }
   let same = 0
   const differ: string[] = []
   for (const r of result.rotations ?? []) {
-    const tag = bp.blockEntityAt(r.pos)?.value.get('Speed')
-    if (tag?.type !== 'float' && tag?.type !== 'double') continue
-    if (Math.abs(tag.value - r.rpm) < 0.01) same++
-    else differ.push(`- ${r.pos.join(',')} ${bp.get(r.pos)?.key}：保存 ${tag.value}、計算 ${r.rpm}`)
+    const v = saved(r.pos)
+    if (v === null) continue
+    if (Math.abs(v - r.rpm) < 0.01) same++
+    else differ.push(`- ${r.pos.join(',')} ${bp.get(r.pos)?.key}：保存 ${v}、計算 ${r.rpm}`)
   }
-  return { same, differ }
+  return { same, differ, sources: ports.length }
+}
+
+interface SavedSpeeds {
+  readonly same: number
+  readonly differ: readonly string[]
+  /** 外から回されていたまとまりに付けた、保存された回転数の仮の動力源の数 */
+  readonly sources: number
 }
 
 const MODE_LABELS: Record<CalcMode, string> = { saved: '保存された状態', running: '動かしたとき' }
 
-function report(name: string, bp: Blueprint, result: CalcResult, mode: CalcMode): string {
+function report(name: string, bp: Blueprint, result: CalcResult, mode: CalcMode, speeds: SavedSpeeds | null): string {
   let blocks = 0
   let create = 0
   for (const r of bp.regions) {
@@ -106,16 +137,15 @@ function report(name: string, bp: Blueprint, result: CalcResult, mode: CalcMode)
     })
   }
   const rotations = result.rotations ?? []
-  const speeds = savedSpeeds(bp, result)
   const lines = [
     `## ${name}（${MODE_LABELS[mode]}）`,
     '',
     `- DataVersion ${bp.dataVersion}（${catalogFor(bp).name}）、大きさ ${bp.size.join('×')}、ブロック ${blocks}（Create ${create}）`,
     `- 回るブロック ${rotations.length}（止まっている ${rotations.filter((r) => r.rpm === 0).length}、過負荷 ${rotations.filter((r) => r.overloaded).length}）、動力源 ${result.sources?.length ?? 0}`,
     `- 物のつながり ${(result.links ?? []).filter((l) => l.kind === 'item').length}、物の動き ${(result.itemMoves ?? []).length}`,
-    ...(mode === 'saved'
+    ...(speeds
       ? [
-          `- 保存された回転数（Speed）と計算が同じ ${speeds.same}、違う ${speeds.differ.length}`,
+          `- 保存された回転数（Speed）と計算が同じ ${speeds.same}、違う ${speeds.differ.length}（保存された回転数の仮の動力源 ${speeds.sources}）`,
           ...speeds.differ.slice(0, MAX_LISTED).map((d) => `  ${d}`),
         ]
       : []),
@@ -164,7 +194,8 @@ describe.skipIf(BLUEPRINT_DIRS.length === 0)('実在の設計図（段階 C）',
             continue
           }
           failures.push(...problems(bp, result).map((p) => `${name}（${MODE_LABELS[mode]}）：${p}`))
-          sections.push(report(name, bp, result, mode))
+          const speeds = mode === 'saved' ? await compareSavedSpeeds(bp, pack, result) : null
+          sections.push(report(name, bp, result, mode, speeds))
         }
       }
     }
