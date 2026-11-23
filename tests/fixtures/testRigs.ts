@@ -70,16 +70,27 @@ function hasIssue(r: CalcResult, text: string): boolean {
   return r.issues.some((i) => i.message.includes(text))
 }
 
-/** 例1（create-stress.md）。水車・大歯車・小歯車・プレス2台。応力計は小歯車の北 */
+/**
+ * 例1（create-stress.md）。水車・大歯車・小歯車・プレス2台。応力計はプレスの南。
+ * 水は Create の説明画面（ponder/water_wheel.nbt）と同じ流し方にする：
+ * 西の安山岩ケーシングの上の水源から、水車の上を東へ流れ、水車の東の側を落ちる。ガラスは水が南北へ広がらないための壁
+ */
 function example1(): BlueprintFixture {
   return rig()
-    .size([4, 4, 6])
+    .size([4, 4, 7])
     .place([1, 1, 1], 'create:water_wheel', { facing: 'south' })
     .place([1, 1, 2], 'create:large_cogwheel', { axis: 'z', ...W })
     .place([2, 2, 2], 'create:cogwheel', { axis: 'z', ...W })
     .place([2, 2, 3], 'create:mechanical_press', { facing: 'south' })
     .place([2, 2, 4], 'create:mechanical_press', { facing: 'south' })
-    .place([2, 2, 1], 'create:stressometer', { facing: 'east', axis_along_first: 'false' })
+    .place([2, 2, 5], 'create:stressometer', { facing: 'east', axis_along_first: 'false' })
+    .place([0, 1, 1], 'create:andesite_casing', {})
+    .place([0, 2, 1], 'minecraft:water', { level: '0' })
+    .place([0, 2, 0], 'minecraft:glass', {})
+    .place([1, 2, 0], 'minecraft:glass', {})
+    .place([2, 2, 0], 'minecraft:glass', {})
+    .place([0, 2, 2], 'minecraft:glass', {})
+    .place([1, 2, 2], 'minecraft:glass', {})
 }
 
 /** 例2（create-stress.md）。モーター・応力計・速度コントローラー・大歯車・粉砕ホイール */
@@ -117,16 +128,17 @@ const STRESS_RIGS: readonly TestRig[] = [
     rules: ['ST-SOURCE-WATER-WHEEL', 'ST-LINK-LARGE-SMALL', 'ST-STEP-STRESS', 'ST-STEP-OVERLOAD'],
     build: example1,
     steps: [
-      '水車の横（東か西）の上に水源を置き、水車の羽に水が流れるようにする',
+      '水は設計図に入っている。西の安山岩ケーシングの上の水源から、水車の上を東へ流れ、水車の東の側を落ちているかを見る。水がなければ、ケーシングの上に水バケツで水源を置く',
+      '水車の回る向きは、水の流れる向きで決まる。アプリは向きを決められないので、回転数の符号は逆でもよい（大きさを比べる）',
       ...STRESS_STEPS,
       '過負荷（回転が止まり、ゴーグルに過負荷と出る）かを見る',
     ],
     watch: [
       { pos: [1, 1, 1], label: '水車' },
       { pos: [2, 2, 3], label: 'プレス' },
-      { pos: [2, 2, 1], label: '応力計' },
+      { pos: [2, 2, 5], label: '応力計' },
     ],
-    check: (r) => [...expectRpm(r, [1, 1, 1], 8), ...expectRpm(r, [2, 2, 3], -16), ...expectRpm(r, [2, 2, 1], -16)],
+    check: (r) => [...expectRpm(r, [1, 1, 1], 8), ...expectRpm(r, [2, 2, 3], -16), ...expectRpm(r, [2, 2, 5], -16)],
   },
   {
     id: 'stress-2-speed-controller',
