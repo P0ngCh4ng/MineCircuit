@@ -317,6 +317,45 @@ Modpack によっては、jar ではなく KubeJS のスクリプトでブロッ
   - 組み立てた資産は、jar より優先度が高く、`kubejs/` のフォルダより低い場所（`ModpackAssetReader` の `memory`）に置く。`kubejs/assets/` に本物のモデルがあれば、そちらを使う。組み立てた blockstates はブロック状態の定義にも入れるので、置くブロックの検索にも出る。
   - 文字列で探すだけなので、変数やループで組み立てた ID とテクスチャは拾えない。
 
+#### レシピ（Mod ごとの読み方。#265）
+
+計算に使うレシピ（処理の材料・時間・できる物）は、jar・`kubejs/data/`・KubeJS のスクリプトから集めて `RecipeBook` にする。レシピの JSON の形は Mod ごとに違うので、読み方を **io の中の、Mod ごとの表** に置く。
+
+```ts
+// io/modpack/recipes/recipeFormat.ts（共通。Mod の名前は出てこない）
+interface RecipeFormat {
+  readonly namespace: string                  // 'create'・'minecraft'
+  readonly types: readonly string[]           // 読む種類（namespace を外した名前。'milling'）
+  read(id: string, type: string, data: Record<string, unknown>): ProcessingRecipe | null
+  readonly script?: RecipeScriptApi           // 作り物の KubeJS で、この Mod のレシピを作る関数（なければスクリプトからは集めない）
+}
+const RECIPE_FORMATS: readonly RecipeFormat[]   // recipes/index.ts。Mod を足すときはここに1行足す
+function readRecipe(id: string, data: unknown): ProcessingRecipe | null   // type の ID から表を引いて読む
+
+interface ProcessingRecipe {
+  readonly id: string        // 'create:milling/wheat'
+  readonly type: string      // 種類の ID（'create:milling'、'minecraft:smelting'）
+  items; tags; duration; results; fluids?; fluidTags?; grid?   // いまと同じ。Mod によらない形
+}
+```
+
+- **どの種類を読むかは、io の表が決める。** 表にある種類は、計算プラグインが使うかどうかによらず読む。プラグインは `RecipeBook.recipes` から、自分の使う種類の ID で選ぶ。
+- **プラグインから種類の一覧を渡す形は取らない。** io は calc を import できないので、渡すには画面が「動くプラグインの種類の一覧」を読み込みに渡すことになる。すると jar ごとの保存（IndexedDB）の中身がプラグインの組み合わせで変わり、保存の鍵に入れる必要が出る。また JSON の形の読み方（1.18 と 1.21 の違い、液体の材料など）はファイルの読み方なので、どのみち io に置く。
+- **置き場所。**
+
+| ファイル | 中身 |
+| --- | --- |
+| `io/modpack/recipes/recipeFormat.ts` | 共通の形（`ProcessingRecipe`・`RecipeBook`・`RecipeFormat`）、材料・できる物・作業台の並びを読む共通の関数、レシピのパス、ID でまとめる関数 |
+| `io/modpack/recipes/index.ts` | 表 `RECIPE_FORMATS`、`readRecipe`、jar の中身を読む前の絞り込み（表の種類の ID から作る） |
+| `io/modpack/recipes/minecraftRecipes.ts` | Minecraft の料理（smelting・blasting・smoking）と作業台（crafting_shaped・crafting_shapeless） |
+| `io/modpack/recipes/createRecipes.ts` | Create の処理の種類（milling など11種）。処理時間・液体の材料・メカニカルクラフターの並び |
+
+- **共通の口。** `Modpack.recipeBook()` と `CalcModpack.recipeBook?()` は `RecipeBook` を返す。型にも名前にも Mod は出てこない。
+- **計算の側。** Create の計算は、自分の使う種類（Create の11種と、扇風機の料理3種、メカニカルクラフターの作業台2種）を `calc/create/createRecipeTypes.ts` にまとめ、種類の ID で `RecipeBook` から選ぶ。種類の短い名前（`milling`）は Create の計算の中だけで使う。
+- **作り物の KubeJS。** `event.recipes.<namespace>.<種類>(…)` は、表からその namespace の `script` を引いて呼ぶ。`event.recipes.<namespace><種類>(…)`（1.18 の `createMilling` の形）も同じ表から引く。`event.smelting`・`event.shaped` など KubeJS が本体のために持つ関数は Minecraft の表から引く。条件の `type` に namespace がなければ、`minecraft:` を探し、なければ表の順にほかの Mod を探す（いままでどおり `milling` は Create の種類に合う）。
+- **2つ目の Mod を足すとき。** `io/modpack/recipes/<mod>Recipes.ts` を作って表に足し、計算プラグインの中で種類の ID で選ぶ。共通の層には手を入れない。共通の形で足りない値（電力など）が出たら、そのときに `ProcessingRecipe` に省略できる項目として足す。
+- レシピの `type` を短い名前から種類の ID に変えたので、jar の保存の版（`JAR_SUMMARY_FORMAT`）を 9 にした。
+
 ## analysis：集計と検索
 
 ```ts
@@ -783,7 +822,7 @@ class CreateStressPlugin implements CalcPlugin {
 同じプラグインが、回転数を求めたあとで、物を運ぶブロックの輸送量と機械の処理時間をプローブに足す（`createThroughput.ts`）。規則は [create-throughput.md](create-throughput.md)。
 
 - レシピの処理時間を使う機械（石臼・粉砕ホイール・ソー・ミキサー）のために、`CalcModpack` に `recipeBook?(): Promise<RecipeBook>` を足す。持たない実装もあるので省略できる。
-- レシピは jar の読み込みのときに `data/<namespace>/recipes/`（1.21 は `recipe/`）から、Create の処理の種類だけを材料と処理時間に縮めて `JarSummary.recipes` に入れる。形を変えたので保存の版を 3 にした。
+- レシピは jar の読み込みのときに `data/<namespace>/recipes/`（1.21 は `recipe/`）から、読み方の表（上の「レシピ（Mod ごとの読み方）」）にある種類だけを材料と処理時間に縮めて `JarSummary.recipes` に入れる。形を変えたので保存の版を 3 にした。
 - Modpack の `kubejs/data/` のレシピは jar より優先する。`kubejs/server_scripts/` のスクリプトは動かして、レシピとタグの変更を集める（下の「KubeJS のスクリプトを動かす」）。
 - Worker の中のプラグインは、画面側の Modpack に `recipes` で問い合わせる（`config`・`list` と同じ形）。
 

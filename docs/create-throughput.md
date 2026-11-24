@@ -221,7 +221,7 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 
 - `TP-KJS-ITEMS` 出る物・材料には、文字列（`"minecraft:stone"`、`"3x minecraft:stone"`、`"#c:ores/iron"`）、`Item.of(id, 数)`、`.withChance(確率)`、`Ingredient.of(…)`、`CreateItem.of(id, 確率)`（1.21）、`{ item, count, chance }`、`{ tag }`、それらの配列を受け付ける。液体（`Fluid.of(…)`、`{ fluid, amount }`）は、ファイルのレシピと同じく見ない。
 - `TP-KJS-UNKNOWN-ITEM` 物の知らない項目（`.ignoreNBT()`・`.or(…)` など）は、物をそのまま返す。`Ingredient.of(/正規表現/)` は空の物にして、仮定に載せる。
-- `TP-KJS-FILTERS` 条件（`event.remove` などの1つ目）は、`id`・`type`・`output`・`input`・`mod` と、その配列（どれか）・オブジェクト（全部）・`{ not: … }` を扱う。照らす相手は、その時点のすべてのレシピ（jar・kubejs/data・それまでにスクリプトで足したもの）。知らない項目のある条件は、何も消さずに仮定に載せる。
+- `TP-KJS-FILTERS` 条件（`event.remove` などの1つ目）は、`id`・`type`・`output`・`input`・`mod` と、その配列（どれか）・オブジェクト（全部）・`{ not: … }` を扱う。照らす相手は、その時点のすべてのレシピ（jar・kubejs/data・それまでにスクリプトで足したもの）。知らない項目のある条件は、何も消さずに仮定に載せる。`type` に namespace がなければ、KubeJS と同じく `minecraft:` の種類を探し、なければ読み方の表（docs/design.md「レシピ（Mod ごとの読み方）」）の順にほかの Mod の種類を探す（`milling` は `create:milling`。#265）。
 - `TP-KJS-IDS` 操作は呼ばれた順に当てはめる。ID を決めずに足したレシピの ID は `kubejs:script/<ファイルのパス（.js なし）>/<その中の番号>` にする。
 - `TP-KJS-REPLACE` 置き換えは、材料の ID か同じタグが元と同じものだけを替える（元のアイテムを含むタグの材料は替えない）。できる物はアイテムの ID だけを替える。2つの引数の古い書き方（`event.replaceInput(元, 先)`）は、すべてのレシピが相手。
 - `TP-KJS-FOR-EACH` `event.forEachRecipe`・`event.findRecipes` は、読む種類のレシピだけを渡す。ほかの種類（Farmer's Delight の料理など）は渡さないので、それを元に作るレシピは集まらない。

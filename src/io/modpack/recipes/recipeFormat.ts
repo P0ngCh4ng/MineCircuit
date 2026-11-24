@@ -1,88 +1,30 @@
-// Create の処理のレシピ（docs/create-throughput.md「レシピ」）。
+// レシピの共通の形と、Mod ごとの読み方（RecipeFormat）の決まり（docs/design.md「レシピ（Mod ごとの読み方）」）。
 // jar の data/<namespace>/recipes/（1.21 は recipe/）と、Modpack の kubejs/data/ のレシピ JSON から、
-// 処理時間の計算に使う種類だけを読み、材料・処理時間・できる物だけを残す。KubeJS のスクリプトのレシピは、
+// 読み方の表（index.ts）にある種類だけを読み、材料・処理時間・できる物だけを残す。KubeJS のスクリプトのレシピは、
 // スクリプトを作り物の KubeJS で動かして集める（kubejsScripts/。#145）。
+// ここには Mod の名前を出さない。Mod ごとの読み方は <mod>Recipes.ts に置く。
 
-import type { ScriptRunSummary } from './kubejsScripts/scriptTypes'
-
-/** Create の処理のレシピの種類（`create:` を外した名前） */
-export type CreateRecipeType =
-  | 'milling'
-  | 'crushing'
-  | 'cutting'
-  | 'mixing'
-  | 'pressing'
-  | 'compacting'
-  | 'splashing'
-  | 'haunting'
-  | 'filling'
-  | 'emptying'
-  | 'mechanical_crafting'
-/** Minecraft の料理のレシピの種類（`minecraft:` を外した名前）。扇風機で燻す・焼くのに使う（#235） */
-export type CookingRecipeType = 'smelting' | 'blasting' | 'smoking'
-/** Minecraft の作業台のレシピの種類。メカニカルクラフターに使う（#235） */
-export type CraftingRecipeType = 'crafting_shaped' | 'crafting_shapeless'
-/**
- * 読むレシピの種類。
- * pressing はベルト・デポの上のプレス、compacting はバスンの上のプレス（圧縮）。この2つはふつう処理時間を書かない。
- * splashing・haunting と料理の3つは扇風機の処理（docs/create-throughput.md「扇風機」）。
- * filling・emptying はスパウトとアイテムドレイン、mechanical_crafting と作業台の2つはメカニカルクラフター（#235）
- */
-export type ProcessingRecipeType = CreateRecipeType | CookingRecipeType | CraftingRecipeType
-export const CREATE_RECIPE_TYPES: readonly CreateRecipeType[] = [
-  'milling',
-  'crushing',
-  'cutting',
-  'mixing',
-  'pressing',
-  'compacting',
-  'splashing',
-  'haunting',
-  'filling',
-  'emptying',
-  'mechanical_crafting',
-]
-export const COOKING_RECIPE_TYPES: readonly CookingRecipeType[] = ['smelting', 'blasting', 'smoking']
-export const CRAFTING_RECIPE_TYPES: readonly CraftingRecipeType[] = ['crafting_shaped', 'crafting_shapeless']
-/** `minecraft:` の種類 */
-const MINECRAFT_RECIPE_TYPES: readonly string[] = [...COOKING_RECIPE_TYPES, ...CRAFTING_RECIPE_TYPES]
-export const PROCESSING_RECIPE_TYPES: readonly ProcessingRecipeType[] = [
-  ...CREATE_RECIPE_TYPES,
-  ...COOKING_RECIPE_TYPES,
-  ...CRAFTING_RECIPE_TYPES,
-]
-
-/** 種類の ID（`create:milling`、`minecraft:smelting`） */
-export function recipeTypeId(type: ProcessingRecipeType): string {
-  return MINECRAFT_RECIPE_TYPES.includes(type) ? `minecraft:${type}` : `create:${type}`
-}
-
-/** 種類の ID（`create:milling`、`minecraft:smelting`）を短い名前にする。読まない種類なら null */
-export function parseRecipeType(id: string): ProcessingRecipeType | null {
-  const m = /^(create|minecraft):(\w+)$/.exec(id)
-  if (!m) return null
-  const list: readonly string[] = m[1] === 'create' ? CREATE_RECIPE_TYPES : MINECRAFT_RECIPE_TYPES
-  return list.includes(m[2]!) ? (m[2] as ProcessingRecipeType) : null
-}
+import type { ScriptRunSummary } from '../kubejsScripts/scriptTypes'
 
 /** レシピ1つ分。IndexedDB に保存し、Worker にも送るので、ただのデータだけにする */
 export interface ProcessingRecipe {
   /** `create:milling/wheat`（namespace と、recipes/ の下のパス） */
   readonly id: string
-  readonly type: ProcessingRecipeType
+  /** 種類の ID（`create:milling`、`minecraft:smelting`） */
+  readonly type: string
   /** 材料のアイテムの ID（`minecraft:wheat`） */
   readonly items: string[]
   /** 材料のタグ（`forge:ores/iron`） */
   readonly tags: string[]
-  /** 処理時間（tick）。書いていなければ 0（pressing・compacting はふつう書いていない） */
+  /** 処理時間（tick）。書いていなければ 0 */
   readonly duration: number
   /** できる物（#127）。液体は含めない */
   readonly results: RecipeResult[]
-  /** 液体の材料の ID（`minecraft:water`）。filling だけが持つ（#235） */
+  /** 液体の材料の ID（`minecraft:water`）。液体を材料にする種類だけが持つ（#235） */
   readonly fluids?: string[]
-  /** 液体の材料のタグ（`c:honey`、`#` なし）。filling だけが持つ（#235） */
+  /** 液体の材料のタグ（`c:honey`、`#` なし）。液体を材料にする種類だけが持つ（#235） */
   readonly fluidTags?: string[]
-  /** 材料の並び。作業台とメカニカルクラフターのレシピだけが持つ（#235） */
+  /** 材料の並び。並びのある種類（作業台など）だけが持つ（#235） */
   readonly grid?: CraftingGrid
 }
 
@@ -92,7 +34,7 @@ export interface CraftingIngredient {
   readonly tags: string[]
 }
 
-/** 作業台・メカニカルクラフターのレシピの材料の並び（docs/create-throughput.md `TP-RECIPE-CRAFTING`） */
+/** 作業台などのレシピの材料の並び（docs/create-throughput.md `TP-RECIPE-CRAFTING`） */
 export interface CraftingGrid {
   /** 形のあるレシピの並び（上の行から、左から）。null は空き。形のないレシピなら null */
   readonly rows: (CraftingIngredient | null)[][] | null
@@ -126,56 +68,70 @@ export interface RecipeBook {
   readonly itemTags: Readonly<Record<string, readonly string[]>>
 }
 
+/** 作り物の KubeJS がレシピを作るときに渡す値 */
+export interface RecipeScriptContext {
+  /** スクリプトで作ったレシピの ID を作る */
+  nextId(): string
+}
+
+/** スクリプトのレシピの関数1つ。引数はスクリプトが渡したまま。作れなければ null */
+export type RecipeScriptBuilder = (ctx: RecipeScriptContext, args: readonly unknown[]) => ProcessingRecipe | null
+
+/** 作り物の KubeJS で、ある Mod のレシピを作る関数（kubejsScripts/fakeKubeJs.ts が使う） */
+export interface RecipeScriptApi {
+  /** `event.recipes.<namespace>.<name>(…)` の name（`mechanicalCrafting` のような書き方も）→ 関数。知らない名前は null */
+  builder(name: string): RecipeScriptBuilder | null
+  /** 1.18 の `event.recipes.<namespace><Name>(…)`（`createMilling`）の形も受け付ける */
+  readonly prefixedNames?: boolean
+  /** `event.<name>(…)`（KubeJS が本体のために持つ `event.smelting`・`event.shaped` など） */
+  readonly eventMethods?: Readonly<Record<string, RecipeScriptBuilder>>
+  /** スクリプトに見せる大域（Mod の KubeJS の連携が足すもの。`CreateItem` など） */
+  readonly globals?: Readonly<Record<string, unknown>>
+}
+
+/** ある Mod（namespace）のレシピの読み方 */
+export interface RecipeFormat {
+  /** 種類の ID の namespace（`create`・`minecraft`） */
+  readonly namespace: string
+  /** 読む種類（namespace を外した名前） */
+  readonly types: readonly string[]
+  /** レシピ JSON を読む。type は types のどれか。読めなければ null */
+  read(id: string, type: string, data: Record<string, unknown>): ProcessingRecipe | null
+  /** 作り物の KubeJS でこの Mod のレシピを作る関数。なければスクリプトからは集めない */
+  readonly script?: RecipeScriptApi
+}
+
 /** jar・データパックの中のレシピのパス。1: namespace、2: recipes/ の下のパス（.json なし） */
 export const RECIPE_PATH = /^data\/([^/]+)\/recipes?\/(.+)\.json$/
 
-/**
- * レシピ JSON を読む。処理時間の計算に使う種類でなければ null。
- * id は `namespace:path`
- */
-export function readProcessingRecipe(id: string, data: unknown): ProcessingRecipe | null {
-  if (!isObject(data)) return null
-  const type = parseRecipeType(typeof data.type === 'string' ? data.type : '')
-  if (!type) return null
-  const items = new Set<string>()
-  const tags = new Set<string>()
-  if (type === 'crafting_shaped' || type === 'crafting_shapeless' || type === 'mechanical_crafting') {
-    return readCraftingRecipe(id, type, data)
-  }
-  if ((COOKING_RECIPE_TYPES as readonly string[]).includes(type)) {
-    // 料理のレシピ：材料は ingredient、できる物は result（1.18 は文字列、1.21 は { id, count }）。cookingtime は使わない
-    collectIngredients(data.ingredient, items, tags)
-    const result = typeof data.result === 'string' ? [{ item: data.result }] : [data.result]
-    return { id, type, items: [...items], tags: [...tags], duration: 0, results: readResults(result) }
-  }
-  collectIngredients(data.ingredients, items, tags)
-  // 1.18 は processingTime、1.21（Create 6.0）は processing_time
-  const time = data.processingTime ?? data.processing_time
-  const recipe: ProcessingRecipe = {
-    id,
-    type,
-    items: [...items],
-    tags: [...tags],
-    duration: typeof time === 'number' && Number.isFinite(time) && time > 0 ? Math.floor(time) : 0,
-    results: readResults(data.results),
-  }
-  if (type !== 'filling') return recipe
-  const fluids = new Set<string>()
-  const fluidTags = new Set<string>()
-  collectFluidIngredients(data.ingredients, fluids, fluidTags)
-  return { ...recipe, fluids: [...fluids], fluidTags: [...fluidTags] }
+/** レシピを ID でまとめる。同じ ID なら後のものを使う */
+export function mergeRecipes(...lists: readonly (readonly ProcessingRecipe[])[]): ProcessingRecipe[] {
+  const byId = new Map<string, ProcessingRecipe>()
+  for (const list of lists) for (const r of list) byId.set(r.id, r)
+  return [...byId.values()]
 }
 
-/** 作業台・メカニカルクラフターのレシピを読む（TP-RECIPE-CRAFTING）。並びが読めなければ null */
-function readCraftingRecipe(
+// ---- 読み方の部品（Mod ごとの読み方から使う） ----
+
+export function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+/**
+ * 作業台の形のレシピを読む（TP-RECIPE-CRAFTING）。並びが読めなければ null。
+ * shapeless は `ingredients`、形のあるものは `pattern` と `key`。できる物は `result`。
+ * readMirrorFlag なら `accept_mirrored`（`acceptMirrored`）が false のときだけ左右を入れ替えない。そうでなければ常に入れ替えてよい
+ */
+export function readCraftingRecipe(
   id: string,
-  type: 'crafting_shaped' | 'crafting_shapeless' | 'mechanical_crafting',
+  type: string,
   data: Record<string, unknown>,
+  shape: { readonly shapeless: boolean; readonly readMirrorFlag: boolean },
 ): ProcessingRecipe | null {
   const results = readResults([data.result])
   if (results.length === 0) return null
   let grid: CraftingGrid
-  if (type === 'crafting_shapeless') {
+  if (shape.shapeless) {
     if (!Array.isArray(data.ingredients)) return null
     const ingredients = data.ingredients.map(readIngredient)
     if (ingredients.length === 0 || ingredients.some((i) => i === null)) return null
@@ -200,7 +156,7 @@ function readCraftingRecipe(
     }
     if (rows.length === 0) return null
     const mirror = data.accept_mirrored ?? data.acceptMirrored
-    grid = { rows, ingredients: [], mirrored: type !== 'mechanical_crafting' || mirror !== false }
+    grid = { rows, ingredients: [], mirrored: !shape.readMirrorFlag || mirror !== false }
   }
   const items = new Set<string>()
   const tags = new Set<string>()
@@ -222,9 +178,9 @@ function readIngredient(value: unknown): CraftingIngredient | null {
 /**
  * 液体の材料を集める（#235）。読める形：
  * - 1.18：`{ fluid, amount }`・`{ fluidTag, amount }`
- * - 1.21（Create 6.0）：`{ type: 'neoforge:single', fluid, amount }`・`{ type: 'neoforge:tag', tag, amount }`
+ * - 1.21：`{ type: 'neoforge:single', fluid, amount }`・`{ type: 'neoforge:tag', tag, amount }`
  */
-function collectFluidIngredients(value: unknown, fluids: Set<string>, tags: Set<string>): void {
+export function collectFluidIngredients(value: unknown, fluids: Set<string>, tags: Set<string>): void {
   if (Array.isArray(value)) {
     for (const v of value) collectFluidIngredients(v, fluids, tags)
     return
@@ -238,10 +194,10 @@ function collectFluidIngredients(value: unknown, fluids: Set<string>, tags: Set<
 }
 
 /**
- * できる物を読む。1.18 は `{ item, count?, chance? }`、1.21（Create 6.0）は `{ id, count?, chance? }`。
+ * できる物を読む。1.18 は `{ item, count?, chance? }`、1.21 は `{ id, count?, chance? }`。
  * 液体（1.18 は `{ fluid, amount }`、1.21 は `{ id, amount }`）と、ID が文字列でないものは見ない
  */
-function readResults(value: unknown): RecipeResult[] {
+export function readResults(value: unknown): RecipeResult[] {
   if (!Array.isArray(value)) return []
   const results: RecipeResult[] = []
   for (const v of value) {
@@ -258,10 +214,10 @@ function readResults(value: unknown): RecipeResult[] {
 /**
  * 材料から、アイテムの ID とタグを集める。液体は見ない。読める形：
  * - `{item}`・`{tag}`・その配列（入れ子の配列も）
- * - NeoForge のいずれかの材料 `{ type: 'neoforge:compound', ingredients: [...] }`（Create 6.0 の Mod 連携のレシピ。#139）
+ * - NeoForge のいずれかの材料 `{ type: 'neoforge:compound', ingredients: [...] }`（Mod 連携のレシピ。#139）
  * - 文字列 `"minecraft:wheat"`・`"#c:ores/iron"`（1.21.2 からの形）
  */
-function collectIngredients(value: unknown, items: Set<string>, tags: Set<string>): void {
+export function collectIngredients(value: unknown, items: Set<string>, tags: Set<string>): void {
   if (Array.isArray(value)) {
     for (const v of value) collectIngredients(v, items, tags)
     return
@@ -279,15 +235,4 @@ function collectIngredients(value: unknown, items: Set<string>, tags: Set<string
   }
   if (typeof value.item === 'string') items.add(value.item)
   if (typeof value.tag === 'string') tags.add(value.tag)
-}
-
-function isObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-}
-
-/** レシピを ID でまとめる。同じ ID なら後のものを使う */
-export function mergeRecipes(...lists: readonly (readonly ProcessingRecipe[])[]): ProcessingRecipe[] {
-  const byId = new Map<string, ProcessingRecipe>()
-  for (const list of lists) for (const r of list) byId.set(r.id, r)
-  return [...byId.values()]
 }

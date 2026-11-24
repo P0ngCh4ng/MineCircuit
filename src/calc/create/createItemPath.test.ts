@@ -7,18 +7,19 @@ import { AssumptionLog } from '../assumptionLog'
 import type { CalcModpack } from '../calcPlugin'
 import type { VirtualPort } from '../virtualPort'
 import { bottleneckValue, itemPathValues, lineSummary, traceItemPaths, type ItemPathResult } from './createItemPath'
+import { recipeTypeId, type CreateRecipeKind } from './createRecipeTypes'
 import { runCreateStress } from './createStressPlugin'
 import { chooseRecipe, crushingTicks, machineCycleTicks, millstoneTicks, pressCycleTicks, sawTicks } from './createThroughput'
 import { blockCenter, throwPath } from './itemMotion'
 
 const recipe = (
   id: string,
-  type: ProcessingRecipe['type'],
+  type: CreateRecipeKind,
   items: string[],
   duration: number,
   results: RecipeResult[],
   tags: string[] = [],
-): ProcessingRecipe => ({ id, type, items, tags, duration, results })
+): ProcessingRecipe => ({ id, type: recipeTypeId(type), items, tags, duration, results })
 const out = (item: string, count = 1, chance = 1): RecipeResult => ({ item, count, chance })
 
 const BOOK: RecipeBook = {

@@ -66,7 +66,7 @@ describe('createWorkerScriptRunner', () => {
     vi.useFakeTimers()
     const { worker, state } = fakeWorker(() => undefined)
     const run = createWorkerScriptRunner({ createWorker: () => worker, timeLimitMs: 1000 })!
-    const pending = run({ ...input, recipes: [{ id: 'x:y', type: 'milling', items: [], tags: [], duration: 1, results: [] }] })
+    const pending = run({ ...input, recipes: [{ id: 'x:y', type: 'create:milling', items: [], tags: [], duration: 1, results: [] }] })
     await vi.advanceTimersByTimeAsync(1000)
     const out = await pending
     expect(out.summary.failed).toBe('1 秒で終わらなかったので打ち切った')

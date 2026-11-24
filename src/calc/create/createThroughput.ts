@@ -5,7 +5,8 @@
 import type { Blueprint } from '../../domain/blueprint'
 import type { NbtTag, RawNbt } from '../../domain/nbt'
 import type { Vec3 } from '../../domain/vec3'
-import type { ProcessingRecipe, ProcessingRecipeType, RecipeBook } from '../../io/modpack/recipes'
+import type { ProcessingRecipe, RecipeBook } from '../../io/modpack/recipes'
+import { recipesOfKind, type CreateRecipeKind } from './createRecipeTypes'
 import type { AssumptionLog } from '../assumptionLog'
 import type { CalcSummaryItem } from '../calcPlugin'
 import { nbtNumber } from '../nbtValues'
@@ -30,7 +31,7 @@ const DEPLOYER_WAIT = 500
 const ARM_MOVE = 1024
 
 /** レシピが分からないときの処理時間（Create のコードの初期値。ミキサーは r = 1 になる 100） */
-export const DEFAULT_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, number>> = {
+export const DEFAULT_RECIPE_DURATION: Readonly<Record<CreateRecipeKind, number>> = {
   milling: 100,
   crushing: 100,
   cutting: 50,
@@ -54,7 +55,7 @@ export const DEFAULT_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, numb
 }
 
 /** 処理時間にレシピの時間を使う機械か（プレス・圧縮は押す動きの速さだけで決まる） */
-const USES_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, boolean>> = {
+const USES_RECIPE_DURATION: Readonly<Record<CreateRecipeKind, boolean>> = {
   milling: true,
   crushing: true,
   cutting: true,
@@ -74,7 +75,7 @@ const USES_RECIPE_DURATION: Readonly<Record<ProcessingRecipeType, boolean>> = {
 }
 
 /** 機械の名前（仮定の文と、律速の機械の名前に使う） */
-export const RECIPE_MACHINE_NAMES: Readonly<Record<ProcessingRecipeType, string>> = {
+export const RECIPE_MACHINE_NAMES: Readonly<Record<CreateRecipeKind, string>> = {
   milling: '石臼',
   crushing: '粉砕ホイール',
   cutting: 'ソー',
@@ -257,7 +258,7 @@ export interface RecipeChoice {
 }
 
 /** ミキサーのレシピの処理時間 0（書いていない）は 100（r = 1）として扱う */
-export function effectiveDuration(type: ProcessingRecipeType, duration: number): number {
+export function effectiveDuration(type: CreateRecipeKind, duration: number): number {
   return type === 'mixing' && duration <= 0 ? 100 : duration
 }
 
@@ -273,8 +274,8 @@ export function recipeAccepts(recipe: ProcessingRecipe, item: string, book: Reci
  * 材料はアイテムの ID とタグで照らす（3）。合うレシピが2つ以上あれば ID の名前順で最初のものを使い、仮定に載せる（4）。
  * 決まらなければ、その種類のレシピの範囲と初期値（5）。Modpack がなければ初期値だけ（6）
  */
-export function chooseRecipe(type: ProcessingRecipeType, itemIds: readonly string[], book: RecipeBook | null): RecipeChoice {
-  const recipes = book?.recipes.filter((r) => r.type === type) ?? []
+export function chooseRecipe(type: CreateRecipeKind, itemIds: readonly string[], book: RecipeBook | null): RecipeChoice {
+  const recipes = recipesOfKind(book, type)
   const name = RECIPE_MACHINE_NAMES[type]
   for (const item of itemIds) {
     const matches = recipes.filter((r) => recipeAccepts(r, item, book)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
@@ -570,7 +571,7 @@ function itemsFor(positions: readonly Vec3[], fromNbt: () => string[], env: Thro
   return arrived.size > 0 ? [...arrived] : fromNbt()
 }
 
-function recipeFor(type: ProcessingRecipeType, items: readonly string[], pos: Vec3, env: ThroughputEnv): RecipeChoice {
+function recipeFor(type: CreateRecipeKind, items: readonly string[], pos: Vec3, env: ThroughputEnv): RecipeChoice {
   const choice = chooseRecipe(type, items, env.recipes)
   if (choice.assumption) env.log.add(choice.assumption, pos)
   if (env.recipes?.scriptsChangeRecipes) {

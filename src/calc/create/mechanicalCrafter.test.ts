@@ -4,6 +4,7 @@ import { BlockState } from '../../domain/blockState'
 import { nbt } from '../../domain/nbt'
 import { ResourceLocation } from '../../domain/resourceLocation'
 import type { ProcessingRecipe, RecipeBook } from '../../io/modpack/recipes'
+import { recipeTypeId, type CreateRecipeKind } from './createRecipeTypes'
 import {
   crafterCycleTicks,
   crafterGroup,
@@ -94,9 +95,9 @@ describe('メカニカルクラフター（#235）', () => {
   })
 
   it('[TP-CRAFTER-RECIPE] 合うレシピが2つ以上なら ID の名前順で最初のもの。タグの材料も照らす。容器の残る材料', () => {
-    const r = (id: string, type: ProcessingRecipe['type'], tags: string[]): ProcessingRecipe => ({
+    const r = (id: string, type: CreateRecipeKind, tags: string[]): ProcessingRecipe => ({
       id,
-      type,
+      type: recipeTypeId(type),
       items: [],
       tags,
       duration: 0,

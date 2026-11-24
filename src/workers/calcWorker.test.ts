@@ -141,7 +141,7 @@ describe('計算の Worker', () => {
           recipes: [
             {
               id: 'create:milling/wheat',
-              type: 'milling',
+              type: 'create:milling',
               items: ['minecraft:wheat'],
               tags: [],
               duration: 150,

@@ -8,6 +8,7 @@ import type { NbtTag } from '../../domain/nbt'
 import { addVec3, type Vec3 } from '../../domain/vec3'
 import type { CraftingIngredient, ProcessingRecipe, RecipeBook } from '../../io/modpack/recipes'
 import { nbtBoolean, nbtNumber } from '../nbtValues'
+import { recipeTypeId, recipesOfKind } from './createRecipeTypes'
 import { clockwise } from './kineticBlocks'
 
 export const CRAFTER_ID = 'create:mechanical_crafter'
@@ -253,8 +254,8 @@ export function matchCrafting(slots: readonly CrafterSlot[], book: RecipeBook): 
   const grid = new Map<string, string>()
   if (ordered) for (const s of slots) grid.set(`${s.coord[0]},${s.coord[1]}`, s.items[0]!)
   const tiers = [
-    book.recipes.filter((r) => r.grid && (r.type === 'crafting_shaped' || r.type === 'crafting_shapeless')),
-    book.recipes.filter((r) => r.grid && r.type === 'mechanical_crafting'),
+    book.recipes.filter((r) => r.grid && (r.type === recipeTypeId('crafting_shaped') || r.type === recipeTypeId('crafting_shapeless'))),
+    recipesOfKind(book, 'mechanical_crafting').filter((r) => r.grid),
   ]
   for (const tier of tiers) {
     const found: { recipe: ProcessingRecipe; items: string[] }[] = []

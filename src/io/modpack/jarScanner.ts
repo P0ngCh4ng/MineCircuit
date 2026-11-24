@@ -1,5 +1,5 @@
 // Mod の jar（zip）1つを開き、必要なファイルだけを取り出してまとめる。
-// 取り出すのは Mod の情報、翻訳ファイル（ja_jp / en_us）、ブロック状態の定義、Create の処理のレシピ、アイテムのタグだけ。Java のコードは読まない。
+// 取り出すのは Mod の情報、翻訳ファイル（ja_jp / en_us）、ブロック状態の定義、読み方の表にある種類のレシピ（recipes/）、アイテムのタグだけ。Java のコードは読まない。
 // 時間がかかるので、画面では Web Worker の中で呼ぶ（workers/jarScan.worker.ts）。
 
 import { inflateSync, unzipSync, type UnzipFileInfo } from 'fflate'
@@ -15,7 +15,7 @@ import {
 } from './modMetadata'
 import { ITEM_TAG_PATH, mergeItemTagFile, mergeItemTagFiles, readItemTagFile, type ItemTagFiles } from './itemTags'
 import type { ExtractedZip } from './partialZip'
-import { RECIPE_PATH, readProcessingRecipe, type ProcessingRecipe } from './recipes'
+import { RECIPE_PATH, mayBeKnownRecipe, readRecipe, type ProcessingRecipe } from './recipes'
 
 /** JSON の値 */
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
@@ -48,7 +48,7 @@ export interface JarSummary {
    * 中身は持たず、必要なときに jar から読む（io/assets/modpackAssetReader.ts）。jar の中の jar の分は含まない
    */
   readonly assets: string[]
-  /** Create の処理のレシピ（`data/<namespace>/recipes/`。処理時間の計算に使う種類だけ。recipes.ts） */
+  /** レシピ（`data/<namespace>/recipes/`。読み方の表にある種類だけ。recipes/） */
   readonly recipes: ProcessingRecipe[]
   /**
    * アイテムのタグ（`data/<namespace>/tags/items/`、1.21 は tags/item/。itemTags.ts）。キーはタグの名前（`#` なし）。
@@ -67,9 +67,6 @@ const ASSETS_NAMESPACE = /^assets\/([^/]+)\//
 const ASSET_INDEX_PATH = /^assets\/[^/]+\/(models|blockstates|textures)\/.*[^/]$/
 /** 残す翻訳のキー。`種類.namespace.path` の3つに分かれるものだけ（説明文などは捨てる） */
 const NAME_KEY = /^(block|item|entity|fluid)\.[^.]+\.[^.]+$/
-
-/** 読むかもしれないレシピの JSON（中身を読む前の絞り込み）。Create のものか、料理・作業台の種類のもの */
-const MAYBE_READ_RECIPE = /"create:|"minecraft:(smelting|blasting|smoking|crafting_shaped|crafting_shapeless)"/
 
 const METADATA_FILES = new Set([FORGE_MODS_TOML, NEOFORGE_MODS_TOML, FABRIC_MOD_JSON, MANIFEST])
 
@@ -251,12 +248,12 @@ function summarize(jar: string, files: Record<string, Uint8Array>, namespaces: S
     }
     const recipe = RECIPE_PATH.exec(name)
     if (recipe) {
-      // Create の処理のレシピと、扇風機に使う料理のレシピ・メカニカルクラフターに使う作業台のレシピ（#235）だけを残す。ほかのレシピは中身を見ずに捨てる。
+      // 読み方の表にある種類のレシピだけを残す。ほかのレシピは中身を見ずに捨てる。
       // 読めないレシピは問題にしない（計算は初期値で続く）
       const source = text(data)
-      if (!MAYBE_READ_RECIPE.test(source)) continue
+      if (!mayBeKnownRecipe(source)) continue
       try {
-        const r = readProcessingRecipe(`${recipe[1]}:${recipe[2]}`, parseLenientJson(source))
+        const r = readRecipe(`${recipe[1]}:${recipe[2]}`, parseLenientJson(source))
         if (r) summary.recipes.push(r)
       } catch {
         // 読めないレシピは使わない

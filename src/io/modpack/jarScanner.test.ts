@@ -117,9 +117,9 @@ describe('scanJar のレシピ', () => {
       },
     }))
     expect(s.recipes).toMatchObject([
-      { id: 'create:crushing/ore', type: 'crushing', items: [], tags: ['c:ores/iron'], duration: 250 },
-      { id: 'create:milling/wheat', type: 'milling', items: ['minecraft:wheat'], tags: [], duration: 150 },
-      { id: 'minecraft:copper_ingot', type: 'smelting', items: ['minecraft:raw_copper'], results: [{ item: 'minecraft:copper_ingot' }] },
+      { id: 'create:crushing/ore', type: 'create:crushing', items: [], tags: ['c:ores/iron'], duration: 250 },
+      { id: 'create:milling/wheat', type: 'create:milling', items: ['minecraft:wheat'], tags: [], duration: 150 },
+      { id: 'minecraft:copper_ingot', type: 'minecraft:smelting', items: ['minecraft:raw_copper'], results: [{ item: 'minecraft:copper_ingot' }] },
     ])
     expect(s.problems).toEqual([])
   })
@@ -148,8 +148,8 @@ describe('scanJar のレシピ', () => {
       nestedJars: { 'inner-1.jar': inner },
     }))
     expect([...s.recipes].sort((a, b) => a.id.localeCompare(b.id))).toMatchObject([
-      { id: 'create:milling/wheat', type: 'milling', items: ['outer:wheat'], tags: [], duration: 99 },
-      { id: 'inner:milling/only_inner', type: 'milling', items: ['inner:x'], tags: [], duration: 20 },
+      { id: 'create:milling/wheat', type: 'create:milling', items: ['outer:wheat'], tags: [], duration: 99 },
+      { id: 'inner:milling/only_inner', type: 'create:milling', items: ['inner:x'], tags: [], duration: 20 },
     ])
   })
 

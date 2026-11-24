@@ -6,7 +6,7 @@ import { emptyItem, fillItem, fluidAccepts, spoutFluid, stillFluid, tankFluid } 
 
 const filling = (fluids: string[], fluidTags: string[]): ProcessingRecipe => ({
   id: 'x:filling',
-  type: 'filling',
+  type: 'create:filling',
   items: ['minecraft:glass_bottle'],
   tags: [],
   duration: 0,

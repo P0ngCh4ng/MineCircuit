@@ -3,19 +3,11 @@
 // ほかの呼び出しは何もしない値（noop）を返し、名前を数える。スクリプトに渡すのはここで作った値だけにする（runScripts.ts）。
 
 import { flattenItemTags, type ItemTagFiles } from '../itemTags'
-import {
-  COOKING_RECIPE_TYPES,
-  CREATE_RECIPE_TYPES,
-  parseRecipeType,
-  readProcessingRecipe,
-  recipeTypeId,
-  type CookingRecipeType,
-  type ProcessingRecipe,
-  type ProcessingRecipeType,
-} from '../recipes'
+import { RECIPE_FORMATS, isKnownRecipeType, readRecipe, recipeFormat, type ProcessingRecipe, type RecipeScriptBuilder } from '../recipes'
 import type { ScriptError, ScriptRunInput, UnsupportedCall } from './scriptTypes'
+import { snakeCase } from './scriptRecipes'
 import { isSvalInternalName } from './svalNames'
-import { ScriptFluid, ScriptItem, parseItemString, toFluidIngredients, toIngredients, toPlainJson, toResults, toScriptItems, toSingleId, withNamespace } from './scriptValues'
+import { ScriptFluid, ScriptItem, itemOf, toPlainJson, toScriptItems, toSingleId, withNamespace } from './scriptValues'
 
 /** 呼ぶイベントの処理（登録したファイルと一緒に覚える） */
 interface Handler {
@@ -23,34 +15,27 @@ interface Handler {
   readonly fn: (event: unknown) => unknown
 }
 
-/** レシピの種類の名前（`create:milling`、`minecraft:smelting`、`milling`）を短い名前にする。namespace がなければ Create の種類。読まない種類は null */
-function processingType(name: string): ProcessingRecipeType | null {
-  if (name.includes(':')) return parseRecipeType(name)
-  // `mechanicalCrafting` → `mechanical_crafting`
-  const snake = name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)
-  return (CREATE_RECIPE_TYPES as readonly string[]).includes(snake) ? (snake as ProcessingRecipeType) : null
+/**
+ * 条件の `type` に書いた種類の名前（`create:milling`、`minecraft:smelting`、`milling`）を種類の ID にする。読まない種類は null。
+ * namespace がなければ `minecraft:` を探し、なければ読み方の表の順にほかの Mod を探す
+ */
+function recipeTypeId(name: string): string | null {
+  if (name.includes(':')) return isKnownRecipeType(name) ? name : null
+  const type = snakeCase(name)
+  const format = [recipeFormat('minecraft'), ...RECIPE_FORMATS].find((f) => f?.types.includes(type))
+  return format ? `${format.namespace}:${type}` : null
 }
 
-/** 並びを持つレシピの種類（作業台とメカニカルクラフター。#235） */
-type GridRecipeType = 'crafting_shaped' | 'crafting_shapeless' | 'mechanical_crafting'
-function isGridType(type: ProcessingRecipeType): type is GridRecipeType {
-  return type === 'crafting_shaped' || type === 'crafting_shapeless' || type === 'mechanical_crafting'
-}
-
-/** `smelting` → 料理の種類。ほかは null */
-function cookingType(name: string): CookingRecipeType | null {
-  return (COOKING_RECIPE_TYPES as readonly string[]).includes(name) ? (name as CookingRecipeType) : null
-}
-
-/** スクリプトの材料1つ分を、レシピ JSON の材料（ID と `#` 付きのタグの配列）にする */
-function ingredientJson(value: unknown): string[] {
-  return toScriptItems(value).map((s) => s.id)
-}
-
-/** `createMilling` → `milling` */
-function legacyBuilderType(name: string): ProcessingRecipeType | null {
-  const m = /^create([A-Z]\w*)$/.exec(name)
-  return m ? processingType(m[1][0].toLowerCase() + m[1].slice(1)) : null
+/** `createMilling` → Create の `milling` の関数（`prefixedNames` の Mod だけ）。ほかは null */
+function prefixedBuilder(name: string): RecipeScriptBuilder | null {
+  for (const f of RECIPE_FORMATS) {
+    if (!f.script?.prefixedNames || !name.startsWith(f.namespace) || name.length <= f.namespace.length) continue
+    const rest = name.slice(f.namespace.length)
+    if (!/^[A-Z]/.test(rest)) continue
+    const b = f.script.builder(rest[0].toLowerCase() + rest.slice(1))
+    if (b) return b
+  }
+  return null
 }
 
 /** 読まない種類のレシピを作る、よく使う呼び出し。何もしないが、再現しないものとしては数えない */
@@ -158,11 +143,7 @@ export class FakeKubeJs {
     // ほかのイベントの入れ物（StartupEvents など）。登録だけ受け付けて呼ばない
     const otherEvents = new Proxy(Object.create(null) as Record<string, unknown>, { get: () => () => undefined })
     const item = {
-      of: (id: unknown, count?: unknown) => {
-        const base = id instanceof ScriptItem ? id : typeof id === 'string' ? parseItemString(id) : (toScriptItems(id)[0] ?? null)
-        if (!base) return new ScriptItem('minecraft:air')
-        return typeof count === 'number' ? base.withCount(count) : base
-      },
+      of: (id: unknown, count?: unknown) => itemOf(id, count),
       empty: new ScriptItem('minecraft:air'),
       getEmpty: () => new ScriptItem('minecraft:air'),
       exists: () => true,
@@ -221,8 +202,6 @@ export class FakeKubeJs {
       Item: item,
       Ingredient: ingredient,
       Fluid: fluid,
-      // 1.21 の kubejs-create の確率付きの物
-      CreateItem: { of: (id: unknown, chance?: unknown) => (item.of(id) as ScriptItem).withChance(chance ?? 1) },
       Platform: platform,
       console: { log: quiet, info: quiet, warn: quiet, error: quiet, debug: quiet },
       global: this.sharedGlobal,
@@ -235,6 +214,8 @@ export class FakeKubeJs {
       NBT: unsupportedGlobal('NBT'),
       Text: unsupportedGlobal('Text'),
       Component: unsupportedGlobal('Component'),
+      // Mod の KubeJS の連携が足す大域（読み方の表。recipes/）
+      ...Object.assign({}, ...RECIPE_FORMATS.map((f) => f.script?.globals ?? {})),
     }
   }
 
@@ -348,91 +329,44 @@ export class FakeKubeJs {
     return builder
   }
 
-  /** `.processingTime(n)` を呼ばないときの処理時間。kubejs-create の初期値（1802 の ProcessingRecipeJS、2001 の ProcessingRecipeSchema） */
-  private static readonly DEFAULT_PROCESSING_TIME = 100
-
-  private builderFor(type: ProcessingRecipeType): (outputs: unknown, inputs: unknown, key?: unknown) => unknown {
-    if (isGridType(type)) return this.gridBuilderFor(type)
-    return (outputs, inputs) => {
-      const { items, tags } = toIngredients(inputs)
-      const duration = FakeKubeJs.DEFAULT_PROCESSING_TIME
-      const recipe: ProcessingRecipe = { id: this.nextId(), type, items, tags, duration, results: toResults(outputs) }
-      // スパウトのレシピは液体の材料も持つ（`Fluid.of('minecraft:water', 250)`。#235）
-      return this.addRecipe(type === 'filling' ? { ...recipe, ...toFluidIngredients(inputs) } : recipe)
-    }
-  }
-
-  /**
-   * 作業台・メカニカルクラフターのレシピ（#235）。`event.shaped(出る物, パターン, キー)`・`event.shapeless(出る物, 材料)`・
-   * `event.recipes.create.mechanical_crafting(出る物, パターン, キー)`。レシピ JSON にして readProcessingRecipe で読む
-   */
-  private gridBuilderFor(type: GridRecipeType): (output: unknown, inputs: unknown, key?: unknown) => unknown {
-    return (output, inputs, key) => {
-      const result = toScriptItems(output).find((s) => !s.id.startsWith('#'))
-      const json: Record<string, unknown> = { type: recipeTypeId(type), result: result ? { item: result.id, count: result.count } : null }
-      if (type === 'crafting_shapeless') {
-        // 1つの要素が1マス（`2x minecraft:stick` は2マス、配列はそのどれか）
-        const slots: string[][] = []
-        for (const v of Array.isArray(inputs) ? inputs : [inputs]) {
-          if (Array.isArray(v)) {
-            slots.push(ingredientJson(v))
-            continue
-          }
-          for (const s of toScriptItems(v)) for (let i = 0; i < s.count; i++) slots.push([s.id])
-        }
-        json.ingredients = slots
-      } else {
-        json.pattern = toPlainJson(inputs)
-        const keys: Record<string, string[]> = {}
-        if (typeof key === 'object' && key !== null) for (const [k, v] of Object.entries(key)) keys[k] = ingredientJson(v)
-        json.key = keys
-      }
-      const recipe = readProcessingRecipe(this.nextId(), json)
+  /** 読み方の表の関数を、スクリプトから呼べる関数にする。作れたレシピは足し、作れなければ何もしない値を返す */
+  private scriptFunction(builder: RecipeScriptBuilder): (...args: unknown[]) => unknown {
+    return (...args) => {
+      const recipe = builder({ nextId: () => this.nextId() }, args)
       return recipe ? this.addRecipe(recipe) : NOOP
     }
   }
 
-  /** 料理のレシピ（`event.smelting(出る物, 材料)`）。出る物は1つ。処理時間は扇風機では使わない */
-  private cookingBuilderFor(type: CookingRecipeType): (output: unknown, input: unknown) => unknown {
-    return (output, input) => {
-      const { items, tags } = toIngredients(input)
-      return this.addRecipe({ id: this.nextId(), type, items, tags, duration: 0, results: toResults(output).slice(0, 1) })
-    }
-  }
-
   private recipeEvent(): unknown {
-    // `event.recipes.minecraft.smelting(…)`・`event.recipes.minecraft.crafting_shaped(…)`
-    const minecraft = new Proxy(Object.create(null) as Record<string, unknown>, {
-      get: (_t, key) => {
-        if (typeof key !== 'string') return undefined
-        const type = cookingType(key)
-        if (type) return this.cookingBuilderFor(type)
-        if (key === 'crafting_shaped' || key === 'crafting_shapeless') return this.gridBuilderFor(key)
-        return NOOP
-      },
-    })
-    // `event.recipes.create.milling(…)`
-    const create = new Proxy(Object.create(null) as Record<string, unknown>, {
-      get: (_t, key) => {
-        if (typeof key !== 'string') return undefined
-        const type = processingType(key)
-        return type ? this.builderFor(type) : NOOP
-      },
-    })
-    // `event.recipes.createMilling(…)`・`event.recipes.create.milling(…)`。ほかの Mod の種類は何もしない
+    // `event.recipes.<namespace>.<種類>(…)`（`event.recipes.create.milling(…)`・`event.recipes.minecraft.smelting(…)`）
+    const byNamespace = new Map<string, unknown>()
+    for (const f of RECIPE_FORMATS) {
+      const api = f.script
+      if (!api) continue
+      byNamespace.set(
+        f.namespace,
+        new Proxy(Object.create(null) as Record<string, unknown>, {
+          get: (_t, key) => {
+            if (typeof key !== 'string') return undefined
+            const b = api.builder(key)
+            return b ? this.scriptFunction(b) : NOOP
+          },
+        }),
+      )
+    }
+    // `event.recipes.createMilling(…)`（1.18）。表にない Mod の種類は何もしない
     const recipes = new Proxy(Object.create(null) as Record<string, unknown>, {
       get: (_t, key) => {
-        if (key === 'create') return create
-        if (key === 'minecraft') return minecraft
         if (typeof key !== 'string') return undefined
-        const type = legacyBuilderType(key)
-        return type ? this.builderFor(type) : NOOP
+        if (byNamespace.has(key)) return byNamespace.get(key)
+        const b = prefixedBuilder(key)
+        return b ? this.scriptFunction(b) : NOOP
       },
     })
     const custom = (json: unknown) => {
       const plain = toPlainJson(json)
       const given = typeof plain === 'object' && plain !== null && typeof (plain as { id?: unknown }).id === 'string' ? (plain as { id: string }).id : null
-      const recipe = readProcessingRecipe(given ?? this.nextId(), plain)
+      const recipe = readRecipe(given ?? this.nextId(), plain)
       return recipe ? this.addRecipe(recipe) : NOOP
     }
     const remove = (filter: unknown) => {
@@ -487,9 +421,8 @@ export class FakeKubeJs {
       },
     }
     for (const name of OTHER_RECIPE_METHODS) methods[name] = () => NOOP
-    for (const type of COOKING_RECIPE_TYPES) methods[type] = this.cookingBuilderFor(type)
-    methods.shaped = this.gridBuilderFor('crafting_shaped')
-    methods.shapeless = this.gridBuilderFor('crafting_shapeless')
+    // `event.smelting(…)`・`event.shaped(…)` など、KubeJS が本体のために持つ関数（読み方の表）
+    for (const f of RECIPE_FORMATS) for (const [name, b] of Object.entries(f.script?.eventMethods ?? {})) methods[name] = this.scriptFunction(b)
     return this.eventObject('レシピのイベント', methods)
   }
 
@@ -497,10 +430,10 @@ export class FakeKubeJs {
   private recipeView(r: ProcessingRecipe): unknown {
     const known: Record<string, unknown> = {
       getId: () => r.id,
-      getType: () => recipeTypeId(r.type),
+      getType: () => r.type,
       getMod: () => r.id.split(':')[0],
       id: r.id,
-      type: recipeTypeId(r.type),
+      type: r.type,
     }
     return new Proxy(Object.create(null) as Record<string, unknown>, {
       get: (_t, key) => {
@@ -571,9 +504,9 @@ export class FakeKubeJs {
         return any((x) => (typeof x === 'string' ? (r) => r.id.split(':')[0] === x : null))
       case 'type':
         return any((x) => {
-          if (x instanceof RegExp) return (r) => x.test(recipeTypeId(r.type))
+          if (x instanceof RegExp) return (r) => x.test(r.type)
           if (typeof x !== 'string') return null
-          const t = processingType(x)
+          const t = recipeTypeId(x)
           // 読まない種類は、ここにあるどのレシピにも合わない
           return (r) => t !== null && r.type === t
         })
