@@ -2,6 +2,7 @@
 // ツールはストアと DocumentSession を EditToolContext としてまとめて受け取る。
 
 import { boxContains, isSingleCell } from '../../domain/box'
+import type { Vec3 } from '../../domain/vec3'
 import { eraseBlock } from '../../edit/editCommand'
 import { useDocumentSession } from '../document/documentSession'
 import { layerVisibility } from '../layers/layerDisplay'
@@ -11,11 +12,11 @@ import { useLayerStore } from '../stores/layerStore'
 import { useToolStore } from '../stores/toolStore'
 import { useViewStore } from '../stores/viewStore'
 import type { EditToolContext } from '../tools/editToolContext'
-import { BeltTool } from '../tools/beltTool'
+import { ConnectTool } from '../tools/connectTool'
 import { EraseTool } from '../tools/eraseTool'
 import { PickTool } from '../tools/pickTool'
 import { PlaceTool } from '../tools/placeTool'
-import { completeBlockState, orientForPlacement, placementHelper, placementProblem } from './placementRules'
+import { completeBlockState, connectTools, orientForPlacement, placementHelper, placementProblem } from './placementRules'
 import type { MoveDirection } from '../tools/keymap'
 import { moveVector } from './moveDirection'
 import { growToward, rangeSizeLabel } from './rangeHandles'
@@ -88,11 +89,11 @@ export function useEditTools(): EditKeyActions {
   tools.register(new PlaceTool(ctx))
   tools.register(new EraseTool(ctx))
   tools.register(new PickTool(ctx))
-  // ベルトのツール（#248）。逆向きに回るシャフトどうしを外すのに、最後の計算の回転数を使う
+  // 計算プラグインのつなぐツール（Create のベルトなど。#248・#266）。
+  // 逆向きに回るシャフトどうしを外すのに、最後の計算の回転数を使う
   const calc = useCalcStore()
-  tools.register(
-    new BeltTool(ctx, (pos) => calc.rotations.find((r) => r.pos[0] === pos[0] && r.pos[1] === pos[1] && r.pos[2] === pos[2])?.rpm ?? null),
-  )
+  const speedAt = (pos: Vec3) => calc.rotations.find((r) => r.pos[0] === pos[0] && r.pos[1] === pos[1] && r.pos[2] === pos[2])?.rpm ?? null
+  for (const def of connectTools()) tools.register(new ConnectTool(def, ctx, speedAt))
 
   return {
     deleteSelected() {

@@ -1,8 +1,14 @@
 import type { Direction } from '../../domain/direction'
 import type { Vec3 } from '../../domain/vec3'
 
-/** ツールの種類。docs/design.md「view」の Tool と同じ */
-export type ToolId = 'select' | 'measure' | 'network' | 'sameBlock' | 'probe' | 'port' | 'place' | 'erase' | 'pick' | 'belt'
+/** 内蔵のツールの種類。docs/design.md「view」の Tool と同じ */
+export type CoreToolId = 'select' | 'measure' | 'network' | 'sameBlock' | 'probe' | 'port' | 'place' | 'erase' | 'pick'
+
+/**
+ * ツールの種類。内蔵のツールか、計算プラグインのつなぐツールの id（'belt' など。#266）。
+ * プラグインのツールは画面が知らない名前なので string にする
+ */
+export type ToolId = CoreToolId | (string & {})
 
 /**
  * マウスの下にあるもの。3D表示と2D表示のどちらの Picker もこの形で返す。

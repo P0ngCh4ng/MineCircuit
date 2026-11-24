@@ -11,6 +11,8 @@ import type { RawNbt } from '../domain/nbt'
 import type { Vec3 } from '../domain/vec3'
 import type { BlockEntityTransform } from '../edit/regionTransform'
 import type { RecipeBook } from '../io/modpack/recipes'
+import type { BlockSettings } from './blockSettings'
+import type { ConnectToolDef } from './connectTool'
 import type { PortKindDef, VirtualPort } from './virtualPort'
 import type { Resolved } from './provenance'
 
@@ -102,14 +104,15 @@ export interface CalcProbe {
   readonly network?: number
 }
 
-/** 速さの段階。境目はプラグインが決める（Create は設定の中速・高速） */
+/** 速さの段階。境目はプラグインが決める（Create の決め方は docs/create-stress.md「結果の形」） */
 export type SpeedLevel = 'stopped' | 'slow' | 'medium' | 'fast'
 
 /** 回るブロック1つ分の回転。表示部分の「回転」の色分けに使う（docs/ui.md「回転の表示」） */
 export interface CalcRotation {
   readonly pos: Vec3
   readonly axis: 'x' | 'y' | 'z'
-  /** 符号付きの回転数。正は軸の正の向きから見て反時計回り（Create と同じ）。過負荷なら止まる前の値 */
+  /** 符号付きの回転数。正は軸の正の向きから見て反時計回り（右手の法則）。
+   * Mod の回転数の符号がこれと違えば、プラグインが直して入れる。過負荷なら止まる前の値 */
   readonly rpm: number
   readonly level: SpeedLevel
   /** 過負荷で止まっている */
@@ -196,6 +199,13 @@ export interface CalcPlugin {
    * 補った状態（補う必要がなければ元のまま）と、補えなかったときの理由。知らないブロックなら null
    */
   completeState?(state: BlockState): { state: BlockState; problem: string | null } | null
+  /**
+   * 画面から変えられる設定（任意。#266）。どのブロックのどの生データの項目を変えられるか。
+   * 知らないブロックや、変えられる設定がなければ null
+   */
+  blockSettings?(state: BlockState): BlockSettings | null
+  /** つなぐツール（任意。#266）。ツールバーに足す（docs/design.md「Mod ごとのものを足す口」） */
+  readonly connectTools?: readonly ConnectToolDef[]
   /** Modpack がないときの棚に出す基本の部品（任意。#162）。既定の状態と、アプリで書いた短い名前 */
   readonly basicBlocks?: readonly { readonly state: BlockState; readonly name: string }[]
   /**

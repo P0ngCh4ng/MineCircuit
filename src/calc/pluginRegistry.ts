@@ -9,7 +9,9 @@ import type { RawNbt } from '../domain/nbt'
 import type { Vec3 } from '../domain/vec3'
 import type { BlockEntityTransform } from '../edit/regionTransform'
 import { transformVanillaState } from '../edit/stateTransform'
+import type { BlockSettings } from './blockSettings'
 import type { CalcMode, CalcModpack, CalcPlugin, CalcResult } from './calcPlugin'
+import type { ConnectToolDef } from './connectTool'
 import { portsFor, type VirtualPort } from './virtualPort'
 
 export class PluginRegistry {
@@ -58,6 +60,20 @@ export class PluginRegistry {
       if (r) return r
     }
     return { state, problem: null }
+  }
+
+  /** 画面から変えられる設定。最初に答えたプラグインのもの。どれも答えなければ null（#266） */
+  blockSettings(state: BlockState): BlockSettings | null {
+    for (const p of this.plugins.values()) {
+      const r = p.blockSettings?.(state) ?? null
+      if (r) return r
+    }
+    return null
+  }
+
+  /** つなぐツール。プラグインの順に並べる（#266） */
+  connectTools(): ConnectToolDef[] {
+    return [...this.plugins.values()].flatMap((p) => p.connectTools ?? [])
   }
 
   /** Modpack がないときの棚に出す基本の部品。プラグインの順に並べる（#162） */

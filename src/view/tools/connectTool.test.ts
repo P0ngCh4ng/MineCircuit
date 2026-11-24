@@ -5,7 +5,8 @@ import type { Blueprint } from '../../domain/blueprint'
 import type { Vec3 } from '../../domain/vec3'
 import type { EditCommand } from '../../edit/editCommand'
 import { EditHistory } from '../../edit/editHistory'
-import { BELT_CANCELLED_MESSAGE, BELT_PICK_SHAFT_MESSAGE, beltDoneMessage, beltFirstMessage, BeltTool } from './beltTool'
+import { connectTools } from '../edit/placementRules'
+import { ConnectTool } from './connectTool'
 import type { EditToolContext } from './editToolContext'
 import type { PickTarget } from './tool'
 
@@ -49,6 +50,13 @@ function fakeContext(bp: Blueprint) {
 const at = (pos: Vec3): PickTarget => ({ pos, empty: false })
 const NO_SHIFT = { shift: false }
 
+// 計算プラグインの一覧から取った、Create のベルトのつなぐツール
+const BELT = connectTools().find((t) => t.id === 'belt')!
+const BELT_PICK_SHAFT_MESSAGE = BELT.messages.pickStart
+const BELT_CANCELLED_MESSAGE = BELT.messages.cancelled
+const beltFirstMessage = BELT.messages.first
+const beltDoneMessage = BELT.messages.done
+
 function sample(): Blueprint {
   return blueprintFixture({ size: [5, 2, 1] })
     .place([0, 0, 0], 'create:shaft', { axis: 'z' })
@@ -63,17 +71,17 @@ describe('ベルトのツール（#248）', () => {
     const bp = sample()
     const before = blueprintContents(bp)
     const { ctx, state } = fakeContext(bp)
-    const tool = new BeltTool(ctx)
+    const tool = new ConnectTool(BELT, ctx)
     tool.onClick(at([0, 0, 0]), NO_SHIFT)
     expect(state.message).toBe(beltFirstMessage([0, 0, 0]))
-    expect(tool.firstShaft).toEqual([0, 0, 0])
+    expect(tool.firstPos).toEqual([0, 0, 0])
     // 2本目を指すと、敷くベルトを見本で出す
     tool.onHover(at([3, 0, 0]))
     expect(state.preview?.cells.map((c) => c.pos)).toEqual([[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0]])
     tool.onClick(at([3, 0, 0]), NO_SHIFT)
     expect(state.message).toBe(beltDoneMessage(4))
     expect(state.preview).toBeNull()
-    expect(tool.firstShaft).toBeNull()
+    expect(tool.firstPos).toBeNull()
     expect(bp.get([1, 0, 0])?.key).toBe('create:belt[casing=false,facing=east,part=middle,slope=horizontal,waterlogged=false]')
     expect(state.history.nextUndo?.label).toBe('ベルトをつなぐ（4 区間）')
     state.history.undo()
@@ -82,7 +90,7 @@ describe('ベルトのツール（#248）', () => {
 
   it('シャフトでないものは選べない。つなげない組み合わせは理由を出し、1本目は残す', () => {
     const { ctx, state } = fakeContext(sample())
-    const tool = new BeltTool(ctx)
+    const tool = new ConnectTool(BELT, ctx)
     tool.onClick(at([0, 1, 0]), NO_SHIFT)
     expect(state.message).toBe(BELT_PICK_SHAFT_MESSAGE)
     tool.onClick({ pos: [1, 0, 0], empty: true }, NO_SHIFT)
@@ -92,13 +100,13 @@ describe('ベルトのツール（#248）', () => {
     expect(state.preview?.cells).toEqual([])
     tool.onClick(at([4, 0, 0]), NO_SHIFT)
     expect(state.message).toContain('軸の向きが違います')
-    expect(tool.firstShaft).toEqual([0, 0, 0])
+    expect(tool.firstPos).toEqual([0, 0, 0])
     expect(state.history.canUndo).toBe(false)
   })
 
   it('逆向きに回るシャフトどうしはつながない（最後の計算の回転数）', () => {
     const { ctx, state } = fakeContext(sample())
-    const tool = new BeltTool(ctx, (pos) => (pos[0] === 0 ? 16 : -16))
+    const tool = new ConnectTool(BELT, ctx, (pos) => (pos[0] === 0 ? 16 : -16))
     tool.onClick(at([0, 0, 0]), NO_SHIFT)
     tool.onClick(at([3, 0, 0]), NO_SHIFT)
     expect(state.message).toContain('逆向き')
@@ -107,18 +115,18 @@ describe('ベルトのツール（#248）', () => {
 
   it('Shift+クリック・同じシャフト・ツールの切り替えで、1本目の選択をやめる', () => {
     const { ctx, state } = fakeContext(sample())
-    const tool = new BeltTool(ctx)
+    const tool = new ConnectTool(BELT, ctx)
     tool.onClick(at([0, 0, 0]), NO_SHIFT)
     tool.onClick(at([3, 0, 0]), { shift: true })
     expect(state.message).toBe(BELT_CANCELLED_MESSAGE)
-    expect(tool.firstShaft).toBeNull()
+    expect(tool.firstPos).toBeNull()
     tool.onClick(at([0, 0, 0]), NO_SHIFT)
     tool.onClick(at([0, 0, 0]), NO_SHIFT)
     expect(state.message).toBe(BELT_CANCELLED_MESSAGE)
-    expect(tool.firstShaft).toBeNull()
+    expect(tool.firstPos).toBeNull()
     tool.onClick(at([0, 0, 0]), NO_SHIFT)
     tool.deactivate()
-    expect(tool.firstShaft).toBeNull()
+    expect(tool.firstPos).toBeNull()
     expect(state.preview).toBeNull()
   })
 })

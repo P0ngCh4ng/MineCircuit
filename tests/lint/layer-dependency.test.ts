@@ -44,8 +44,38 @@ ruleTester.run('layer-dependency', rule, {
     { filename: file('view/platform/platform.ts'), code: "const m = import('@/io/tauri/tauriFileSink')", options },
     // 名前が似ているだけのフォルダは対象外
     { filename: file('io/tauriLike.ts'), code: "import { a } from './fileSource'", options },
+    // Mod の場所（#266）：同じ Mod の場所の中と、登録の場所からは使ってよい
+    { filename: file('calc/create/createStressPlugin.ts'), code: "import { a } from './createBeltTool'", options },
+    { filename: file('calc/create/createStressPlugin.ts'), code: "import { a } from '../../io/assets/create/createPartialModels'", options },
+    { filename: file('calc/builtinPlugins.ts'), code: "import { a } from './create/createStressPlugin'", options },
+    { filename: file('io/assets/builtinPartialModels.ts'), code: "import { a } from './create/createPartialModels'", options },
+    // Mod の場所から共通の層を使うのはよい
+    { filename: file('calc/create/a.ts'), code: "import { a } from '../calcPlugin'", options },
+    // テストは対象外
+    { filename: file('calc/blockSettings.test.ts'), code: "import { a } from './create/createStressPlugin'", options },
+    // 名前に create を含むだけのファイルは対象外
+    { filename: file('view/a.ts'), code: "import { a } from '../calc/createLike'", options },
   ],
   invalid: [
+    // Mod の場所を共通の層から直接使う（#266）
+    {
+      filename: file('view/tools/beltTool.ts'),
+      code: "import { a } from '../../calc/create/createBeltConnector'",
+      options,
+      errors: [{ messageId: 'modDir' }],
+    },
+    {
+      filename: file('calc/blockSettings.ts'),
+      code: "import { a } from './create/createBlockSettings'",
+      options,
+      errors: [{ messageId: 'modDir' }],
+    },
+    {
+      filename: file('io/assets/partialModels.ts'),
+      code: "export { a } from './create/createPartialModels'",
+      options,
+      errors: [{ messageId: 'modDir' }],
+    },
     {
       filename: file('io/fileSource.ts'),
       code: "import { readFile } from '@tauri-apps/plugin-fs'",

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { BlockState } from '../../domain/blockState'
 import { ResourceLocation } from '../../domain/resourceLocation'
-import { rotateVector } from '../../domain/rotation3'
+import { IDENTITY_ROTATION, rotateVector } from '../../domain/rotation3'
 import { partialModelsFor } from './partialModels'
 
 const state = (id: string, properties: Record<string, string>) => new BlockState(ResourceLocation.parse(id), properties)
@@ -72,5 +72,18 @@ describe('partialModelsFor：ブレイズバーナー', () => {
 
   it('表にないブロックには何も重ねない', () => {
     expect(partialModelsFor(state('create:shaft', { axis: 'y' }))).toEqual([])
+  })
+})
+
+describe('partialModelsFor：Mod ごとの表（#266）', () => {
+  const stone = state('minecraft:stone', {})
+  const a = { 'minecraft:stone': () => [{ model: 'a:block/x', matrix: IDENTITY_ROTATION }] }
+  const b = { 'minecraft:stone': () => [{ model: 'b:block/x', matrix: IDENTITY_ROTATION }] }
+
+  it('表になければ空。同じ ID が2つの表にあれば先に登録したもの', () => {
+    expect(partialModelsFor(stone)).toEqual([])
+    expect(partialModelsFor(stone, []).length).toBe(0)
+    expect(partialModelsFor(stone, [a, b]).map((p) => p.model)).toEqual(['a:block/x'])
+    expect(partialModelsFor(stone, [b, a]).map((p) => p.model)).toEqual(['b:block/x'])
   })
 })

@@ -1,8 +1,12 @@
 // 置くときの向きと、置けるか（#119・#121。docs/ui.md「編集」）。範囲の回転・反転の規則（#132）も。
-// Mod ごとの規則は計算プラグインが持つので、画面は計算プラグインの一覧に聞くだけにする。
+// 画面から変えられる設定と、つなぐツール（#266）も。
+// Mod ごとの規則は計算プラグインが持つので、画面は計算プラグインの一覧に聞くだけにする
+// （docs/design.md「Mod ごとのものを足す口」）。
 // 計算そのものは Worker で行うので、ここの一覧は向きと規則を聞くためだけに使う。
 
+import type { BlockSettings } from '../../calc/blockSettings'
 import { createBuiltinRegistry } from '../../calc/builtinPlugins'
+import type { ConnectToolDef } from '../../calc/connectTool'
 import type { BlockState } from '../../domain/blockState'
 import type { BlockTransform } from '../../domain/blockTransform'
 import type { Blueprint } from '../../domain/blueprint'
@@ -39,6 +43,16 @@ export function placementProblem(bp: Blueprint, pos: Vec3, state: BlockState): s
  */
 export function completeBlockState(state: BlockState): { state: BlockState; problem: string | null } {
   return registry.completeState(state)
+}
+
+/** state のブロックで画面から変えられる設定。なければ null（#266） */
+export function blockSettingsFor(state: BlockState): BlockSettings | null {
+  return registry.blockSettings(state)
+}
+
+/** 計算プラグインのつなぐツール（#266）。ツールバーに足す */
+export function connectTools(): ConnectToolDef[] {
+  return registry.connectTools()
 }
 
 /** Modpack がないときの棚に出す基本の部品（#162） */

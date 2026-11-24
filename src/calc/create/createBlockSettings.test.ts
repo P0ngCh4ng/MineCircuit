@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { blueprintFixture, state } from '../../tests/fixtures/blueprintFixture'
-import { nbt } from '../domain/nbt'
-import type { Vec3 } from '../domain/vec3'
-import { setBlockEntityTag } from '../edit/editCommand'
-import { EditHistory } from '../edit/editHistory'
-import { blockSettingsFor, parseSettingInput, settingTag, settingValue } from './blockSettings'
-import { runCreateStress } from './create/createStressPlugin'
+import { blueprintFixture, state } from '../../../tests/fixtures/blueprintFixture'
+import { nbt } from '../../domain/nbt'
+import type { Vec3 } from '../../domain/vec3'
+import { setBlockEntityTag } from '../../edit/editCommand'
+import { EditHistory } from '../../edit/editHistory'
+import type { BlockState } from '../../domain/blockState'
+import { parseSettingInput, settingTag, settingValue } from '../blockSettings'
+import { createBuiltinRegistry } from '../builtinPlugins'
+import { runCreateStress } from './createStressPlugin'
+
+// 画面と同じく、計算プラグインの一覧に聞く（#266）
+const registry = createBuiltinRegistry()
+const blockSettingsFor = (state: BlockState) => registry.blockSettings(state)
 
 describe('[ST-SETTING-SCROLL] blockSettingsFor（変えられる設定の説明）', () => {
   it('クリエイティブモーターと速度コントローラーは ScrollValue（−256〜256、初期値 16）', () => {
