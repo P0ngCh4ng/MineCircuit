@@ -30,8 +30,9 @@ export interface CalcModpack {
    */
   list?(dir: string): Promise<string[]>
   /**
-   * Create の処理のレシピ（jar と kubejs/data/。docs/create-throughput.md「レシピ」）。
-   * 処理時間の計算に使う。持たない実装もあるので省略できる（省略なら、レシピは分からないものとして計算する）
+   * Modpack のレシピ（jar・kubejs/data/・KubeJS のスクリプト。読み方の表にある種類だけ。docs/design.md「レシピ（Mod ごとの読み方）」）。
+   * プラグインは自分の使う種類を、種類の ID（`create:milling` など）で選ぶ。
+   * 持たない実装もあるので省略できる（省略なら、レシピは分からないものとして計算する）
    */
   recipeBook?(): Promise<RecipeBook>
 }
