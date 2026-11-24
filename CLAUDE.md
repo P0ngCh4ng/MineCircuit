@@ -91,6 +91,8 @@ tests/
 
 各層が import してよいのは、自分と、この一覧で自分より上にある層だけ（domain ← io ← edit ← analysis ← calc）。view と workers はその5つを使える。view は workers も使える。Vue・Three.js・Pinia は view の中だけ。破ると `npm run lint` が失敗する。
 
+Mod ごとのもの（`calc/create/`・`io/assets/create/` のような Mod の名前のフォルダ）は、その中に閉じる。共通の層から import してよいのは登録の場所（`calc/builtinPlugins.ts`・`io/assets/builtinPartialModels.ts`）だけで、ほかは計算プラグインや Mod ごとの表の口から使う（docs/design.md「Mod ごとのものを足す口」）。破ると `npm run lint` が失敗する。
+
 Tauri の API（`@tauri-apps/*`）を import してよいのは `src/io/tauri/` と `src/view/platform/` だけ。ブラウザ版とデスクトップ版のどちらで動いているかを調べるのも `view/platform/` だけにして、ほかの層は知らないままにする。
 
 ## 設計のルール
@@ -137,7 +139,7 @@ Tauri の API（`@tauri-apps/*`）を import してよいのは `src/io/tauri/` 
 - **正しい組み合わせは、利用者の jar で確かめる。** `assets/<namespace>/blockstates/<ID>.json` を見る。jar やその中身はリポジトリに入れない。
 - **向きは計算で確かめる。** 作った設計図を `runCreateStress` に通し、回転数と物の通り道（届く物・溜まる物・`links`）が考えたとおりか見てから渡す。ベルトの進む向きは回転数の符号と軸で決まり（docs/create-throughput.md「物の通り道」）、取り違えやすい。
 - **仮の入出力は .nbt に入らない。** 物の入口や仮の動力源を使う設計図を渡すときは、どのブロックに何を付けるかを書き添える。
-- **ゲームが描画のコードで描くブロックは、Modpack を読んでも箱になる。** チェストなどがそれにあたる。形を描けるのは、部品のモデルの表（`io/assets/partialModels.ts`）にあるものだけ。
+- **ゲームが描画のコードで描くブロックは、Modpack を読んでも箱になる。** チェストなどがそれにあたる。形を描けるのは、部品のモデルの表（Mod ごとの表。Create は `io/assets/create/createPartialModels.ts`）にあるものだけ。
 - **作った設計図はリポジトリに入れない。** 作業用のフォルダに書き出す。リポジトリに残すのは、作るコード（`tests/fixtures/` やテスト）だけ。
 
 ## コードの書き方

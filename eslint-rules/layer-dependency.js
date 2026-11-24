@@ -2,6 +2,7 @@
 // 依存は上の層から下の層への一方向だけ（CLAUDE.md「フォルダ構成」、docs/design.md「層と依存の向き」）。
 // 下の層から上の層を import したら止める。あわせて、view 以外で Vue / Three.js / Pinia を import したら止める。
 // Tauri の API（@tauri-apps/*）と src/io/tauri/ は、src/io/tauri/ と src/view/platform/ の中だけで使う（CLAUDE.md「フォルダ構成」）。
+// Mod ごとの場所（calc/create/ など）は、同じ Mod の場所の中と登録の場所からだけ使う（docs/design.md「Mod ごとのものを足す口」）。
 import path from 'node:path'
 
 // 下の層から順に並べる。各層は、自分と自分より前（下）の層だけを import してよい
@@ -28,6 +29,25 @@ const TAURI_DIRS = ['io/tauri', 'view/platform']
 
 // Tauri 用の実装（TauriFileSource など）を置くフォルダ。使ってよいのは TAURI_DIRS だけ
 const TAURI_IMPL_DIR = 'io/tauri'
+
+// Mod ごとの場所のフォルダ名（Mod の namespace）。どの層の中にあっても、このフォルダは Mod の場所とみなす
+const MOD_DIRS = ['create']
+
+// Mod の場所を import してよい登録の場所（src からの相対パス）
+const MOD_REGISTRATION_FILES = ['calc/builtinPlugins.ts', 'io/assets/builtinPartialModels.ts']
+
+/**
+ * file が入っている Mod の場所の名前の一覧（src からの相対パスのフォルダのうち MOD_DIRS にあるもの）
+ * @param {string} srcDir
+ * @param {string} file
+ * @returns {string[]}
+ */
+function modDirsOf(srcDir, file) {
+  const rel = path.relative(srcDir, file)
+  if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) return []
+  const dirs = rel.split(/[\\/]/).slice(0, -1)
+  return dirs.filter((d) => MOD_DIRS.includes(d))
+}
 
 /**
  * src からの相対パスの最初のフォルダ名を層として返す。層の外なら null
@@ -110,6 +130,8 @@ const rule = {
         '"{{spec}}" はここでは import できません。Tauri の API は src/io/tauri/ と src/view/platform/ の中だけで使います。',
       tauriImpl:
         'src/io/tauri/ はここでは import できません。Tauri 用の実装を選ぶのは src/view/platform/ だけです。',
+      modDir:
+        'Mod の場所（{{mod}}/）はここでは import できません。共通の層は計算プラグインや Mod ごとの表の口から使い、Mod の場所を足すのは登録の場所（{{registration}}）だけです。',
     },
   },
   create(context) {
@@ -118,6 +140,9 @@ const rule = {
     if (!isInside(srcDir, context.filename, '.')) return {}
     const fromLayer = layerOf(srcDir, context.filename)
     const tauriAllowed = canUseTauri(srcDir, context.filename)
+    const fromMods = modDirsOf(srcDir, context.filename)
+    const isTest = /\.test\.[cm]?[jt]s$/.test(context.filename)
+    const isRegistration = MOD_REGISTRATION_FILES.some((f) => path.resolve(srcDir, f) === path.resolve(context.filename))
 
     /** @param {import('estree').Node | null | undefined} source */
     function check(source) {
@@ -140,6 +165,15 @@ const rule = {
       if (isInside(srcDir, target, TAURI_IMPL_DIR) && !tauriAllowed) {
         context.report({ node: source, messageId: 'tauriImpl' })
         return
+      }
+
+      if (!isTest && !isRegistration) {
+        // 拡張子のない import 先（'./create/x'）は、最後の部分をファイル名とみなす
+        const mod = modDirsOf(srcDir, target).find((m) => !fromMods.includes(m))
+        if (mod) {
+          context.report({ node: source, messageId: 'modDir', data: { mod, registration: MOD_REGISTRATION_FILES.join('、') } })
+          return
+        }
       }
 
       if (fromLayer === null) return

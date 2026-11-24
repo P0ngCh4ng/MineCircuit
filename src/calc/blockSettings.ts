@@ -1,10 +1,9 @@
-// 計算に使うブロックの設定（クリエイティブモーターの回転数など）の説明。
-// どのブロックのどの生データ（nbt）の項目を画面で変えられるかを、Mod ごとの知識として計算の層に置く。
+// 計算に使うブロックの設定（クリエイティブモーターの回転数など）の説明の形と、入力の確かめ方。
+// どのブロックのどの生データ（nbt）の項目を画面で変えられるかは Mod ごとの知識なので、
+// 計算プラグインが CalcPlugin.blockSettings で答える（docs/design.md「Mod ごとのものを足す口」）。
 // 画面（view）はこの説明を表示し、変更を編集の操作（setBlockEntityTag）にするだけ。
 
-import type { BlockState } from '../domain/blockState'
 import { nbt, type NbtTag, type RawNbt } from '../domain/nbt'
-import { createBlockSettings } from './create/createBlockSettings'
 import { nbtNumber } from './nbtValues'
 import { resolved, type Resolved } from './provenance'
 
@@ -33,11 +32,6 @@ export interface BlockSettings {
    * ゲームがこの形を読めるかは未確認（#22 で確かめる）。
    */
   initialBlockEntity(): RawNbt
-}
-
-/** state のブロックで変えられる設定。なければ null */
-export function blockSettingsFor(state: BlockState): BlockSettings | null {
-  return createBlockSettings(state)
 }
 
 /** 今の値と出どころ。生データにあれば設計図、なければ内蔵の初期値 */

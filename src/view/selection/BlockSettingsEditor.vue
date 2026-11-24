@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // 選択中のブロックの「計算に使う設定」（#72）。クリエイティブモーターの回転数など。
-// どの項目を変えられるかは calc の blockSettingsFor が決める。この部品は表示と入力の確認だけを行い、
+// どの項目を変えられるかは計算プラグインが決める（placementRules の blockSettingsFor）。この部品は表示と入力の確認だけを行い、
 // 変更は編集の操作（setBlockEntityTag）として生データに書く（元に戻せる）。
 import { computed, reactive, watch } from 'vue'
-import { blockSettingsFor, parseSettingInput, settingTag, settingValue, type BlockSettingField } from '../../calc/blockSettings'
+import { parseSettingInput, settingTag, settingValue, type BlockSettingField } from '../../calc/blockSettings'
 import { PROVENANCE_LABELS } from '../../calc/provenance'
 import { setBlockEntityTag } from '../../edit/editCommand'
 import type { Vec3 } from '../../domain/vec3'
 import { useDocumentSession } from '../document/documentSession'
+import { blockSettingsFor } from '../edit/placementRules'
 
 const props = defineProps<{ pos: Vec3 }>()
 

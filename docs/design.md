@@ -428,8 +428,8 @@ function replaceCells(bp: Blueprint, cells: { pos: Vec3; after: CellValue }[], l
 - 新しく置いたブロックは `blockEntity: null`。計算では値の出どころの仕組みで初期値を使う
 - 回転では生データ（nbt）をそのまま引き継ぐ。ブロック状態の項目を直す操作（`setBlockProperty`）も同じ
 - 右パネルでブロック状態の値を選ぶときの候補（`edit/propertyChoices.ts`）。Modpack があれば、ブロック状態の定義から読んだ取りうる値（`propertyValueOptionsFor`）。なければ、よく使う項目だけ一般の値（`axis`：x・y・z、`facing`：6方向、`horizontal_facing`：水平の4方向、`true`・`false` の項目：その2つ）。どちらでも分からない項目は、文字を打って直す。今の値は候補になくても必ず入れる
-- 生データの項目を変える操作は、元の生データを書き換えず、写しを作って項目だけを差し替える。元に戻すと元の生データ（同じもの）を書き戻す。どのブロックのどの項目を変えられるか、生データがないときに何を入れるかは、Mod ごとの知識なので calc に置く（`calc/blockSettings.ts` の `blockSettingsFor`）。画面はそれを表示するだけ
-- ベルトをつなぐ（#248）：どのマスに何を置くか（つなげるか、区間のブロック状態と生データ）は Create の知識なので calc に置く（`calc/create/createBeltConnector.ts` の `planBeltConnection`。規則は docs/create-stress.md「ベルトをつなぐ」）。ベルトのツール（`view/tools/beltTool.ts`）がそれを `replaceCells` にして書き込む。`replaceCells` は before を今の中身から取り直し、どれかのマスが範囲の外なら何も変えない
+- 生データの項目を変える操作は、元の生データを書き換えず、写しを作って項目だけを差し替える。元に戻すと元の生データ（同じもの）を書き戻す。どのブロックのどの項目を変えられるか、生データがないときに何を入れるかは、Mod ごとの知識なので計算プラグインが答える（`CalcPlugin.blockSettings`。Create は `calc/create/createBlockSettings.ts`。形は `calc/blockSettings.ts`）。画面は計算プラグインの一覧（`PluginRegistry.blockSettings`）に聞いて表示するだけ
+- ベルトをつなぐ（#248）：どのマスに何を置くか（つなげるか、区間のブロック状態と生データ）は Create の知識なので calc に置く（`calc/create/createBeltConnector.ts` の `planBeltConnection`。規則は docs/create-stress.md「ベルトをつなぐ」）。Create の計算プラグインが「つなぐツール」（`CalcPlugin.connectTools`。下の「Mod ごとのものを足す口」）として出し、画面の共通のツール（`view/tools/connectTool.ts`）がそれを `replaceCells` にして書き込む。`replaceCells` は before を今の中身から取り直し、どれかのマスが範囲の外なら何も変えない
 - 置くツールで枠のすぐ外へ置くときは、そのマスが入るように広げる（`placeGrowing`、下の「設計図の大きさを変える（#191）」）。それより外は受け付けない
 
 ### 範囲の編集（#129）
@@ -759,6 +759,10 @@ interface CalcPlugin {
   // 置き方の補助（任意。3D で面をクリックしたとき）。クリックしたブロックと当たった点から、置く位置と状態を返す。
   // 使わないなら null（ふつうに面の隣に置く）。Create は歯車の補助（CogwheelBlockItem の helper と同じ）
   placementHelper?(bp: Blueprint, hit: { pos: Vec3; face: Direction; point: Vec3 }, state: BlockState): { pos: Vec3; state: BlockState } | null
+  // 画面から変えられる設定（任意。#266）。知らないブロックなら null。下の「Mod ごとのものを足す口」
+  blockSettings?(state: BlockState): BlockSettings | null
+  // つなぐツール（任意。#266）。ツールバーに足す。下の「Mod ごとのものを足す口」
+  readonly connectTools?: readonly ConnectToolDef[]
 }
 
 interface CalcContext {
@@ -792,8 +796,8 @@ type IssueSeverity = 'error' | 'warning' | 'info'   // 問題の重さ。省略�
 interface CalcRotation {
   pos: Vec3
   axis: 'x' | 'y' | 'z'
-  rpm: number          // 符号付き。正は軸の正の向きから見て反時計回り（Create と同じ）。過負荷なら止まる前の値
-  level: 'stopped' | 'slow' | 'medium' | 'fast'   // 速さの段階。境目はプラグインが決める（Create は設定の中速・高速）
+  rpm: number          // 符号付き。正は軸の正の向きから見て反時計回り（右手の法則）。過負荷なら止まる前の値。Mod の回転数の符号がこれと違えば、プラグインが直して入れる
+  level: 'stopped' | 'slow' | 'medium' | 'fast'   // 速さの段階。境目はプラグインが決める（Create の決め方は create-stress.md「結果の形」）
   overloaded: boolean  // 過負荷で止まっている
 }
 
@@ -802,6 +806,49 @@ class PluginRegistry {
   available(bp: Blueprint, pack: Modpack | null): CalcPlugin[]
 }
 ```
+
+### Mod ごとのものを足す口（#266）
+
+このアプリは工業Mod全般を扱う。Create は最初の対象であって前提ではない。Mod ごとの知識は、その Mod の場所（`calc/create/`、`io/assets/create/` のような Mod の namespace の名前のフォルダ）に閉じ、共通の層（domain・io・edit・analysis・calc の共通部分・view・workers）からは直接 import しない。共通の層は「口」（決まった形の関数や表）だけを知り、Mod ごとの中身はその口から足す。2つ目の計算プラグイン（spec.md「開発の順番」7）を、共通の層に手を入れずに足せるようにするため。
+
+Mod の場所を import してよいのは、Mod の場所の中と、次の登録の場所だけ。`npm run lint`（`eslint-rules/layer-dependency.js`）で調べる。テスト（`*.test.ts`、`tests/`）は調べない。
+
+| 登録の場所 | 足すもの |
+| --- | --- |
+| `calc/builtinPlugins.ts` | 内蔵の計算プラグイン（`BUILTIN_PLUGINS`） |
+| `io/assets/builtinPartialModels.ts` | 部品のモデルの表（`BUILTIN_PARTIAL_MODELS`）。io は calc を使えないので、計算プラグインとは別に io の中で登録する |
+
+口の一覧。どれも任意で、持たないプラグインは何も足さない。複数のプラグインが答えるものは、登録した順に聞き、最初に答えたものを使う。
+
+| 口 | 形 | 使う所 |
+| --- | --- | --- |
+| 置くときの向き・置けるか・置き方の補助・足りない状態・基本の部品・範囲の回転と反転 | `CalcPlugin` の `orientForPlacement` ほか（上） | `view/edit/placementRules.ts` が `PluginRegistry` に聞く |
+| 画面から変えられる設定 | `CalcPlugin.blockSettings(state)` → `BlockSettings \| null` | 右パネルの設定（`BlockSettingsEditor`）。`PluginRegistry.blockSettings` に聞く |
+| つなぐツール | `CalcPlugin.connectTools`（`ConnectToolDef[]`） | ツールバー。`view/tools/connectTool.ts` が共通の動きを持つ |
+| 部品のモデルの表 | `PartialModelTable`（ブロックの ID → 選び方） | `io/assets/partialModels.ts` が登録した表を引く（下の「部品のモデルの表」） |
+| 回転の色分け・力の流れ・物の流れ | `CalcResult` の `rotations`・`links`・`itemMoves` | 表示部分。Mod によらない形で渡す（`CalcRotation` の符号と段階は上） |
+
+**つなぐツール。** 2つのブロックを順にクリックして、その間を埋めるツール（Create のベルト）。Mod の規則（どこから始められるか、つなげるか、何を置くか）と文言はプラグインが持ち、クリックの受け取り・見本・書き込み（`replaceCells`）は画面の共通のツールが持つ。
+
+```ts
+interface ConnectToolDef {
+  readonly id: string                      // ツールの id。'belt'。内蔵のツールやほかのプラグインのものと重ねない
+  readonly label: string                   // 「ベルト」
+  readonly key: string | null              // 切り替えのキー（'L'）。内蔵のツールのキーと重なれば使わない
+  readonly description: string             // ボタンの説明
+  readonly icon: readonly string[]         // ボタンの絵（SVG の path。viewBox 0 0 20 20）
+  // 状態表示の文言（選び方・やめた・1本目を選んだ・つないだ）と、編集の操作の名前（元に戻すボタンに出る）
+  readonly messages: { pickStart: string; cancelled: string; first(pos: Vec3): string; done(count: number): string; command(count: number): string }
+  canStart(state: BlockState | null): boolean          // 1本目・2本目に選べるか（シャフトか）
+  // 1本目から2本目までに置くもの（並びは始めから終わり）。同じブロックなら null（やめる）、つなげなければ理由
+  plan(bp: Blueprint, first: Vec3, second: Vec3, options: { speedAt(pos: Vec3): number | null }): { cells: { pos: Vec3; after: CellValue }[] } | string | null
+}
+```
+
+- ツールバーには内蔵のツールのあとに、登録したプラグインのつなぐツールを足す。プラグインがなければ出ない。Modpack に Mod がないとき（`hasNamespace` が false）に隠すことは、まだしない（基本の部品の棚と同じく、Modpack がなくても Create のブロックを置けるため）。
+- `speedAt` は最後の計算の回転数。画面が計算の結果（`rotations`）から引いて渡す。
+
+**画面から変えられる設定。** 形（`BlockSettings`・`BlockSettingField`）と、入力の確かめ方・値の出どころ（`parseSettingInput`・`settingValue`）は共通（`calc/blockSettings.ts`）。どのブロックに何があるかだけを、プラグインが `blockSettings` で答える。
 
 ### 例：Createの応力プラグイン
 
@@ -1009,7 +1056,9 @@ flowchart LR
 - 形のないブロックの見た目は、液体の箱 → チェスト・シュルカーボックスの絵 → アイテムの絵の板 → particle の箱の順に選ぶ。
 - ベッド・旗・頭は、アイテムの絵もゲームの描画のコードで描く（親が `builtin/entity`）ので、板にできず particle の箱のまま。
 
-**部品のモデルの表。** Create のベルトやブレイズバーナーの頭は、blockstates のモデルが空（`belt/particle`）か籠だけで、ゲームでは描画のコード（BlockEntityRenderer）が状態に合わせて部品のモデル（partial model）を選んで描く。jar のファイルからは分からないので、選び方を表に書き写す（`io/assets/partialModels.ts`）。Mod 固有の知識をアプリに持たせる例外なので、入れるものを絞る。
+**部品のモデルの表。** Create のベルトやブレイズバーナーの頭は、blockstates のモデルが空（`belt/particle`）か籠だけで、ゲームでは描画のコード（BlockEntityRenderer）が状態に合わせて部品のモデル（partial model）を選んで描く。jar のファイルからは分からないので、選び方を表に書き写す。Mod 固有の知識をアプリに持たせる例外なので、入れるものを絞る。
+
+- 表は Mod ごとに分ける（`PartialModelTable`：ブロックの ID → 状態から部品の一覧を返す関数）。Create の表は `io/assets/create/createPartialModels.ts`。表の一覧は `io/assets/builtinPartialModels.ts` に登録し、`io/assets/partialModels.ts`（`partialModelsFor`）が引く。同じ ID が2つの表にあれば、先に登録したものを使う。上の「Mod ごとのものを足す口」
 
 - 表に書くのは「どの状態で、どの部品のモデルを、どの向きで重ねるか」だけ。モデルとテクスチャは利用者の jar から読む（アプリに入れない）。出典は README の「注記」。
 - `ModelResolver` は blockstates で選んだモデルのあとに、表の部品を重ねる。読めない部品は problems に書いて飛ばし、ほかの部分は描く。全部で描くものがなければ、これまでどおり null（箱）。
@@ -1064,7 +1113,7 @@ flowchart LR
 
 ```ts
 interface Tool {
-  readonly id: 'select' | 'measure' | 'network' | 'sameBlock' | 'probe' | 'port' | 'place' | 'erase' | 'pick' | 'belt'
+  readonly id: string   // 内蔵のツール（'select' | 'measure' | 'network' | 'sameBlock' | 'probe' | 'port' | 'place' | 'erase' | 'pick'）か、計算プラグインのつなぐツールの id（'belt'）
   onHover(target: PickTarget | null): void
   onClick(target: PickTarget, mods: { shift: boolean }): void
 }
