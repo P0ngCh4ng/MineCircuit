@@ -1,4 +1,4 @@
-// 規則の一覧（docs/verification.md「3. 規則の一覧」）。書類の規則 ID ごとに、出典と確かめた段階を持つ。
+// 規則の一覧（docs/create-verification.md「3. 規則の一覧」）。書類の規則 ID ごとに、出典と確かめた段階を持つ。
 // rules.test.ts が、書類の ID・テストの名前に出てくる ID・この一覧が一致することを調べる。
 // ソースのパスは Create の src/main/java/com/simibubi/create/ から。0.5.1（Fabric）と 6.0 で同じなら1つだけ書く。
 
@@ -14,7 +14,7 @@ export interface Rule {
 
 const STRESS = 'create-stress.md'
 const AB: readonly Stage[] = ['A', 'B']
-/** 実在の設計図で、ゲームが保存した回転数と計算が合った（docs/verification.md「実在の設計図で確かめる（C）」） */
+/** 実在の設計図で、ゲームが保存した回転数と計算が合った（docs/create-verification.md「実在の設計図で確かめる（C）」） */
 const ABC: readonly Stage[] = ['A', 'B', 'C']
 
 function stress(source: string, stages: readonly Stage[] = AB): Rule {

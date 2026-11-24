@@ -1,4 +1,4 @@
-// ブロックの一覧（docs/verification.md「1. ブロックの一覧」）を読む。
+// ブロックの一覧（docs/create-verification.md「1. ブロックの一覧」）を読む。
 // 一覧は scripts/extractBlockIds.mjs と scripts/extractCreateSource.mjs で、利用者の jar と Create のソースから作る。
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'

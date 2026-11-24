@@ -1,4 +1,4 @@
-// 回転・反転を、すべてのブロックの、プロパティのとりうる値で確かめる（docs/verification.md「2. 状態の組み合わせ」）。
+// 回転・反転を、すべてのブロックの、プロパティのとりうる値で確かめる（docs/create-verification.md「2. 状態の組み合わせ」）。
 // 期待値はコードの式をなぞらず、回転と反転の性質（4回で元に戻る、値の範囲を出ない、向きが変わる）で書く。
 import { describe, expect, it } from 'vitest'
 import type { BlockTransform, MirrorAxis, QuarterTurns } from '../../src/domain/blockTransform'

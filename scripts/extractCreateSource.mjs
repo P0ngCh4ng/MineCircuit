@@ -1,5 +1,5 @@
 // Create のソースから、ブロックごとのブロックエンティティ（種類・クラス・回るか）と応力の初期値を取り出し、
-// scripts/extractBlockIds.mjs が作ったブロックの一覧に書き足す（docs/verification.md「1. ブロックの一覧」）。
+// scripts/extractBlockIds.mjs が作ったブロックの一覧に書き足す（docs/create-verification.md「1. ブロックの一覧」）。
 // 取り出すのは名前と数値だけ。Create は MIT License。
 // 使い方：node scripts/extractCreateSource.mjs <Create のソースの根> <ブロックの一覧の .json> <出典の説明>
 // 例：node scripts/extractCreateSource.mjs ./Create tests/verification/blocks/create-6.0.10.json "Creators-of-Create/Create 7ff2760"

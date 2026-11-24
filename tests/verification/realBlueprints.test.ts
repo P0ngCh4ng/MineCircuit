@@ -1,4 +1,4 @@
-// 段階 C：実在の設計図を手元で計算に通す（docs/verification.md「実在の設計図で確かめる（C）」）。
+// 段階 C：実在の設計図を手元で計算に通す（docs/create-verification.md「実在の設計図で確かめる（C）」）。
 // 設計図と Modpack は利用者の PC にあるものを読むだけで、リポジトリには入れない。環境変数を渡したときだけ動く。
 //
 //   MINECIRCUIT_BLUEPRINTS  設計図（.nbt）のフォルダ。; で区切って複数。中のフォルダも探す
@@ -85,7 +85,7 @@ function problems(bp: Blueprint, result: CalcResult): string[] {
 /**
  * ゲームが生データに保存した回転数（Speed）と、計算の回転数を比べる。
  * 設計図の外から回されていたまとまり（計算では止まるのに、保存では回っているブロックがある）には、そのブロックに保存された回転数の
- * 仮の動力源を付けて計算し直し、ほかのブロックの回転数を比べる（docs/verification.md「実在の設計図で確かめる（C）」）。
+ * 仮の動力源を付けて計算し直し、ほかのブロックの回転数を比べる（docs/create-verification.md「実在の設計図で確かめる（C）」）。
  * 保存のあとで変えた設計図などでは違ってよいので、失敗にはしない
  */
 async function compareSavedSpeeds(bp: Blueprint, pack: CalcModpack | null, first: CalcResult): Promise<SavedSpeeds> {

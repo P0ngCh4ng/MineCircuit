@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 右パネルのプローブ（#31）。マウスの下（なければクリックした）ブロックの回転数・応力などを、値だけ一時的に出す。
+// 右パネルのプローブ（#31）。マウスの下（なければクリックした）ブロックの計算の値（プラグインが返すもの）を、値だけ一時的に出す。
 // 出どころ・ネットワーク・問題は、ブロックを選んで「選択中のブロック」の欄で見る（#158）。
 // クリックしたブロックのネットワークを強調していれば、その数と解除のボタンを出す。
 import { computed } from 'vue'
@@ -7,6 +7,7 @@ import { useDocumentSession } from '../document/documentSession'
 import { useCalcStore } from '../stores/calcStore'
 import { useProbeStore } from '../stores/probeStore'
 import { useToolStore } from '../stores/toolStore'
+import { calcValueWords } from './calcValueWords'
 import { formatPos } from './probeModel'
 
 const tools = useToolStore()
@@ -27,10 +28,11 @@ const blockId = computed(() => {
 const values = computed(() => probe.readings.flatMap((r) => r.values.map((item) => ({ pluginId: r.pluginId, item }))))
 
 const emptyText = computed(() => {
-  if (!calc.hasBlueprint) return '設計図を開くと、ブロックの回転数と応力を見られます。'
-  if (!probe.shownPos) return 'ブロックにマウスを重ねると、回転数と応力が出ます。クリックすると、つながったブロックを強調します。'
+  if (!calc.hasBlueprint) return '設計図を開くと、ブロックの計算の値を見られます。'
+  if (!probe.shownPos)
+    return `ブロックにマウスを重ねると、${calcValueWords(calc.probeValueLabels)}が出ます。クリックすると、つながったブロックを強調します。`
   if (calc.outcomes === null) return '計算が終わると値が出ます。'
-  if (probe.readings.length === 0) return 'このブロックには計算の値がありません。回転でつながるブロックではないか、計算できるプラグインがありません。'
+  if (probe.readings.length === 0) return 'このブロックには計算の値がありません。計算で扱うブロックではないか、計算できるプラグインがありません。'
   return null
 })
 </script>
@@ -53,7 +55,7 @@ const emptyText = computed(() => {
       <span v-if="probe.networkPositions">
         {{ formatPos(probe.probedPos) }} とつながった {{ probe.networkPositions.length }} ブロックを強調中
       </span>
-      <span v-else>{{ formatPos(probe.probedPos) }} は回転でつながるブロックではありません</span>
+      <span v-else>{{ formatPos(probe.probedPos) }} はつながりを計算するブロックではありません</span>
       <button type="button" data-action="clear-probe" @click="probe.clear()">強調を解除</button>
     </p>
   </section>

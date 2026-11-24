@@ -734,6 +734,7 @@ interface CalcResult {
   assumptions: { pos?: Vec3; message: string }[]          // 何を仮定して計算したか
   probes?: CalcProbe[]                                    // ブロックごとの値（プローブ）
   rotations?: CalcRotation[]                              // 回るブロックごとの回転（表示部分の色分け）
+  speedLevelNote?: string                                 // 速さの段階の境目の説明。回転の凡例に出す（#267）。Create は「中速・高速の境目は Create の設定（中速 30・高速 100 RPM）」
 }
 
 type IssueSeverity = 'error' | 'warning' | 'info'   // 問題の重さ。省略はエラー

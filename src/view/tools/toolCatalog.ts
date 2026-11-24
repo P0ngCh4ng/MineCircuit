@@ -19,7 +19,7 @@ export const TOOL_CATALOG: readonly ToolInfo[] = [
   { id: 'measure', label: '計測', key: 'M', description: '2つのブロックの距離を測る' },
   { id: 'network', label: 'ネットワーク', key: 'C', description: 'クリックしたブロックと、回転でつながったブロックを強調する' },
   { id: 'sameBlock', label: '同じブロック', key: 'S', description: '隣り合う同じ種類のブロックをまとめて強調する' },
-  { id: 'probe', label: 'プローブ', key: 'P', description: '回転数と応力を見る' },
+  { id: 'probe', label: 'プローブ', key: 'P', description: 'マウスの下のブロックの計算の値を見る' },
   { id: 'port', label: '仮の入出力', key: 'O', description: 'ブロックの面に仮の動力源や負荷を置く' },
   { id: 'place', label: '置く', key: 'B', description: 'ブロックを置く・置き換える。ドラッグで一直線に置く', groupStart: true },
   { id: 'erase', label: '消す', key: 'E', description: 'ブロックを消す' },

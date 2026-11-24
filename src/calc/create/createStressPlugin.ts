@@ -117,6 +117,7 @@ export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<
     assumptions: log.list(),
     probes: allProbes,
     rotations: rotations(graph, evaluation, values),
+    speedLevelNote: speedLevelNote(values),
     links: withItemPathLinks(flow.links, path.records),
     itemMoves: path.moves,
     sources: flow.sources,
@@ -301,6 +302,11 @@ function rotations(graph: KineticGraph, ev: KineticEvaluation, values: CreateVal
     result.push({ pos: [node.pos[0], node.pos[1], node.pos[2]], axis: node.axis, rpm, level, overloaded })
   })
   return result
+}
+
+/** 回転の凡例に出す、速さの段階の境目の説明（#267） */
+function speedLevelNote(values: CreateValueResolver): string {
+  return `中速・高速の境目は Create の設定（中速 ${formatNumber(values.mediumSpeed().value)}・高速 ${formatNumber(values.fastSpeed().value)} RPM）`
 }
 
 /** ブロックごとの値（プローブ用）。仮の入出力のノードは含めない */

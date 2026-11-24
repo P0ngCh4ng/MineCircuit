@@ -37,8 +37,9 @@ export interface CalcModpack {
 }
 
 /**
- * 計算の見方（#243。docs/create-stress.md「動かしたとき」）。
- * saved は保存された状態のまま、running は止まっている動力源を設計図の中身から動かしたものとして計算する
+ * 計算の見方（#243。docs/design.md「calc：計算プラグイン」の CalcContext）。
+ * saved は保存された状態のまま、running は止まっている動力源を設計図の中身から動かしたものとして計算する。
+ * 何を動かすかはプラグインが決める
  */
 export type CalcMode = 'saved' | 'running'
 
@@ -154,10 +155,12 @@ export interface CalcResult {
   readonly summary: readonly CalcSummaryItem[]
   readonly issues: readonly CalcIssue[]
   readonly assumptions: readonly CalcAssumption[]
-  /** ブロックごとの値（回転数・応力など）。プローブで使う。なければ省略 */
+  /** ブロックごとの値。プローブで使う。なければ省略 */
   readonly probes?: readonly CalcProbe[]
   /** 回るブロックごとの回転。表示部分の色分けで使う。なければ省略 */
   readonly rotations?: readonly CalcRotation[]
+  /** 速さの段階（SpeedLevel）の境目の説明。回転の凡例に出す（#267）。なければ省略 */
+  readonly speedLevelNote?: string
   /** 力や物が伝わるつながり。なければ省略 */
   readonly links?: readonly CalcLink[]
   /** 物の動き。なければ省略 */

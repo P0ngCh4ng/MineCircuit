@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 左パネルの「置くブロック」（#18、#71、#114）。docs/ui.md「編集」。
 // ブロックの絵（アイコン）を並べた棚から選ぶ。棚に並べるものは「Mod」の欄で選ぶ（「この設計図」と、Modpack を読んでいれば Mod ごと）。
-// 「ブロック」の欄で絞り込み、ID と状態（create:shaft[axis=y]）は Enter でそのまま使う。
+// 「ブロック」の欄で絞り込み、ID と状態（minecraft:oak_log[axis=y]）は Enter でそのまま使う。
 // スポイト（I）で表示中のブロックから取ることもできる。状態（向きなど）はブロック状態の定義（#27）から選ぶ。
 import { computed, ref, watch } from 'vue'
 import { BlockState } from '../../domain/blockState'
@@ -211,7 +211,7 @@ function onSubmit(): void {
   try {
     const state = parseBlockStateInput(input.value)
     if (!state) {
-      inputError.value = 'ID を入力してください。例：create:shaft[axis=y]'
+      inputError.value = 'ID を入力してください。例：minecraft:oak_log[axis=y]'
       return
     }
     use(state)
@@ -302,7 +302,7 @@ function onSubmit(): void {
           data-testid="brush-input"
           type="text"
           :list="content.pack ? undefined : 'brush-id-list'"
-          :placeholder="content.pack ? 'シャフト、create:shaft[axis=y]' : 'create:shaft[axis=y]'"
+          :placeholder="content.pack ? 'オークの原木、minecraft:oak_log[axis=y]' : 'minecraft:oak_log[axis=y]'"
           spellcheck="false"
           autocomplete="off"
           :aria-invalid="inputError !== null"

@@ -165,7 +165,8 @@ describe('プローブとネットのハイライト（Create の応力で）', 
     expect(tools.setTool('probe')).toBe(true)
     await flushPromises()
     expect(wrapper.find('[data-testid="probe-panel"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('ブロックにマウスを重ねると')
+    // 説明の文の値の名前は、プラグインが返した値の名前から作る（#267）
+    expect(wrapper.text()).toContain('ブロックにマウスを重ねると、回転数・供給などが出ます')
 
     tools.hover({ pos: [3, 0, 0], empty: false })
     await flushPromises()
@@ -195,7 +196,7 @@ describe('プローブとネットのハイライト（Create の応力で）', 
     tools.hover(null)
     await flushPromises()
     expect(wrapper.text()).toContain('このブロックには計算の値がありません')
-    expect(wrapper.text()).toContain('回転でつながるブロックではありません')
+    expect(wrapper.text()).toContain('つながりを計算するブロックではありません')
 
     await wrapper.find('[data-action="clear-probe"]').trigger('click')
     expect(probe.probedPos).toBeNull()

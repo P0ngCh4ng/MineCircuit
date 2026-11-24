@@ -9,7 +9,7 @@ export default mergeConfig(
     test: {
       include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
       environment: 'happy-dom',
-      // 計算の分岐の網羅率（docs/verification.md「4. コードの分岐」）。npm run coverage で測る
+      // 計算の分岐の網羅率（docs/create-verification.md「4. コードの分岐」）。npm run coverage で測る
       coverage: {
         provider: 'v8',
         include: ['src/calc/create/**/*.ts'],

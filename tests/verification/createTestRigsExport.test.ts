@@ -1,15 +1,15 @@
-// 試験台（tests/fixtures/testRigs.ts）を .nbt に書き出し、手順と期待値の表を作る（docs/verification.md「ゲームで測る（D）」）。
+// 試験台（tests/fixtures/create/testRigs.ts）を .nbt に書き出し、手順と期待値の表を作る（docs/create-verification.md「ゲームで測る（D）」）。
 // 環境変数を渡したときだけ動く。書き出し先はリポジトリの外にする。
 //
 //   MINECIRCUIT_RIGS_OUT  書き出すフォルダ。.nbt と「手順.md」を置く
 //   MINECIRCUIT_MODPACK   Modpack のフォルダ（任意）。渡すと、期待値をその Modpack の設定とレシピで計算する
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { describe, it } from 'vitest'
 import type { CalcModpack, CalcResult } from '../../src/calc/calcPlugin'
 import { runCreateStress } from '../../src/calc/create/createStressPlugin'
 import { ModpackLoader } from '../../src/io/modpack/modpackLoader'
-import { TEST_RIGS, type TestRig } from '../fixtures/testRigs'
+import { TEST_RIGS, type TestRig } from '../fixtures/create/testRigs'
 import { NodeFileSource } from './nodeFileSource'
 
 const OUT = process.env.MINECIRCUIT_RIGS_OUT ?? ''
@@ -45,7 +45,7 @@ describe.skipIf(!OUT)('試験台の書き出し', () => {
     let pack: CalcModpack | null = null
     if (MODPACK_DIR) pack = await new ModpackLoader(new NodeFileSource(MODPACK_DIR)).load()
     const sections = [
-      '# ゲームで測る試験台（Create Astral）',
+      `# ゲームで測る試験台（${MODPACK_DIR ? basename(MODPACK_DIR.replace(/[\\/]+$/, '')) : 'Modpack なし'}）`,
       '',
       '設計図（.nbt）を `schematics` フォルダに入れ、クリエイティブのワールドで置く。期待値は' +
         (MODPACK_DIR ? 'Modpack の設定とレシピで計算したもの。' : 'Create の内蔵の初期値で計算したもの（Modpack なし）。'),
