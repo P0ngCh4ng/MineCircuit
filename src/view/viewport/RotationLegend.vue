@@ -1,6 +1,10 @@
 <script setup lang="ts">
 // 表示部分の右下に出す「回転」の色の凡例（#117。docs/ui.md「回転の表示」）
+// 中速・高速の境目の説明は、計算プラグインが返したものを出す（#267）
+import { useCalcStore } from '../stores/calcStore'
 import { ROTATION_COLORS, ROTATION_LEGEND } from './rotationColors'
+
+const calc = useCalcStore()
 </script>
 
 <template>
@@ -9,7 +13,8 @@ import { ROTATION_COLORS, ROTATION_LEGEND } from './rotationColors'
       <span class="swatch" :style="{ background: ROTATION_COLORS[item.key] }" aria-hidden="true"></span>
       {{ item.label }}
     </span>
-    <span class="note">中速・高速の境目は Create の設定（初期値 30・100 RPM）。数値はプローブで見る</span>
+    <span v-for="note in calc.speedLevelNotes" :key="note" class="note" data-testid="speed-level-note">{{ note }}</span>
+    <span class="note">数値はプローブで見る</span>
   </div>
 </template>
 

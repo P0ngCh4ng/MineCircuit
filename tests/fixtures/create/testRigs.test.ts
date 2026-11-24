@@ -1,8 +1,8 @@
 // 試験台（testRigs.ts）が、ゲームに置ける形になっていて、計算が考えたとおりに回り・流れることを調べる。
 import { describe, expect, it } from 'vitest'
-import { runCreateStress } from '../../src/calc/create/createStressPlugin'
-import { OUT_OF_RANGE_NOTE } from '../../src/calc/create/kineticGraph'
-import { CATALOGS } from '../verification/createBlockCatalog'
+import { runCreateStress } from '../../../src/calc/create/createStressPlugin'
+import { OUT_OF_RANGE_NOTE } from '../../../src/calc/create/kineticGraph'
+import { CATALOGS } from '../../verification/createBlockCatalog'
 import { TEST_RIGS } from './testRigs'
 
 const catalog = CATALOGS.find((c) => c.name === 'create-0.5.1-fabric')!

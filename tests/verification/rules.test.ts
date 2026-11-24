@@ -1,4 +1,4 @@
-// 規則の一覧（docs/verification.md「3. 規則の一覧」）の抜けを調べる。
+// 規則の一覧（docs/create-verification.md「3. 規則の一覧」）の抜けを調べる。
 // 書類に書いた規則 ID、テストの名前に出てくる ID、rules.ts の一覧の三つが一致すること。
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'

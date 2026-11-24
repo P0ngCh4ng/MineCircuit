@@ -1,4 +1,4 @@
-// 数値の一覧（docs/verification.md「5. 数値」）の抜けを調べる。
+// 数値の一覧（docs/create-verification.md「5. 数値」）の抜けを調べる。
 // src/calc/create/ のテスト以外のファイルの数を構文木から集め、numbers.ts の一覧と比べる。
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'

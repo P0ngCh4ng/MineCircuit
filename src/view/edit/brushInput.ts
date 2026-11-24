@@ -9,7 +9,7 @@ import { isAir } from '../../io/readers/nbtBlueprintReader'
 export class BrushInputError extends Error {}
 
 /**
- * 入力した文字をブロック状態にする。形は "create:shaft" か "create:shaft[axis=y,waterlogged=false]"。
+ * 入力した文字をブロック状態にする。形は "minecraft:oak_log" か "minecraft:oak_stairs[facing=north,half=bottom]"。
  * namespace を省くと minecraft。空なら null。形が正しくなければ BrushInputError。
  */
 export function parseBlockStateInput(text: string): BlockState | null {
@@ -23,12 +23,12 @@ export function parseBlockStateInput(text: string): BlockState | null {
   } catch (e) {
     throw new BrushInputError(e instanceof Error ? e.message : String(e))
   }
-  if (/\s/.test(idText)) throw new BrushInputError(`ID "${idText}" に空白があります。"create:shaft" の形で入力してください。`)
+  if (/\s/.test(idText)) throw new BrushInputError(`ID "${idText}" に空白があります。"minecraft:oak_log" の形で入力してください。`)
 
   const properties: Record<string, string> = {}
   if (open >= 0) {
     if (!s.endsWith(']')) {
-      throw new BrushInputError('"[" に対応する "]" がありません。"create:shaft[axis=y]" の形で入力してください。')
+      throw new BrushInputError('"[" に対応する "]" がありません。"minecraft:oak_log[axis=y]" の形で入力してください。')
     }
     const body = s.slice(open + 1, -1).trim()
     for (const part of body === '' ? [] : body.split(',')) {

@@ -221,11 +221,14 @@ describe('Create の応力プラグイン', () => {
     // west 向きのモーターは符号が反転する
     expect(at('0,0,4')).toMatchObject({ rpm: -128, level: 'fast' })
     expect(at('0,0,6')).toMatchObject({ axis: 'y', rpm: 0, level: 'stopped', overloaded: false })
+    // 凡例に出す境目の説明（#267）
+    expect(result.speedLevelNote).toBe('中速・高速の境目は Create の設定（中速 30・高速 100 RPM）')
 
     // 設定で容量を小さくすると過負荷：回転数は止まる前の値、overloaded を立てる
     const pack = fakePack({ 'saves/World/serverconfig/create-server.toml': TOML })
     const over = await runCreateStress(pressLine(), { pack, ports: [] })
     expect(over.rotations?.find((r) => r.pos.join() === '1,0,0')).toMatchObject({ rpm: 16, overloaded: true })
+    expect(over.speedLevelNote).toContain('中速 40')
   })
 
   it('設置の規則に合わない歯車を、問題に出す', async () => {

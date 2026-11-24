@@ -1,15 +1,15 @@
-// ゲームで測るための試験台（docs/verification.md「ゲームで測る（D）」）。
-// 設計図はここでコードから作り、利用者に渡す .nbt は tests/verification/testRigsExport.test.ts が作業用のフォルダに書き出す。
+// ゲームで測るための試験台（docs/create-verification.md「ゲームで測る（D）」）。
+// 設計図はここでコードから作り、利用者に渡す .nbt は tests/verification/createTestRigsExport.test.ts が作業用のフォルダに書き出す。
 // リポジトリには .nbt を入れない。どれも Create Astral（Create 0.5.1 Fabric、1.18.2）向け。
 // ブロック状態は、ゲームが保存するのと同じ項目をすべて書く（Create Astral の説明画面の設計図のパレットで確かめた）。
 
-import type { CalcResult } from '../../src/calc/calcPlugin'
-import { planBeltConnection } from '../../src/calc/create/createBeltConnector'
-import { CREATE_STRESS_PLUGIN_ID, ITEM_INPUT_PORT_KIND } from '../../src/calc/create/kineticGraph'
-import type { VirtualPort } from '../../src/calc/virtualPort'
-import { nbt, type RawNbt } from '../../src/domain/nbt'
-import type { Vec3 } from '../../src/domain/vec3'
-import { blueprintFixture, type BlueprintFixture } from './blueprintFixture'
+import type { CalcResult } from '../../../src/calc/calcPlugin'
+import { planBeltConnection } from '../../../src/calc/create/createBeltConnector'
+import { CREATE_STRESS_PLUGIN_ID, ITEM_INPUT_PORT_KIND } from '../../../src/calc/create/kineticGraph'
+import type { VirtualPort } from '../../../src/calc/virtualPort'
+import { nbt, type RawNbt } from '../../../src/domain/nbt'
+import type { Vec3 } from '../../../src/domain/vec3'
+import { blueprintFixture, type BlueprintFixture } from '../blueprintFixture'
 
 export interface RigWatch {
   readonly pos: Vec3

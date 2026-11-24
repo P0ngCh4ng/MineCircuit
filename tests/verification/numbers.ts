@@ -1,4 +1,4 @@
-// 数値の一覧（docs/verification.md「5. 数値」）。src/calc/create/ のテスト以外のファイルにある数を、
+// 数値の一覧（docs/create-verification.md「5. 数値」）。src/calc/create/ のテスト以外のファイルにある数を、
 // それを含む宣言（`ファイル名#宣言の名前`）ごとに、種類で分けて持つ。0・1・配列の添字は数えない。
 // numbers.test.ts が、コードの数とこの一覧が一致することを調べる。
 

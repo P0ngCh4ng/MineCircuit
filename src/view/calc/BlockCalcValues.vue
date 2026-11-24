@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // 選択中のブロックの計算の値（#158）。docs/ui.md「右パネル」。
-// 回転数・応力など（出どころの印つき）、属するネットワーク、そのブロックの問題を出す。
+// プラグインが返す値（出どころの印つき）、属するネットワーク、そのブロックの問題を出す。
 import { computed } from 'vue'
 import { PROVENANCE_LABELS } from '../../calc/provenance'
 import type { Vec3 } from '../../domain/vec3'
 import { useCalcStore } from '../stores/calcStore'
 import { useProbeStore } from '../stores/probeStore'
+import { calcValueWords } from './calcValueWords'
 import { issuesAt, networkRowsAt, probeAt } from './probeModel'
 import { SEVERITY_LABELS } from './severityLabels'
 
@@ -19,7 +20,7 @@ const networks = computed(() => networkRowsAt(calc.outcomes, props.pos))
 const issues = computed(() => issuesAt(calc.outcomes, props.pos))
 
 const emptyText = computed(() => {
-  if (calc.outcomes === null) return '計算が終わると、回転数や応力が出ます。'
+  if (calc.outcomes === null) return `計算が終わると、${calcValueWords(calc.probeValueLabels)}が出ます。`
   if (readings.value.length === 0 && issues.value.length === 0) return 'このブロックには計算の値がありません。'
   return null
 })

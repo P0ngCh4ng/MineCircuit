@@ -138,6 +138,25 @@ export const useCalcStore = defineStore('calc', () => {
     (outcomes.value ?? []).flatMap((o) => (o.status === 'ok' ? (o.result.rotations ?? []) : [])),
   )
 
+  /** 速さの段階の境目の説明（プラグインごと、重なりなし）。回転の凡例に出す（#267） */
+  const speedLevelNotes = computed<readonly string[]>(() => {
+    const notes = new Set<string>()
+    for (const o of outcomes.value ?? []) {
+      if (o.status === 'ok' && o.result.speedLevelNote) notes.add(o.result.speedLevelNote)
+    }
+    return [...notes]
+  })
+
+  /** プラグインがブロックごとに返す値の名前（「回転数」「応力」など。出てきた順、重なりなし）。画面の説明の文に使う（#267） */
+  const probeValueLabels = computed<readonly string[]>(() => {
+    const labels = new Set<string>()
+    for (const o of outcomes.value ?? []) {
+      if (o.status !== 'ok') continue
+      for (const p of o.result.probes ?? []) for (const v of p.values) labels.add(v.label)
+    }
+    return [...labels]
+  })
+
   /** 物の動き（すべてのプラグインの分）。表示部分の「物の流れ」で使う */
   const itemMoves = computed<readonly CalcItemMove[]>(() =>
     (outcomes.value ?? []).flatMap((o) => (o.status === 'ok' ? (o.result.itemMoves ?? []) : [])),
@@ -153,6 +172,8 @@ export const useCalcStore = defineStore('calc', () => {
     issuePositions,
     issueCounts,
     rotations,
+    speedLevelNotes,
+    probeValueLabels,
     itemMoves,
     setBackend,
     attach,

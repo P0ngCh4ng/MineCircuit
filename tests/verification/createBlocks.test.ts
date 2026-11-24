@@ -1,4 +1,4 @@
-// ブロックの一覧と計算のコードを突き合わせて、抜けを調べる（docs/verification.md）。
+// ブロックの一覧と計算のコードを突き合わせて、抜けを調べる（docs/create-verification.md）。
 // 抜けが見つかったら、直すか、下の「分かっている抜け」に理由を書いて載せる。直したら一覧から消す（消さないと失敗する）。
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
