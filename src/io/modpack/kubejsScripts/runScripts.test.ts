@@ -5,7 +5,7 @@ import type { ScriptRunInput } from './scriptTypes'
 
 const wheat: ProcessingRecipe = {
   id: 'create:milling/wheat',
-  type: 'milling',
+  type: 'create:milling',
   items: ['minecraft:wheat'],
   tags: [],
   duration: 150,
@@ -13,7 +13,7 @@ const wheat: ProcessingRecipe = {
 }
 const ironOre: ProcessingRecipe = {
   id: 'create:crushing/iron_ore',
-  type: 'crushing',
+  type: 'create:crushing',
   items: [],
   tags: ['c:ores/iron'],
   duration: 250,
@@ -52,7 +52,7 @@ describe('runKubeJsScripts（1.18 の書き方）', () => {
     expect(out.summary).toMatchObject({ files: 1, added: 2, removed: 0, replaced: 0, errors: [], failed: null })
     expect(byId(out, 'kubejs:script/recipes/milling/1')).toEqual({
       id: 'kubejs:script/recipes/milling/1',
-      type: 'milling',
+      type: 'create:milling',
       items: ['minecraft:rooted_dirt'],
       tags: [],
       duration: 70,
@@ -78,16 +78,16 @@ describe('runKubeJsScripts（1.18 の書き方）', () => {
     })
     expect(byId(out, 'pack:copper')).toEqual({
       id: 'pack:copper',
-      type: 'smelting',
+      type: 'minecraft:smelting',
       items: ['minecraft:raw_copper'],
       tags: [],
       duration: 0,
       results: [{ item: 'minecraft:copper_ingot', count: 1, chance: 1 }],
     })
-    expect(byId(out, 'pack:iron')).toMatchObject({ type: 'blasting', tags: ['c:raw_materials/iron'], results: [{ item: 'minecraft:iron_ingot', count: 2, chance: 1 }] })
-    expect(byId(out, 'pack:beef')).toMatchObject({ type: 'smoking', items: ['minecraft:beef'] })
-    expect(byId(out, 'pack:wash')).toMatchObject({ type: 'splashing', results: [{ item: 'minecraft:clay_ball', count: 1, chance: 0.5 }] })
-    expect(byId(out, 'pack:haunt')).toMatchObject({ type: 'haunting', items: ['minecraft:sand'] })
+    expect(byId(out, 'pack:iron')).toMatchObject({ type: 'minecraft:blasting', tags: ['c:raw_materials/iron'], results: [{ item: 'minecraft:iron_ingot', count: 2, chance: 1 }] })
+    expect(byId(out, 'pack:beef')).toMatchObject({ type: 'minecraft:smoking', items: ['minecraft:beef'] })
+    expect(byId(out, 'pack:wash')).toMatchObject({ type: 'create:splashing', results: [{ item: 'minecraft:clay_ball', count: 1, chance: 0.5 }] })
+    expect(byId(out, 'pack:haunt')).toMatchObject({ type: 'create:haunting', items: ['minecraft:sand'] })
     expect(byId(out, 'pack:glass')).toBeUndefined()
     // 焚き火の料理は読まない
     expect(out.recipes.some((r) => r.items.includes('minecraft:cod'))).toBe(false)
@@ -106,7 +106,7 @@ describe('runKubeJsScripts（1.18 の書き方）', () => {
       `,
     })
     expect(byId(out, 'pack:torch')).toMatchObject({
-      type: 'crafting_shaped',
+      type: 'minecraft:crafting_shaped',
       results: [{ item: 'minecraft:torch', count: 4 }],
       grid: {
         rows: [[{ items: ['minecraft:coal', 'minecraft:charcoal'], tags: [] }], [{ items: [], tags: ['c:rods/wooden'] }]],
@@ -120,10 +120,10 @@ describe('runKubeJsScripts（1.18 の書き方）', () => {
       { items: ['minecraft:red_mushroom'], tags: [] },
       { items: ['minecraft:brown_mushroom', 'minecraft:crimson_fungus'], tags: [] },
     ])
-    expect(byId(out, 'pack:wheel')).toMatchObject({ type: 'mechanical_crafting', items: ['create:andesite_alloy'] })
+    expect(byId(out, 'pack:wheel')).toMatchObject({ type: 'create:mechanical_crafting', items: ['create:andesite_alloy'] })
     expect(byId(out, 'pack:wheel')?.grid?.rows?.[0]).toEqual([null, { items: ['create:andesite_alloy'], tags: [] }, null])
-    expect(byId(out, 'pack:diamond')).toMatchObject({ type: 'mechanical_crafting' })
-    expect(byId(out, 'pack:stick')).toMatchObject({ type: 'crafting_shapeless' })
+    expect(byId(out, 'pack:diamond')).toMatchObject({ type: 'create:mechanical_crafting' })
+    expect(byId(out, 'pack:stick')).toMatchObject({ type: 'minecraft:crafting_shapeless' })
   })
 
   it('[TP-KJS-RECIPE-CALLS] スパウト・ドレインのレシピ（#235）：create.filling は液体の材料（Fluid.of・{ fluidTag }）も持つ', () => {
@@ -137,15 +137,33 @@ describe('runKubeJsScripts（1.18 の書き方）', () => {
       `,
     })
     expect(byId(out, 'pack:honey')).toMatchObject({
-      type: 'filling',
+      type: 'create:filling',
       items: ['minecraft:glass_bottle'],
       results: [{ item: 'minecraft:honey_bottle' }],
       fluids: ['create:honey'],
       fluidTags: [],
     })
     expect(byId(out, 'pack:xp')).toMatchObject({ fluids: [], fluidTags: ['c:experience'] })
-    expect(byId(out, 'pack:drain')).toMatchObject({ type: 'emptying', items: ['minecraft:honey_bottle'], results: [{ item: 'minecraft:glass_bottle' }] })
+    expect(byId(out, 'pack:drain')).toMatchObject({ type: 'create:emptying', items: ['minecraft:honey_bottle'], results: [{ item: 'minecraft:glass_bottle' }] })
     expect(byId(out, 'pack:drain')?.fluids).toBeUndefined()
+  })
+
+  it('[TP-KJS-FILTERS] 条件の type に namespace がなければ minecraft: を探し、なければ読み方の表のほかの Mod を探す（#265）', () => {
+    const out = run({
+      'types.js': `
+        onEvent('recipes', event => {
+          event.smelting('minecraft:glass', 'minecraft:sand').id('pack:glass')
+          event.remove({ type: 'smelting' })
+          event.remove({ type: 'milling' })
+          event.remove({ type: 'unknownType' })
+          event.remove({ type: /crush/ })
+        })
+      `,
+    })
+    expect(byId(out, 'pack:glass')).toBeUndefined()
+    expect(out.recipes.map((r) => r.id)).toEqual([])
+    const kept = run({ 'keep.js': `onEvent('recipes', event => { event.remove({ type: 'other:milling' }); event.remove({ type: 'deploying' }) })` })
+    expect(kept.recipes.map((r) => r.id)).toEqual(['create:milling/wheat', 'create:crushing/iron_ore'])
   })
 
   it('[TP-KJS-FILTERS][TP-KJS-REPLACE] remove・replaceInput（2つの引数の古い書き方も）を当てはめる', () => {
@@ -188,7 +206,7 @@ describe('runKubeJsScripts（1.19 からの書き方）', () => {
     })
     expect(byId(out, 'pack:gravel')).toEqual({
       id: 'pack:gravel',
-      type: 'crushing',
+      type: 'create:crushing',
       items: [],
       tags: ['c:cobblestones'],
       // processingTime を呼ばなければ、kubejs-create と同じく 100
@@ -198,9 +216,9 @@ describe('runKubeJsScripts（1.19 からの書き方）', () => {
         { item: 'minecraft:flint', count: 1, chance: 0.25 },
       ],
     })
-    expect(out.recipes.find((r) => r.type === 'mixing')).toMatchObject({ items: ['minecraft:sand'], duration: 40 })
+    expect(out.recipes.find((r) => r.type === 'create:mixing')).toMatchObject({ items: ['minecraft:sand'], duration: 40 })
     // 作業台のレシピは、パターンとキーがそろっていれば足す（メカニカルクラフター。#235）
-    expect(out.recipes.find((r) => r.type === 'crafting_shaped')).toMatchObject({ items: ['minecraft:oak_planks'], results: [{ item: 'minecraft:stick' }] })
+    expect(out.recipes.find((r) => r.type === 'minecraft:crafting_shaped')).toMatchObject({ items: ['minecraft:oak_planks'], results: [{ item: 'minecraft:stick' }] })
     expect(out.itemTags['c:cobblestones'].values).toEqual(['minecraft:cobblestone'])
     expect(out.itemTags['c:x']).toBeUndefined()
     expect(out.summary).toMatchObject({ added: 3, unsupported: [], errors: [] })
@@ -211,7 +229,7 @@ describe('runKubeJsScripts（1.19 からの書き方）', () => {
       'constants.js': `const mB = 81`,
       'mix.js': `ServerEvents.recipes(e => { e.recipes.create.mixing('minecraft:clay', 'minecraft:sand').processingTime(mB) })`,
     })
-    expect(out.recipes.find((r) => r.type === 'mixing')?.duration).toBe(81)
+    expect(out.recipes.find((r) => r.type === 'create:mixing')?.duration).toBe(81)
   })
 
   it('[TP-KJS-FOR-EACH] forEachRecipe・findRecipes は、読む種類のレシピだけを条件で選んで渡す', () => {

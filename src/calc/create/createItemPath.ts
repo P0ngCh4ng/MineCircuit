@@ -8,7 +8,8 @@ import type { Blueprint } from '../../domain/blueprint'
 import { DIRECTIONS, directionVector, isDirection, oppositeDirection, type Direction } from '../../domain/direction'
 import type { NbtCompound } from '../../domain/nbt'
 import { addVec3, equalsVec3, type Vec3 } from '../../domain/vec3'
-import type { ProcessingRecipeType, RecipeBook } from '../../io/modpack/recipes'
+import type { RecipeBook } from '../../io/modpack/recipes'
+import { recipeKind, type CreateRecipeKind } from './createRecipeTypes'
 import type { AssumptionLog } from '../assumptionLog'
 import type { CalcIssue, CalcItemMove, CalcSummaryItem } from '../calcPlugin'
 import { nbtBoolean, nbtCompound, nbtNumber, nbtPos, nbtString } from '../nbtValues'
@@ -86,7 +87,7 @@ export interface ItemOutput {
 
 /** 機械で使ったレシピ */
 export interface AppliedRecipe {
-  readonly type: ProcessingRecipeType
+  readonly type: CreateRecipeKind
   /** 材料（届いた物） */
   readonly input: string
   readonly choice: RecipeChoice
@@ -109,7 +110,7 @@ export interface ItemPathRecord {
   /** 機械が1分に処理できる数。機械でなければ null */
   capacityPerMinute: number | null
   /** 処理する機械の種類（律速の機械の名前に使う）。機械でなければ null */
-  machine: ProcessingRecipeType | null
+  machine: CreateRecipeKind | null
   /** 処理できる数の出どころ（レシピの処理時間の出どころ）。機械でなければ null */
   capacitySource: Provenance | null
   /** レシピで処理した数（個/秒）の合計。処理できる数で頭打ちにするのに使う */
@@ -870,7 +871,8 @@ class ItemTracer {
     const kept = outs.filter((o) => o.rate > EPSILON)
     const input = [...new Set(match.items)].sort().map((item) => `${item} ×${match.items.filter((x) => x === item).length}`).join('、')
     rec.recipes.push({
-      type: recipe.type,
+      // 並びのレシピは作業台かメカニカルクラフターの種類
+      type: recipeKind(recipe.type) ?? 'mechanical_crafting',
       input,
       choice: {
         duration: resolved(cycle, 'builtin', `クラフター ${group.longest} 台の道、速さ ${s}`),
@@ -1122,7 +1124,7 @@ class ItemTracer {
     this.arrive(pos, flow, from, carry)
     const mpos = addVec3(pos, [0, 2, 0])
     const mid = this.env.bp.get(mpos)?.id.toString()
-    const type: ProcessingRecipeType | null =
+    const type: CreateRecipeKind | null =
       mid === 'create:mechanical_mixer' ? 'mixing' : mid === 'create:mechanical_press' ? 'compacting' : null
     if (type === null) {
       // 処理する機械がなければ、ただの入れ物
@@ -1428,7 +1430,7 @@ class ItemTracer {
    */
   private process(
     pos: Vec3,
-    type: ProcessingRecipeType,
+    type: CreateRecipeKind,
     flow: Flow,
     machine: string,
     rpm: number,
@@ -1559,7 +1561,7 @@ class ItemTracer {
       this.env.log.add('KubeJS のスクリプトがレシピを変えているが、スクリプトのレシピは読めないので、物の通り道に入れていない')
     }
     const item = flow.item
-    let type: ProcessingRecipeType = kind === 'blasting' ? 'smelting' : kind
+    let type: CreateRecipeKind = kind === 'blasting' ? 'smelting' : kind
     let choice = chooseRecipe(type, [item], book)
     let burn = false
     if (kind === 'blasting') {

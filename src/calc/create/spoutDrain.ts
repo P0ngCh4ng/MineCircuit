@@ -6,7 +6,8 @@ import type { Blueprint } from '../../domain/blueprint'
 import { DIRECTIONS, directionVector, isDirection, oppositeDirection, type Direction } from '../../domain/direction'
 import type { NbtCompound, RawNbt } from '../../domain/nbt'
 import { addVec3, type Vec3 } from '../../domain/vec3'
-import type { ProcessingRecipe, ProcessingRecipeType, RecipeBook } from '../../io/modpack/recipes'
+import type { ProcessingRecipe, RecipeBook } from '../../io/modpack/recipes'
+import { recipeTypeId, recipesOfKind, type CreateRecipeKind } from './createRecipeTypes'
 import { nbtCompound, nbtPos, nbtString } from '../nbtValues'
 import { resolved } from '../provenance'
 import { recipeAccepts, type RecipeChoice } from './createThroughput'
@@ -164,7 +165,7 @@ export function fluidAccepts(recipe: ProcessingRecipe, fluid: string): boolean {
 
 /** 液体を入れる・抜く処理1回分 */
 export interface FluidProcess {
-  readonly type: ProcessingRecipeType
+  readonly type: CreateRecipeKind
   readonly choice: RecipeChoice
   /** できる物（レシピのもの、または Create の決まりで作ったもの） */
   readonly recipe: ProcessingRecipe
@@ -204,7 +205,7 @@ function fromRecipes(
 function generic(type: 'filling' | 'emptying', item: string, result: string, rule: string, assumption: string | null): FluidProcess {
   const recipe: ProcessingRecipe = {
     id: `Create の決まり（${rule}）`,
-    type,
+    type: recipeTypeId(type),
     items: [item],
     tags: [],
     duration: FILLING_TICKS,
@@ -227,7 +228,7 @@ function generic(type: 'filling' | 'emptying', item: string, result: string, rul
 /** スパウトで液体を入れた物（TP-SPOUT）。入れられなければ null */
 export function fillItem(item: string, fluid: string, book: RecipeBook | null): FluidProcess | null {
   const f = stillFluid(fluid)
-  const recipes = (book?.recipes ?? []).filter((r) => r.type === 'filling' && recipeAccepts(r, item, book) && fluidAccepts(r, f))
+  const recipes = recipesOfKind(book, 'filling').filter((r) => recipeAccepts(r, item, book) && fluidAccepts(r, f))
   const fromRecipe = fromRecipes('filling', recipes, item, 'スパウト')
   if (fromRecipe) return fromRecipe
   if (item === 'minecraft:bucket') {
@@ -245,7 +246,7 @@ const POTIONS = new Set(['minecraft:potion', 'minecraft:splash_potion', 'minecra
 /** アイテムドレインで液体を抜いた物（TP-ITEM-DRAIN）。抜けなければ null */
 export function emptyItem(item: string, book: RecipeBook | null): FluidProcess | null {
   if (POTIONS.has(item)) return generic('emptying', item, 'minecraft:glass_bottle', 'ポーションを抜く', null)
-  const recipes = (book?.recipes ?? []).filter((r) => r.type === 'emptying' && recipeAccepts(r, item, book))
+  const recipes = recipesOfKind(book, 'emptying').filter((r) => recipeAccepts(r, item, book))
   const fromRecipe = fromRecipes('emptying', recipes, item, 'アイテムドレイン')
   if (fromRecipe) return fromRecipe
   if (item.endsWith('_bucket') && item !== 'minecraft:bucket' && item !== 'minecraft:powder_snow_bucket') {

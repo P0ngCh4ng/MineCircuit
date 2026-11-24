@@ -322,7 +322,7 @@ describe('ModpackLoader（KubeJS のレシピ）', () => {
     ])
     const pack = await new ModpackLoader(source).load()
     const book = await pack.recipeBook()
-    expect(book.recipes).toMatchObject([{ id: 'kubejs:milling/wheat', type: 'milling', items: ['minecraft:wheat'], tags: [], duration: 150 }])
+    expect(book.recipes).toMatchObject([{ id: 'kubejs:milling/wheat', type: 'create:milling', items: ['minecraft:wheat'], tags: [], duration: 150 }])
     expect(book.scriptsChangeRecipes).toBe(true)
     expect(pack.problems).toEqual([])
   })

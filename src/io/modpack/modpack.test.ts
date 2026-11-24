@@ -7,7 +7,7 @@ import { MemoryFileSource } from '../memoryFileSource'
 import type { ProcessingRecipe } from './recipes'
 
 function recipe(id: string, duration: number): ProcessingRecipe {
-  return { id, type: 'milling', items: ['minecraft:wheat'], tags: [], duration, results: [] }
+  return { id, type: 'create:milling', items: ['minecraft:wheat'], tags: [], duration, results: [] }
 }
 
 function summary(jar: string, partial: Partial<JarSummary>): JarSummary {
@@ -79,7 +79,7 @@ describe('Modpack', () => {
   it('[TP-RECIPE-SOURCES] Minecraft 本体の jar のレシピ（扇風機の料理のレシピ。#235）も使い、同じ ID なら Mod の jar を優先する', async () => {
     const cooking = (id: string, result: string): ProcessingRecipe => ({
       id,
-      type: 'smelting',
+      type: 'minecraft:smelting',
       items: ['minecraft:raw_copper'],
       tags: [],
       duration: 0,

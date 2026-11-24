@@ -72,7 +72,7 @@ describe('flowLinks（#207）', () => {
       recipes: [
         {
           id: 'create:mixing/andesite_alloy',
-          type: 'mixing' as const,
+          type: 'create:mixing',
           items: ['minecraft:andesite'],
           tags: [],
           duration: 0,

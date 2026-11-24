@@ -30,11 +30,12 @@ import {
 } from './createThroughput'
 import { readCreateServerConfig } from './createConfig'
 import { runCreateStress } from './createStressPlugin'
+import { recipeTypeId, type CreateRecipeKind } from './createRecipeTypes'
 import { CreateValueResolver } from './createValueResolver'
 
-const recipe = (id: string, type: ProcessingRecipe['type'], items: string[], duration: number): ProcessingRecipe => ({
+const recipe = (id: string, type: CreateRecipeKind, items: string[], duration: number): ProcessingRecipe => ({
   id,
-  type,
+  type: recipeTypeId(type),
   items,
   tags: [],
   duration,

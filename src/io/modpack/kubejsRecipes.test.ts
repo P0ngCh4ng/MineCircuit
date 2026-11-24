@@ -21,9 +21,9 @@ describe('readKubeJsRecipes', () => {
     ])
     const result = await readKubeJsRecipes(source)
     expect(result.recipes).toMatchObject([
-      { id: 'createastral:milling/grain', type: 'milling', items: ['minecraft:wheat'], tags: [], duration: 120 },
-      { id: 'createastral:smelt', type: 'smelting', items: ['a:b'], results: [{ item: 'a:c', count: 1, chance: 1 }] },
-      { id: 'pack:deep/a/b/cut', type: 'cutting', items: [], tags: ['minecraft:logs'], duration: 0 },
+      { id: 'createastral:milling/grain', type: 'create:milling', items: ['minecraft:wheat'], tags: [], duration: 120 },
+      { id: 'createastral:smelt', type: 'minecraft:smelting', items: ['a:b'], results: [{ item: 'a:c', count: 1, chance: 1 }] },
+      { id: 'pack:deep/a/b/cut', type: 'create:cutting', items: [], tags: ['minecraft:logs'], duration: 0 },
     ])
     expect(result.problems).toEqual([])
     expect(result.scriptsChangeRecipes).toBe(false)

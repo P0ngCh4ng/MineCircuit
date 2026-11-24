@@ -1,7 +1,7 @@
 // スクリプトの中の物の書き方（`"3x minecraft:stone"`、`Item.of(…).withChance(…)` など）を、レシピのデータに直す。
 // docs/create-throughput.md「KubeJS のスクリプトのレシピ」。
 
-import type { RecipeResult } from '../recipes'
+import type { RecipeResult } from '../recipes/recipeFormat'
 import { isSvalInternalName } from './svalNames'
 
 /**
@@ -94,6 +94,13 @@ export function parseItemString(text: string): ScriptItem | null {
   const m = /^(\d+)\s*x\s+(.+)$/i.exec(t)
   if (m) return new ScriptItem(withNamespace(m[2]), Math.max(1, Number.parseInt(m[1], 10)))
   return new ScriptItem(withNamespace(t))
+}
+
+/** `Item.of(id, count?)`。読めなければ空気 */
+export function itemOf(id: unknown, count?: unknown): ScriptItem {
+  const base = id instanceof ScriptItem ? id : typeof id === 'string' ? parseItemString(id) : (toScriptItems(id)[0] ?? null)
+  if (!base) return new ScriptItem('minecraft:air')
+  return typeof count === 'number' ? base.withCount(count) : base
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {

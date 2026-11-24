@@ -5,7 +5,7 @@ import { FileNotFoundError, isDirectoryEntry, type FileSource } from '../fileSou
 import { parseLenientJson } from './jarScanner'
 import { ITEM_TAG_PATH, mergeItemTagFile, readItemTagFile, type ItemTagFiles } from './itemTags'
 import { KUBEJS_DIR } from './kubejs'
-import { RECIPE_PATH, readProcessingRecipe, type ProcessingRecipe } from './recipes'
+import { RECIPE_PATH, readRecipe, type ProcessingRecipe } from './recipes'
 
 export const KUBEJS_DATA_DIR = `${KUBEJS_DIR}/data`
 export const KUBEJS_SERVER_DIR = `${KUBEJS_DIR}/server_scripts`
@@ -66,7 +66,7 @@ export async function readKubeJsRecipes(source: FileSource): Promise<KubeJsRecip
     }
     const m = RECIPE_PATH.exec(relative)
     if (!m) return
-    const recipe = readProcessingRecipe(`${m[1]}:${m[2]}`, parseLenientJson(decoder.decode(await source.read(path))))
+    const recipe = readRecipe(`${m[1]}:${m[2]}`, parseLenientJson(decoder.decode(await source.read(path))))
     if (recipe) recipes.push(recipe)
   })
   await visit(KUBEJS_SERVER_DIR, 0, async (path) => {

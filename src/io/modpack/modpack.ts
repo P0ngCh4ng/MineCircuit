@@ -164,7 +164,7 @@ export class Modpack {
     ]
   }
 
-  /** Create の処理のレシピ（jar と kubejs/data/ のもの）、アイテムのタグと、スクリプトがレシピを変えているか */
+  /** レシピ（jar と kubejs/data/ と KubeJS のスクリプトのもの。読み方の表にある種類だけ）、アイテムのタグと、スクリプトがレシピを変えているか */
   recipeBook(): Promise<RecipeBook> {
     return Promise.resolve(this.recipes)
   }
