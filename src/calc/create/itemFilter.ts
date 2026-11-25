@@ -53,7 +53,12 @@ function listFilter(filter: NbtCompound): { items: NbtCompound[]; blacklist: boo
   if (tag) {
     const inv = nbtCompound(tag, 'Items')
     const list = inv?.value.get('Items')
-    if (list?.type === 'list') for (const e of list.value) if (e.type === 'compound') items.push(e)
+    if (list?.type === 'list') {
+      for (const e of list.value) {
+        /* v8 ignore else -- NBT のリストの要素は同じ型で、ゲームは物の一覧を compound のリストで書く */
+        if (e.type === 'compound') items.push(e)
+      }
+    }
     return { items, blacklist: nbtBoolean(tag, 'Blacklist') ?? false }
   }
   const components = nbtCompound(filter, 'components')
@@ -61,8 +66,10 @@ function listFilter(filter: NbtCompound): { items: NbtCompound[]; blacklist: boo
     const list = components.value.get(FILTER_ITEMS)
     if (list?.type === 'list') {
       for (const e of list.value) {
+        /* v8 ignore if -- NBT のリストの要素は同じ型で、ゲームは filter_items を compound のリストで書く */
         if (e.type !== 'compound') continue
         const stack = nbtCompound(e, 'item')
+        /* v8 ignore else -- ゲームは filter_items の要素に必ず item を書く */
         if (stack) items.push(stack)
       }
     }

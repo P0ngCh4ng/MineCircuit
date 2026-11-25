@@ -91,7 +91,11 @@ export function fanCatalyst(state: BlockState | null): FanProcessingKind | null 
   if (id === 'minecraft:water' || p.waterlogged === 'true') return 'splashing'
   if (id === 'minecraft:soul_fire') return 'haunting'
   if (id === 'minecraft:soul_campfire') return p.lit === 'false' ? null : 'haunting'
-  if (id === 'create:lit_blaze_burner') return p.flame_type === 'soul' ? 'haunting' : p.flame_type === 'regular' || p.flame_type === undefined ? 'smoking' : null
+  if (id === 'create:lit_blaze_burner') {
+    if (p.flame_type === 'soul') return 'haunting'
+    /* v8 ignore next -- ゲームは flame_type に regular か soul を必ず残すので、ここは regular だけが来る */
+    return p.flame_type === 'regular' || p.flame_type === undefined ? 'smoking' : null
+  }
   if (id === 'minecraft:fire') return 'smoking'
   if (id === 'minecraft:campfire') return p.lit === 'false' ? null : 'smoking'
   if (id === 'create:blaze_burner') {
@@ -111,7 +115,7 @@ function flowThrough(state: BlockState | null, air: Direction): 'pass' | 'into' 
   if (!state) return 'pass'
   const id = state.id.toString()
   if (NO_COLLISION.has(id) || FAN_TRANSPARENT.has(id)) return 'pass'
-  const path = id.split(':')[1] ?? ''
+  const path = state.id.path
   if (id.startsWith('minecraft:') && (path.endsWith('_fence') || path.endsWith('_leaves'))) return 'pass'
   if (/^minecraft:(waxed_)?(exposed_|weathered_|oxidized_)?copper_grate$/.test(id)) return 'pass'
   if (id === 'create:andesite_funnel' || id === 'create:brass_funnel') {
@@ -138,6 +142,7 @@ export function findFanCurrents(bp: Blueprint, rpmAt: (pos: Vec3) => number | nu
     region.forEachBlock((x, y, z, state) => {
       if (state.id.toString() !== 'create:encased_fan') return
       const facing = state.properties.facing
+      /* v8 ignore else -- ゲームは扇風機に必ず facing を残す */
       if (facing && isDirection(facing)) fans.push({ pos: [x + ox, y + oy, z + oz], facing })
     })
   })

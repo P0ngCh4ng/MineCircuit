@@ -138,6 +138,7 @@ function runningSpeeds(graph: KineticGraph, ev: KineticEvaluation): (pos: Vec3) 
     const tooSlow = node.minSpeed > 0 && Math.abs(r.speed) < node.minSpeed
     speeds.set(node.pos.join(','), stopped || tooSlow ? 0 : r.speed)
   })
+  /* v8 ignore next -- 物の通り道と扇風機の風が回転数を聞くのは回るブロックの位置だけ。ゲームはその向きのプロパティを必ず残すので、どれもノードになる */
   return (pos) => speeds.get(pos.join(',')) ?? null
 }
 
@@ -146,6 +147,7 @@ function withItemPath(list: CalcProbe[], records: readonly ItemPathRecord[]): Ca
   const result = [...list]
   for (const record of records) {
     const values = itemPathValues(record)
+    /* v8 ignore if -- 物の通り道の記録は、届く物・レシピ・溜まる物・メモのどれかを必ず持つ */
     if (values.length === 0) continue
     const i = result.findIndex((p) => p.pos.join() === record.pos.join())
     if (i < 0) {
@@ -254,6 +256,7 @@ function summarize(graph: KineticGraph, ev: KineticEvaluation, settingSource: Pr
   for (const net of ev.networks) {
     const blocks = net.nodes.filter((i) => graph.nodes[i]!.portId === null)
     // 仮の入出力だけのネットワークはない（つなぐ先のブロックと同じネットワークになる）が、念のため除く
+    /* v8 ignore if -- 仮の入出力は、つなぐ先のブロックと同じネットワークに入る */
     if (blocks.length === 0) continue
     if (net.overloaded) overloaded++
     else if (net.maxSpeed === 0) stopped++

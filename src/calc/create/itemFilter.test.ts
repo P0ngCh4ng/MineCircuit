@@ -81,3 +81,36 @@ describe('フィルター（#253）', () => {
     expect(testFilter(inList, 'minecraft:stone')).toEqual({ pass: true, unknown: 'create:attribute_filter' })
   })
 })
+
+describe('フィルターの読み方の抜け', () => {
+  it('中の物の一覧がないリストフィルターは、中が空のときと同じ（create:filter だけを通す）', () => {
+    // 1.18.2：tag はあるが Items がない
+    const noItems = stack('create:filter', nbt.compound({ RespectNBT: nbt.byte(0) }))
+    expect(testFilter(noItems, 'minecraft:stone')).toEqual({ pass: false, unknown: null })
+    // 1.21.1：tag も components もない
+    const bare = nbt.compound({ id: nbt.string('create:filter'), count: nbt.int(1) })
+    expect(testFilter(bare, 'minecraft:stone').pass).toBe(false)
+    expect(testFilter(bare, 'create:filter').pass).toBe(true)
+    // 1.21.1：components に create:filter_items がない
+    const named = nbt.compound({
+      id: nbt.string('create:filter'),
+      count: nbt.int(1),
+      components: nbt.compound({ 'minecraft:custom_name': nbt.string('"stone"') }),
+    })
+    expect(testFilter(named, 'minecraft:stone').pass).toBe(false)
+  })
+
+  it('1.21.1 で create:filter_items_blacklist がなければ、通す一覧として読む', () => {
+    const filter = nbt.compound({
+      id: nbt.string('create:filter'),
+      count: nbt.int(1),
+      components: nbt.compound({
+        'create:filter_items': nbt.list('compound', [
+          nbt.compound({ slot: nbt.int(0), item: nbt.compound({ id: nbt.string('minecraft:stone'), count: nbt.int(1) }) }),
+        ]),
+      }),
+    })
+    expect(testFilter(filter, 'minecraft:stone').pass).toBe(true)
+    expect(testFilter(filter, 'minecraft:dirt').pass).toBe(false)
+  })
+})

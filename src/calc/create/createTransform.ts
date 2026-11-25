@@ -16,8 +16,12 @@ type Props = Record<string, string>
 const NO_TURN = { translate: [0, 0, 0], pivot: [0, 0, 0] } as const
 
 function flip(props: Props, name: string): void {
-  if (props[name] === 'true') props[name] = 'false'
-  else if (props[name] === 'false') props[name] = 'true'
+  if (props[name] === 'true') {
+    props[name] = 'false'
+    return
+  }
+  /* v8 ignore else -- ゲームはこのプロパティに true・false のほかを残さない */
+  if (props[name] === 'false') props[name] = 'true'
 }
 
 function swapParts(props: Props, name = 'part'): void {
@@ -57,6 +61,7 @@ function mirrorCreate(id: string, before: Props, props: Props, m: Exclude<Mirror
       m === 'x'
         ? { window_ne: 'window_nw', window_nw: 'window_ne', window_se: 'window_sw', window_sw: 'window_se' }
         : { window_ne: 'window_se', window_se: 'window_ne', window_nw: 'window_sw', window_sw: 'window_nw' }
+    /* v8 ignore next -- ゲームが残す窓は4つの向き（window_ne など）だけ */
     props.shape = table[window] ?? window
   }
   // コントローラーレールの backwards（ControllerRailBlock.mirror。z の反転は Mirror.LEFT_RIGHT）
@@ -81,6 +86,7 @@ function rotateCreate(id: string, before: Props, props: Props, turns: QuarterTur
     flip(props, 'axis_along_first')
   }
   if (odd && before.horizontal_axis !== undefined) {
+    /* v8 ignore next -- ゲームは horizontal_axis に x・z のほかを残さない */
     props.horizontal_axis = before.horizontal_axis === 'x' ? 'z' : before.horizontal_axis === 'z' ? 'x' : before.horizontal_axis
   }
   // 鋸を上下に向けたときの flipped（SawBlock.rotate）
@@ -99,6 +105,7 @@ function rotateCreate(id: string, before: Props, props: Props, turns: QuarterTur
   // 液体タンクの窓
   if (before.shape?.startsWith('window_')) {
     let shape = before.shape
+    /* v8 ignore next -- ゲームが残す窓は4つの向き（window_ne など）だけ */
     for (let i = 0; i < turns; i++) shape = WINDOW_TURN[shape] ?? shape
     props.shape = shape
   }
@@ -119,6 +126,7 @@ function isChainDrive(id: string): boolean {
 function rotateChainDrive(before: Props, props: Props, turns: QuarterTurns): void {
   const t: BlockTransform = { ...NO_TURN, quarterTurns: turns, mirror: 'none' }
   const connection = axisOf(transformVector(t, unitOf(chainConnectionAxis(before))))
+  /* v8 ignore next -- ゲームはチェーンドライブに必ず axis を残す */
   const normal = axisOf(transformVector(t, unitOf((before.axis ?? 'y') as 'x' | 'y' | 'z')))
   if (connection.negative) swapParts(props)
   props.axis = normal.axis
@@ -155,6 +163,7 @@ function moveSticky(before: Props, props: Props, t: BlockTransform): void {
       const u = directionVector(d)
       return u[0] === v[0] && u[1] === v[1] && u[2] === v[2]
     })
+    /* v8 ignore next -- 6つの向きの単位ベクトルを回しても、6つの向きのどれかになる */
     props[`sticky_${next ?? dir}`] = before[k]!
   }
 }
@@ -183,8 +192,7 @@ export function transformCreateState(state: BlockState, t: BlockTransform): Bloc
 }
 
 // 位置の値（1.20.5 からの int 配列 [x, y, z]、それより前の compound {X, Y, Z}）を読む・同じ形で書く
-function readPos(tag: NbtTag | undefined): Vec3 | null {
-  if (!tag) return null
+function readPos(tag: NbtTag): Vec3 | null {
   if (tag.type === 'intArray' && tag.value.length === 3) return [tag.value[0]!, tag.value[1]!, tag.value[2]!]
   if (tag.type === 'compound') {
     const xyz = (['X', 'Y', 'Z'] as const).map((k) => tag.value.get(k))
@@ -195,6 +203,7 @@ function readPos(tag: NbtTag | undefined): Vec3 | null {
 
 function writePos(like: NbtTag, v: Vec3): NbtTag {
   if (like.type === 'intArray') return { type: 'intArray', value: Int32Array.from(v) }
+  /* v8 ignore if -- 書き戻すのは readPos が読めた位置（int 配列か compound）だけ */
   if (like.type !== 'compound') return like
   const value = new Map(like.value)
   ;(['X', 'Y', 'Z'] as const).forEach((k, i) => value.set(k, { type: 'int', value: v[i]! }))

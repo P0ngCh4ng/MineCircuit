@@ -195,7 +195,8 @@ function trimRows(rows: readonly (readonly (CraftingIngredient | null)[])[]): (C
 
 /** 決まった並びが、形のあるレシピに合うか */
 function matchesShaped(recipe: ProcessingRecipe, grid: Map<string, string>, book: RecipeBook): boolean {
-  const rows = trimRows(recipe.grid?.rows ?? [])
+  // 呼ぶ側が、grid.rows のあるレシピだけを渡す
+  const rows = trimRows(recipe.grid!.rows!)
   const coords = [...grid.keys()].map((k) => k.split(',').map(Number) as [number, number])
   if (rows.length === 0 || coords.length === 0) return false
   const minX = Math.min(...coords.map((c) => c[0]))

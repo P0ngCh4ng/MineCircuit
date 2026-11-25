@@ -15,8 +15,8 @@ export default mergeConfig(
         include: ['src/calc/create/**/*.ts'],
         exclude: ['src/calc/create/**/*.test.ts'],
         reporter: ['text-summary', 'json-summary', 'html'],
-        // 下がらないようにする下限。目標は分岐 100%（#237）。上がったら、この値も上げる
-        thresholds: { statements: 98, branches: 95, functions: 99, lines: 99 },
+        // 下限は 100%。通せない分岐は、その場所に理由付きの印を付ける（docs/create-verification.md「4. コードの分岐」）
+        thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
       },
     },
   }),

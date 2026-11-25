@@ -44,7 +44,8 @@ export function throwPath(start: Vec3, end: Vec3, vy: number): MotionPath {
   if (heights[heights.length - 1] !== end[1]) heights.push(end[1])
   const ticks = heights.length - 1
   const path = heights.map((h, i) => {
-    const u = ticks > 0 ? i / ticks : 1
+    // 落ちる動きは少なくとも 1 tick 数えるので、ticks は 1 以上
+    const u = i / ticks
     return {
       t: i / TICKS_PER_SECOND,
       pos: [start[0] + (end[0] - start[0]) * u, h, start[2] + (end[2] - start[2]) * u] as Vec3,

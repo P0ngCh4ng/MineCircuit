@@ -192,6 +192,7 @@ export function runningSteamEngines(bp: Blueprint, log: AssumptionLog): Map<stri
       let facing: Direction = engine.dir
       if (directionAxis(facing) === 'y') {
         const f = engine.state.properties.facing
+        /* v8 ignore else -- ゲームは床・天井の蒸気エンジンにも必ず横の facing を残す */
         if (f && isDirection(f)) facing = f
       }
       const a = efficiency === 0 || axis === 'y' ? 1 : isPositive(facing) ? 1 : -1
@@ -258,6 +259,7 @@ function doubles(tag: NbtTag | undefined): number[] | null {
     if (v.type !== 'double' && v.type !== 'float') return null
     out.push(v.value)
   }
+  /* v8 ignore next -- ゲームは接着剤の pos・From・To を3つの数で残す */
   return out.length === 3 ? out : null
 }
 
@@ -344,6 +346,7 @@ export function runningWindmillSpeed(
 ): number | null {
   if (nbtBoolean(be, 'Running') === true && nbtNumber(be, 'LastGenerated') !== null) return null
   const facing = state.properties.facing
+  /* v8 ignore if -- ゲームは風車の軸受に必ず facing を残す */
   if (!facing || !isDirection(facing)) return 0
   const sails = countSails(bp, pos, facing, glue)
   log.add(`風車は組み立てて回しているとみなした（帆 ${sails} 枚）`, pos)

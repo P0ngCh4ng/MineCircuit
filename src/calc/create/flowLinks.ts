@@ -42,9 +42,13 @@ export function flowLinks(bp: Blueprint, graph: KineticGraph, rpmAt: (pos: Vec3)
     if (moves.has(key)) return moves.get(key)!
     const state = bp.get(pos)
     const facing = state?.properties.facing
+    /* v8 ignore next -- 回転数はグラフのどのノードにもあり、ベルトの区間はノードなので null にならない */
     const rpm = rpmAt(pos) ?? 0
+    /* v8 ignore if -- ベルトの辺は、水平の facing を持つベルトの区間どうしにだけ張ってある */
     if (!state || !facing || !isDirection(facing) || directionAxis(facing) === 'y') return null
-    if (!BELT_SLOPES.has(state.properties.slope ?? 'horizontal') || rpm === 0) return null
+    /* v8 ignore next -- ゲームはベルトに必ず slope を残す */
+    const slope = state.properties.slope ?? 'horizontal'
+    if (!BELT_SLOPES.has(slope) || rpm === 0) return null
     // 進む向きは facing の軸の上で、(回転数 < 0) XOR (軸が X) なら負の向き
     const axis = directionAxis(facing)
     const [positive, negative] = axisDirections(axis)
