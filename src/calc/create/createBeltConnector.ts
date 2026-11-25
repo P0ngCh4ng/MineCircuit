@@ -77,7 +77,7 @@ export interface BeltConnectOptions {
 export function beltShaftAxis(state: BlockState | null): Axis | null {
   if (!state || state.id.toString() !== SHAFT_ID) return null
   const axis = state.properties['axis']
-  return axis === 'x' || axis === 'y' || axis === 'z' ? axis : null
+  return axis === 'x' || axis === 'y' || axis === 'z' ? axis : /* v8 ignore next -- ゲームはシャフトに必ず axis を残す */ null
 }
 
 function pick(axis: Axis, v: Vec3): number {
@@ -104,7 +104,11 @@ function passable(state: BlockState | null, axis: Axis): boolean {
 function hasWaterSource(state: BlockState | null): boolean {
   if (!state) return false
   const id = state.id.toString()
-  if (id === 'minecraft:water') return (state.properties['level'] ?? '0') === '0'
+  if (id === 'minecraft:water') {
+    /* v8 ignore next -- ゲームは水に必ず level を残す */
+    const level = state.properties['level'] ?? '0'
+    return level === '0'
+  }
   if (id === 'minecraft:bubble_column') return true
   return state.properties['waterlogged'] === 'true'
 }

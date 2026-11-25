@@ -504,6 +504,7 @@ export function kineticThroughputValues(pos: Vec3, id: string, rotation: Kinetic
       const recipe = recipeFor('cutting', itemsFor([pos], () => findItemIds(be), env), pos, env)
       return [stackItem(label, sawTicks(rpm, recipe.duration.value, 1)!, sawTicks(rpm, recipe.duration.value, STACK_SIZE)!, rotation.source, recipe), recipeItem(recipe)]
     }
+    /* v8 ignore next -- KINETIC_THROUGHPUT_BLOCKS のブロックは、どれも上の case にある */
     default:
       return []
   }

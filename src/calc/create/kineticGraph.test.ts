@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { blueprintFixture, state, type BlueprintFixture } from '../../../tests/fixtures/blueprintFixture'
-import type { Blueprint } from '../../domain/blueprint'
+import { BlockVolume } from '../../domain/blockVolume'
+import { Blueprint } from '../../domain/blueprint'
 import { nbt } from '../../domain/nbt'
 import type { Vec3 } from '../../domain/vec3'
 import { AssumptionLog } from '../assumptionLog'
@@ -917,5 +918,104 @@ describe('KineticGraph：規則の分かれ道（#237）', () => {
     // 回転数 0 の仮の動力源は容量も 0
     const still = evaluate(bp, [{ id: 'in', pos: [0, 0, 0], pluginId: 'create-stress', kind: 'rotation-source', params: { capacity: 100 } }])
     expect(still.network([0, 0, 0]).capacity).toBe(0)
+  })
+})
+
+describe('KineticGraph：分かれ道（#237）', () => {
+  it('[ST-STEP-NODES] リージョンが重なる位置は、先のリージョンのブロックだけを使う（先が空気でも）', () => {
+    // a は x = 0〜2（x = 2 は空気）、b は x = 1〜3。b の x = 1・2 は a に隠れる
+    const a = new BlockVolume({
+      name: 'a',
+      size: [3, 1, 1],
+      palette: [state('create:creative_motor', { facing: 'east' }), state('create:shaft', { axis: 'x' })],
+      cells: Int32Array.of(0, 1, -1),
+      blockEntities: new Map([[0, scroll(16)]]),
+    })
+    const b = new BlockVolume({
+      name: 'b',
+      size: [3, 1, 1],
+      offset: [1, 0, 0],
+      palette: [state('create:cogwheel', { axis: 'y' }), state('create:shaft', { axis: 'x' })],
+      cells: Int32Array.of(0, 1, 1),
+    })
+    const r = evaluate(new Blueprint('two', 'litematic', 0, [a, b]))
+    expect(r.graph.nodes.map((n) => [n.pos.join(), n.id])).toEqual([
+      ['0,0,0', 'create:creative_motor'],
+      ['1,0,0', 'create:shaft'],
+      ['3,0,0', 'create:shaft'],
+    ])
+    expect(r.speed([1, 0, 0])).toBe(16)
+    // x = 2 は空気なので、x = 3 のシャフトには伝わらない
+    expect(r.speed([3, 0, 0])).toBe(0)
+  })
+
+  it('[ST-LINK-CHAIN] 隣り合うチェーンドライブでも、つながる側でなければ回さない（end の先の start）', () => {
+    // 軸が y のチェーンドライブは z の向きにつながる。end の南の start は別の列
+    const bp = blueprintFixture()
+      .place([0, 0, 0], 'create:creative_motor', { facing: 'up' }, scroll(16))
+      .place([0, 1, 0], 'create:encased_chain_drive', { axis: 'y', axis_along_first: 'false', part: 'end' })
+      .place([0, 1, 1], 'create:encased_chain_drive', { axis: 'y', axis_along_first: 'false', part: 'start' })
+      .toBlueprint()
+    const r = evaluate(bp)
+    expect(r.speed([0, 1, 0])).toBe(16)
+    expect(r.speed([0, 1, 1])).toBe(0)
+    expect(r.graph.edges.filter((e) => e.kind === 'chain')).toEqual([])
+  })
+
+  it('[ST-LINK-CHAIN-CONVEYOR] つながる先が設計図の中でチェーンコンベアでなければ、つながない。Connections がなければ相手はない', () => {
+    const bp = blueprintFixture({ size: [3, 2, 2] })
+      .place([0, 0, 0], 'create:creative_motor', { facing: 'up' }, scroll(16))
+      .place([0, 1, 0], 'create:chain_conveyor', {}, nbt.compound({ Connections: nbt.list('intArray', [nbt.intArray([2, 0, 0])]) }))
+      .place([2, 1, 0], 'create:shaft', { axis: 'y' })
+      .place([0, 0, 1], 'create:creative_motor', { facing: 'up' }, scroll(32))
+      .place([0, 1, 1], 'create:chain_conveyor', {})
+      .toBlueprint()
+    const r = evaluate(bp)
+    expect(r.speed([0, 1, 0])).toBe(16)
+    expect(r.speed([2, 1, 0])).toBe(0)
+    expect(r.speed([0, 1, 1])).toBe(32)
+    expect(r.graph.edges.filter((e) => e.kind === 'chain-conveyor')).toEqual([])
+    expect(r.log.list().some((a) => a.message.startsWith('チェーンコンベアのつながる先が設計図の外'))).toBe(false)
+  })
+
+  it('[ST-STEP-CONTROLLER] 2つのコントローラーが同じまとまりの大歯車を回すときも、両方の入力を先に解く', () => {
+    // 大歯車 2 つはシャフトでつながる。コントローラーの入力はそれぞれクリエイティブモーターで回す
+    const bp = blueprintFixture()
+      .place([0, 0, 0], 'create:creative_motor', { facing: 'east' }, scroll(16))
+      .place([1, 0, 0], 'create:rotation_speed_controller', { axis: 'x' }, scroll(32))
+      .place([1, 1, 0], 'create:large_cogwheel', { axis: 'z' })
+      .place([1, 1, 1], 'create:shaft', { axis: 'z' })
+      .place([1, 1, 2], 'create:large_cogwheel', { axis: 'z' })
+      .place([1, 0, 2], 'create:rotation_speed_controller', { axis: 'x' }, scroll(32))
+      .place([0, 0, 2], 'create:creative_motor', { facing: 'east' }, scroll(16))
+      .toBlueprint()
+    const r = evaluate(bp)
+    expect(r.graph.controllers).toHaveLength(2)
+    expect(r.speed([1, 1, 0])).toBe(32)
+    expect(r.speed([1, 1, 2])).toBe(32)
+    expect(r.log.list().some((a) => a.message.startsWith('速度コントローラーの出力が入力に戻っている'))).toBe(false)
+  })
+
+  it('[ST-STEP-CONTROLLER][ST-LINK-LARGE-LARGE] 2つのコントローラーが互いの入力を回す輪は、仮定に載せて計算に入れない。軸の違う大歯車は斜めでも面が合わなければかみ合わない', () => {
+    // コントローラー1 の大歯車 → コントローラー2 の入力。コントローラー2 の大歯車 → ギアボックスとシャフト → コントローラー1 の入力
+    const bp = blueprintFixture()
+      .place([1, 1, 1], 'create:rotation_speed_controller', { axis: 'x' }, scroll(32))
+      .place([1, 2, 1], 'create:large_cogwheel', { axis: 'z' })
+      .place([1, 2, 2], 'create:rotation_speed_controller', { axis: 'z' }, scroll(32))
+      .place([1, 3, 2], 'create:large_cogwheel', { axis: 'x' })
+      .place([2, 3, 2], 'create:gearbox', { axis: 'z' })
+      .place([2, 2, 2], 'create:shaft', { axis: 'y' })
+      .place([2, 1, 2], 'create:gearbox', { axis: 'x' })
+      .place([2, 1, 1], 'create:gearbox', { axis: 'y' })
+      .toBlueprint()
+    const r = evaluate(bp)
+    expect(r.graph.controllers).toHaveLength(2)
+    // 大歯車どうし（軸 z と x、ずれは y と z）はかみ合わない
+    expect(r.graph.edges.filter((e) => e.kind === 'large-large')).toEqual([])
+    const loops = r.log
+      .list()
+      .filter((a) => a.message.startsWith('速度コントローラーの出力が入力に戻っている'))
+      .map((a) => a.pos?.join())
+    expect(loops.sort()).toEqual(['1,1,1', '1,2,2'])
   })
 })

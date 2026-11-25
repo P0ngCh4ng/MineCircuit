@@ -304,6 +304,11 @@ describe('応力の規則の分かれ道（#237）', () => {
     })
   })
 
+  it('[ST-CONFIG-TOML] 引用符が閉じていない見出しは、表の名前なしとして読む', () => {
+    const toml = parseTomlSubset(['[kinetics]', 'a = 1', '["kinetics]', 'b = 2'].join('\n'))
+    expect(Object.fromEntries(toml)).toEqual({ 'kinetics.a': 1, b: 2 })
+  })
+
   it('[ST-CONFIG-SEARCH] saves/ を一覧できない Modpack は defaultconfigs を使う', async () => {
     const pack: CalcModpack = {
       hasNamespace: (ns) => ns === 'create',

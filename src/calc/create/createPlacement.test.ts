@@ -106,6 +106,14 @@ describe('placementHelper（Create の歯車の置き方の補助）', () => {
     expect(placementHelper(bp, { pos: [1, 1, 0], face: 'south', point: [1.5, 1.95, 1] }, small)?.pos).toEqual([1, 2, 0])
   })
 
+  it('[PL-HELPER-SKIP] 同じ大きさの歯車どうしでも、置ける位置がなければ使わない', () => {
+    // 1マスの設計図では、横も斜めも設計図の外
+    const smallOnly = blueprintFixture({ size: [1, 1, 1] }).place([0, 0, 0], 'create:cogwheel', { axis: 'y' }).toBlueprint()
+    expect(placementHelper(smallOnly, { pos: [0, 0, 0], face: 'up', point: [0.95, 1, 0.5] }, small)).toBeNull()
+    const largeOnly = blueprintFixture({ size: [1, 1, 1] }).place([0, 0, 0], 'create:large_cogwheel', { axis: 'y' }).toBlueprint()
+    expect(placementHelper(largeOnly, { pos: [0, 0, 0], face: 'up', point: [0.95, 1, 0.5] }, large)).toBeNull()
+  })
+
   it('[PL-HELPER-LARGE] 大きい歯車どうし：軸の向きに1つずらした斜めに、軸を直角にして置く', () => {
     const bp = blueprintFixture({ size: [4, 4, 4] }).place([1, 1, 1], 'create:large_cogwheel', { axis: 'y' }).toBlueprint()
     // 上の面（軸の向きは上が近い）の東寄り → 東 + 上、軸は x

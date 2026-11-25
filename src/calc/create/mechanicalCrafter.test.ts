@@ -149,3 +149,44 @@ describe('メカニカルクラフター（#235）', () => {
     expect(craftingRemainder('minecraft:stone')).toBeNull()
   })
 })
+
+describe('メカニカルクラフターの読み方の抜け', () => {
+  it('pointing がなければ up として、渡す先を決める', () => {
+    const bp = blueprintFixture({ size: [1, 2, 1] })
+      .place([0, 0, 0], 'create:mechanical_crafter', { facing: 'north' })
+      .place([0, 1, 0], 'create:mechanical_crafter', { facing: 'north' })
+      .toBlueprint()
+    expect(crafterTarget(bp, [0, 0, 0])).toEqual([0, 1, 0])
+    expect(crafterTarget(bp, [0, 1, 0])).toBeNull()
+  })
+
+  it('入力のまとめ役：Data がなければ自分、Data の位置に X がなければ 0', () => {
+    const bp = blueprintFixture({ size: [2, 2, 1] })
+      .place([0, 0, 0], 'create:mechanical_crafter', { facing: 'north', pointing: 'up' }, nbt.compound({ ConnectedInput: nbt.compound({ Controller: nbt.byte(0) }) }))
+      .place(
+        [1, 1, 0],
+        'create:mechanical_crafter',
+        { facing: 'north', pointing: 'up' },
+        nbt.compound({
+          ConnectedInput: nbt.compound({ Controller: nbt.byte(0), Data: nbt.list('compound', [nbt.compound({ Y: nbt.int(-1), Z: nbt.int(0) })]) }),
+        }),
+      )
+      .toBlueprint()
+    expect(crafterInputController(bp, [0, 0, 0])).toEqual([0, 0, 0])
+    expect(crafterInputController(bp, [1, 1, 0])).toEqual([1, 0, 0])
+  })
+
+  it('材料のタグがレシピの本にないときは、そのタグに合う物はない', () => {
+    const recipe: ProcessingRecipe = {
+      id: 'a:x',
+      type: recipeTypeId('crafting_shaped'),
+      items: [],
+      tags: [],
+      duration: 0,
+      results: [{ item: 'a:x', count: 1, chance: 1 }],
+      grid: { rows: [[{ items: [], tags: ['c:unknown'] }]], ingredients: [], mirrored: false },
+    }
+    const book: RecipeBook = { recipes: [recipe], scriptsChangeRecipes: false, itemTags: {} }
+    expect(matchCrafting([{ pos: [0, 0, 0], coord: [0, 0], items: ['minecraft:diamond'] }], book)).toBeNull()
+  })
+})

@@ -291,6 +291,7 @@ export class KineticGraph {
         const state = bp.get(nodes[prev].pos)
         if (!state || state.properties.part === 'end') break
         const next = nextBeltSegment(nodes[prev].pos, state)
+        /* v8 ignore if -- ゲームは横を向いていないベルトを残さない */
         if (!next) break
         if (!inside(next)) {
           log.add('ベルトの続きが設計図の外にある。範囲外は空気とみなした', nodes[prev].pos)
@@ -648,7 +649,10 @@ export class KineticGraph {
   }
 
   private conflict(addIssue: (pos: Vec3, message: string) => void, a: number, b: number, message: string): void {
-    for (const i of [a, b]) if (this.nodes[i].portId === null) addIssue(this.nodes[i].pos, message)
+    for (const i of [a, b]) {
+      /* v8 ignore else -- 仮の入出力は1本の辺だけでつながる端なので、ぶつかる2つのどちらにもならない */
+      if (this.nodes[i].portId === null) addIssue(this.nodes[i].pos, message)
+    }
   }
 
   /**
@@ -804,13 +808,17 @@ function chainConveyorConnections(be: RawNbt | null): Vec3[] {
   if (!tag || tag.type !== 'list') return []
   const result: Vec3[] = []
   for (const item of tag.value) {
-    if (item.type === 'intArray' && item.value.length === 3) result.push([item.value[0], item.value[1], item.value[2]])
-    else if (item.type === 'compound') {
-      const x = nbtNumber(item, 'X')
-      const y = nbtNumber(item, 'Y')
-      const z = nbtNumber(item, 'Z')
-      if (x !== null && y !== null && z !== null) result.push([x, y, z])
+    if (item.type === 'intArray' && item.value.length === 3) {
+      result.push([item.value[0], item.value[1], item.value[2]])
+      continue
     }
+    /* v8 ignore if -- ゲームは位置を3つの int 配列か {X, Y, Z} で残す */
+    if (item.type !== 'compound') continue
+    const x = nbtNumber(item, 'X')
+    const y = nbtNumber(item, 'Y')
+    const z = nbtNumber(item, 'Z')
+    /* v8 ignore else -- ゲームは {X, Y, Z} の3つをそろえて残す */
+    if (x !== null && y !== null && z !== null) result.push([x, y, z])
   }
   return result
 }

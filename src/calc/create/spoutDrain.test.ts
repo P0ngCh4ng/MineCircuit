@@ -103,3 +103,33 @@ describe('スパウトの液体（#235）', () => {
     expect(p?.assumption).toBe('スパウトの材料 minecraft:glass_bottle に合うレシピが 3 つあるので、ID の名前順で最初の a:x を使った')
   })
 })
+
+describe('スパウトの液体の抜け', () => {
+  it('管の口の先が、液体を持たないふつうのブロックなら、液体は分からない', () => {
+    const bp = blueprintFixture({ size: [2, 2, 1] })
+      .place([0, 0, 0], 'create:spout')
+      .place([1, 0, 0], 'minecraft:stone')
+      .place([0, 1, 0], 'minecraft:oak_planks')
+      .toBlueprint()
+    expect(spoutFluid(bp, [0, 0, 0])).toEqual({ fluid: null, from: 'unknown', candidates: [] })
+  })
+
+  it('流れている水（level が 0 でない）は、管の口の先でも鍾乳石の上でも液体の出どころでない', () => {
+    const flowing = blueprintFixture({ size: [1, 2, 1] })
+      .place([0, 0, 0], 'create:spout')
+      .place([0, 1, 0], 'minecraft:water', { level: '3' })
+      .toBlueprint()
+    expect(spoutFluid(flowing, [0, 0, 0]).fluid).toBeNull()
+    const drip = (level: string) =>
+      blueprintFixture({ size: [1, 7, 1] })
+        .place([0, 0, 0], 'create:spout')
+        .place([0, 1, 0], 'create:fluid_valve', { facing: 'up', enabled: 'false', waterlogged: 'false' })
+        .place([0, 2, 0], 'minecraft:cauldron')
+        .place([0, 3, 0], 'minecraft:pointed_dripstone', { vertical_direction: 'down', thickness: 'tip', waterlogged: 'false' })
+        .place([0, 4, 0], 'minecraft:stone')
+        .place([0, 5, 0], 'minecraft:water', { level })
+        .toBlueprint()
+    expect(spoutFluid(drip('0'), [0, 0, 0]).fluid).toBe('minecraft:water')
+    expect(spoutFluid(drip('2'), [0, 0, 0]).fluid).toBeNull()
+  })
+})

@@ -130,3 +130,26 @@ describe('扇風機の風（#235）', () => {
     expect(kindAt([4, 1, 1])).toEqual([])
   })
 })
+
+describe('扇風機の風の抜け', () => {
+  it('銅の格子は風を通す', () => {
+    const fx = blueprintFixture({ size: [5, 1, 1] })
+      .place([0, 0, 0], 'create:encased_fan', { facing: 'east' })
+      .place([1, 0, 0], 'minecraft:waxed_weathered_copper_grate', { waterlogged: 'false' })
+      .place([2, 0, 0], 'minecraft:stone')
+    expect(kindsAlongX(currents(fx, { '0,0,0': 64 }), 0, 0, 3)).toEqual(['0', '-', '-'])
+    fx.place([1, 0, 0], 'minecraft:copper_grate', { waterlogged: 'false' }).place([2, 0, 0], 'minecraft:air')
+    expect(kindsAlongX(currents(fx, { '0,0,0': 64 }), 0, 0, 3)).toEqual(['0', '0', '0'])
+  })
+
+  it('2台の扇風機の風が重なるマスには、両方の風がかかる', () => {
+    const fx = blueprintFixture({ size: [5, 1, 1] })
+      .place([0, 0, 0], 'create:encased_fan', { facing: 'east' })
+      .place([4, 0, 0], 'create:encased_fan', { facing: 'west' })
+    const c = currents(fx, { '0,0,0': 64, '4,0,0': 64 })
+    expect(c.cellsAt([2, 0, 0]).map((cell) => [cell.fan, cell.offset])).toEqual([
+      [[0, 0, 0], 2],
+      [[4, 0, 0], 2],
+    ])
+  })
+})

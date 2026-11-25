@@ -43,5 +43,6 @@ const PARTS: readonly (readonly [string, string, Readonly<Record<string, string>
 /** 基本の部品。どれも回転軸の決まった状態 */
 export const CREATE_BASIC_BLOCKS: readonly BasicBlock[] = PARTS.map(([path, name, props = {}]) => {
   const bare = new BlockState(new ResourceLocation('create', path), { ...props })
+  /* v8 ignore next -- 基本の部品は、どれも足りないプロパティを埋められる */
   return { state: completeCreateState(bare)?.state ?? bare, name }
 })

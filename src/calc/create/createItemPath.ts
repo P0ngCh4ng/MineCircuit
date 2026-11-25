@@ -349,12 +349,18 @@ class ItemTracer {
     }
   }
 
+  /** pos の回転数。回るブロックでなければ 0（止まっているのと同じ） */
+  private rpm(pos: Vec3): number {
+    return this.env.rpmAt(pos) ?? 0
+  }
+
   // ---- 受け取る ----
 
   /** pos のブロックに物が届く。face は受け取る面（null は入れ物に直接入れる） */
   private deliver(pos: Vec3, flow: Flow, from: Vec3 | null, face: Direction | null, carry: Carry = INSTANT): void {
     if (flow.rate <= EPSILON) return
     const state = this.env.bp.get(pos)
+    /* v8 ignore next -- 渡す元は、どれも渡す先が空気でないことを確かめてから渡す */
     if (!state) return
     const key = `${posKey(pos)}|${flow.item}`
     if (this.ancestors.has(key)) {
@@ -423,13 +429,13 @@ class ItemTracer {
   /** ベルト。進む向きに、つながったベルトの端まで進む */
   private belt(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, carry: Carry): void {
     this.arrive(pos, flow, from, carry)
-    const slope = state.properties.slope ?? 'horizontal'
+    const slope = beltSlope(state)
     const facing = horizontalFacing(state)
     if (!facing || !BELT_SLOPES.has(slope)) {
       this.stop(pos, '縦・横向きのベルトは扱わないので、物はここで止まるとした', true)
       return
     }
-    const rpm = this.env.rpmAt(pos) ?? 0
+    const rpm = this.rpm(pos)
     if (rpm === 0) {
       this.stop(pos, '止まっているので、物はここで止まる')
       return
@@ -473,7 +479,7 @@ class ItemTracer {
         }
         return
       }
-      if ((this.env.bp.get(seg)?.properties.slope ?? 'horizontal') === 'horizontal') {
+      if (beltSlope(this.env.bp.get(seg)) === 'horizontal') {
         const tpos = addVec3(seg, [0, 1, 0])
         const tunnel = this.env.bp.get(tpos)?.id.toString()
         if (tunnel === 'create:brass_tunnel') {
@@ -504,9 +510,9 @@ class ItemTracer {
     }
     // 端の1つ先（高さは端の区間と同じ）。ベルトの速さのまま進み、空気なら落ちる
     const end = segments[segments.length - 1]!
-    const speed = beltSpeed(this.env.rpmAt(end) ?? 0)
+    const speed = beltSpeed(this.rpm(end))
     this.handOff(end, addVec3(end, directionVector(move)), flow, oppositeDirection(move), null, {
-      seconds: speed > 0 ? 1 / speed : 0,
+      seconds: travelSeconds(1, speed),
       dropVy: 0,
     })
   }
@@ -515,7 +521,7 @@ class ItemTracer {
   private beltStep(segments: readonly Vec3[], i: number, flow: Flow): void {
     const seg = segments[i]!
     const next = segments[i + 1]
-    const speed = beltSpeed(this.env.rpmAt(seg) ?? 0)
+    const speed = beltSpeed(this.rpm(seg))
     if (next && speed > 0) this.addMove(seg, next, flow, { seconds: distance(seg, next) / speed })
   }
 
@@ -537,8 +543,9 @@ class ItemTracer {
   /** ベルトの区間 pos から move の向きの次の区間。端なら null */
   private nextBelt(pos: Vec3, state: BlockState, move: Direction): Vec3 | null {
     const facing = horizontalFacing(state)
+    /* v8 ignore next -- 呼ぶ前に、水平の向きのベルトだけを選んでいる */
     if (!facing) return null
-    const isBelt = (p: Vec3): BlockState | null => {
+    const isBelt =(p: Vec3): BlockState | null => {
       const s = this.env.bp.get(p)
       return s && s.id.toString() === 'create:belt' && s.properties.facing === facing ? s : null
     }
@@ -568,6 +575,7 @@ class ItemTracer {
     const s = this.env.bp.get(f)
     if (!s || !BELT_FUNNELS.has(s.id.toString()) || s.properties.powered === 'true') return null
     const facing = horizontalFacing(s)
+    /* v8 ignore next -- ゲームはベルトのファンネルを水平の向きでしか残さない */
     if (!facing) return null
     const shape = s.properties.shape
     if (shape !== 'pulling' && !(facing === oppositeDirection(move) && shape !== 'pushing')) return null
@@ -587,8 +595,8 @@ class ItemTracer {
     const tpos = addVec3(seg, [0, 1, 0])
     this.recordArrival(tpos, flow, seg)
     this.hold(seg, prev, flow, BRASS_TUNNEL_TICKS)
-    const speed = beltSpeed(this.env.rpmAt(seg) ?? 0)
-    const carry = (to: Vec3): Carry => ({ seconds: speed > 0 ? distance(seg, to) / speed : 0, dropVy: 0, moveFrom: seg })
+    const speed = beltSpeed(this.rpm(seg))
+    const carry = (to: Vec3): Carry => ({ seconds: travelSeconds(distance(seg, to), speed), dropVy: 0, moveFrom: seg })
     // ほかの出口：組のほかのトンネルの先のベルトと、組の端の横の口。口（Sides）とフィルターで使えない出口は除く
     const others: { from: Vec3; to: Vec3; face: Direction }[] = []
     for (const side of sideDirections(move)) {
@@ -650,7 +658,7 @@ class ItemTracer {
    * 入る側（move の反対）のフィルターに合わない物は、手前の区間で止まる
    */
   private tunnelRefuses(next: Vec3, move: Direction, item: string): boolean {
-    if ((this.env.bp.get(next)?.properties.slope ?? 'horizontal') !== 'horizontal') return false
+    if (beltSlope(this.env.bp.get(next)) !== 'horizontal') return false
     const tpos = addVec3(next, [0, 1, 0])
     if (this.env.bp.get(tpos)?.id.toString() !== 'create:brass_tunnel') return false
     return !this.filterPasses(tunnelSideFilter(this.env.bp.blockEntityAt(tpos), oppositeDirection(move)), item, tpos)
@@ -683,7 +691,7 @@ class ItemTracer {
   /** p が、上に真鍮のトンネルがある、move と同じ向きに進む水平のベルトか */
   private isTunnelBelt(p: Vec3, move: Direction): boolean {
     const s = this.env.bp.get(p)
-    if (!s || s.id.toString() !== 'create:belt' || (s.properties.slope ?? 'horizontal') !== 'horizontal') return false
+    if (!s || s.id.toString() !== 'create:belt' || beltSlope(s) !== 'horizontal') return false
     const facing = horizontalFacing(s)
     if (!facing || directionAxis(facing) !== directionAxis(move)) return false
     return this.env.bp.get(addVec3(p, [0, 1, 0]))?.id.toString() === 'create:brass_tunnel'
@@ -712,7 +720,7 @@ class ItemTracer {
       this.stop(pos, 'イジェクターの向きが分からないので、物はここで止まる', true)
       return
     }
-    if ((this.env.rpmAt(pos) ?? 0) === 0) {
+    if (this.rpm(pos) === 0) {
       this.stop(pos, '止まっているので、物を投げない')
       return
     }
@@ -796,7 +804,7 @@ class ItemTracer {
     const bp = this.env.bp
     const group = crafterGroup(bp, finalPos)!
     const final = group.final
-    const rpm = Math.min(...group.members.map((m) => Math.abs(this.env.rpmAt(m) ?? 0)))
+    const rpm = Math.min(...group.members.map((m) => Math.abs(this.rpm(m))))
     const s = crafterSpeed(rpm)
     if (s === 0) {
       this.stop(final, '止まっているので、組み立てない')
@@ -870,16 +878,19 @@ class ItemTracer {
     }
     const kept = outs.filter((o) => o.rate > EPSILON)
     const input = [...new Set(match.items)].sort().map((item) => `${item} ×${match.items.filter((x) => x === item).length}`).join('、')
+    /* v8 ignore start -- 並びのレシピは作業台かメカニカルクラフターの種類で、材料は1つ以上ある（matchCrafting がそれだけを返す） */
+    const type = recipeKind(recipe.type) ?? 'mechanical_crafting'
+    const first = match.items[0] ?? null
+    /* v8 ignore stop */
     rec.recipes.push({
-      // 並びのレシピは作業台かメカニカルクラフターの種類
-      type: recipeKind(recipe.type) ?? 'mechanical_crafting',
+      type,
       input,
       choice: {
         duration: resolved(cycle, 'builtin', `クラフター ${group.longest} 台の道、速さ ${s}`),
         text: `${recipe.id}（${input}、${cycle} tick）`,
         assumption: null,
         recipe,
-        item: match.items[0] ?? null,
+        item: first,
       },
       outputs: kept.map((o) => ({ ...o })),
     })
@@ -962,6 +973,7 @@ class ItemTracer {
       this.note(pos, `ホッパーが送れるのは ${formatRate(TICKS_PER_SECOND / HOPPER_TICKS)} 個/秒まで。届く数はこれより多い`)
     }
     const facing = state.properties.facing
+    /* v8 ignore next -- ゲームはホッパーを下か横の向きでしか残さない */
     const target = facing && isDirection(facing) && facing !== 'up' ? addVec3(pos, directionVector(facing)) : null
     if (target && this.env.bp.get(target)) {
       this.deliver(target, flow, pos, null, INSTANT)
@@ -1000,7 +1012,7 @@ class ItemTracer {
     const isPress = id === 'create:mechanical_press'
     const isDeployer = id === 'create:deployer' && m?.properties.facing === 'down'
     if (!isPress && !isDeployer) return 'pass'
-    const rpm = this.env.rpmAt(mpos) ?? 0
+    const rpm = this.rpm(mpos)
     if (rpm === 0) {
       this.note(mpos, '止まっているので、下を通る物を処理しない')
       return 'pass'
@@ -1056,7 +1068,7 @@ class ItemTracer {
   /** 石臼。できた物は下のシュート・取り出すファンネル・機械アームで先へ */
   private millstone(pos: Vec3, flow: Flow, from: Vec3 | null, carry: Carry): void {
     this.arrive(pos, flow, from, carry)
-    const rpm = this.env.rpmAt(pos) ?? 0
+    const rpm = this.rpm(pos)
     if (rpm === 0) {
       this.stop(pos, '止まっているので、物はここで止まる')
       return
@@ -1081,7 +1093,7 @@ class ItemTracer {
     const wheels = HORIZONTAL_OFFSETS.map((d) => addVec3(pos, d)).filter(
       (p) => this.env.bp.get(p)?.id.toString() === 'create:crushing_wheel',
     )
-    const speeds = wheels.map((p) => Math.abs(this.env.rpmAt(p) ?? 0))
+    const speeds = wheels.map((p) => Math.abs(this.rpm(p)))
     const rpm = speeds.length > 0 ? Math.min(...speeds) : 0
     if (rpm === 0) {
       this.stop(pos, '粉砕ホイールが止まっているので、物はここで止まる')
@@ -1104,7 +1116,7 @@ class ItemTracer {
       this.stop(pos, '上向きでないソーは扱わないので、物はここで止まるとした', true)
       return
     }
-    const rpm = this.env.rpmAt(pos) ?? 0
+    const rpm = this.rpm(pos)
     if (rpm === 0) {
       this.stop(pos, '止まっているので、物はここで止まる')
       return
@@ -1131,7 +1143,7 @@ class ItemTracer {
       this.basinOutput(pos, state, flow)
       return
     }
-    const rpm = this.env.rpmAt(mpos) ?? 0
+    const rpm = this.rpm(mpos)
     if (rpm === 0) {
       this.stop(pos, '上の機械が止まっているので、物はここで止まる')
       return
@@ -1202,11 +1214,12 @@ class ItemTracer {
   private deployerHand(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, carry: Carry): void {
     this.arrive(pos, flow, from, carry)
     const facing = state.properties.facing
+    /* v8 ignore next -- ゲームは向きのないデプロイヤーを残さない */
     if (!facing || !isDirection(facing)) {
       this.stop(pos, 'デプロイヤーの向きが分からないので、物はここで止まる')
       return
     }
-    const rpm = this.env.rpmAt(pos) ?? 0
+    const rpm = this.rpm(pos)
     if (rpm === 0) {
       this.stop(pos, '止まっているので、物はここで止まる')
       return
@@ -1234,6 +1247,7 @@ class ItemTracer {
     const b = this.env.bp.get(below)
     const shape = s.properties.shape
     if (b?.id.toString() === 'create:depot') return shape === 'pushing'
+    /* v8 ignore next -- ゲームはベルトのファンネルを、ベルトかデポの上にしか残さない（ほかはふつうのファンネルになる） */
     if (b?.id.toString() !== 'create:belt') return false
     if (shape === 'pushing') return true
     if (shape === 'pulling') return false
@@ -1244,7 +1258,7 @@ class ItemTracer {
   /** ベルトの区間の進む向き。止まっていれば null（TP-BLOCK-BELT） */
   private beltMove(pos: Vec3, state: BlockState): Direction | null {
     const facing = horizontalFacing(state)
-    const rpm = this.env.rpmAt(pos) ?? 0
+    const rpm = this.rpm(pos)
     if (!facing || rpm === 0) return null
     const axis = directionAxis(facing)
     const [positive, negative] = axisDirections(axis)
@@ -1263,6 +1277,7 @@ class ItemTracer {
     const p = addVec3(pos, directionVector(side))
     const o = this.env.bp.get(p)
     if (!o || o.id.toString() !== s.id.toString() || horizontalFacing(o) !== facing) return null
+    /* v8 ignore next -- ラージチェストの半分の指す先の同じ向きのチェストは、ゲームでは必ずもう片方の半分 */
     return o.properties.type === (type === 'left' ? 'right' : 'left') ? p : null
   }
 
@@ -1347,6 +1362,7 @@ class ItemTracer {
       }
       if (!s || !FUNNELS.has(s.id.toString()) || s.properties.extracting !== 'true' || s.properties.powered === 'true') continue
       const facing = s.properties.facing
+      /* v8 ignore next -- ゲームは向きのないファンネルを残さない */
       if (!facing || !isDirection(facing)) continue
       if (!equalsVec3(addVec3(n, directionVector(oppositeDirection(facing))), pos)) continue
       if (!this.blockFilterPasses(n, item)) continue
@@ -1367,7 +1383,7 @@ class ItemTracer {
     const dests: Destination[] = []
     for (const arm of this.arms) {
       if (!arm.take.some((t) => equalsVec3(t, pos)) || arm.deposit.length === 0) continue
-      const ticks = armMoveTicks(this.env.rpmAt(arm.pos) ?? 0)
+      const ticks = armMoveTicks(this.rpm(arm.pos))
       if (ticks === null) {
         this.note(arm.pos, '止まっているので、物を運ばない')
         continue
@@ -1452,6 +1468,7 @@ class ItemTracer {
         // 処理できる数は、プローブの「処理時間」と同じく Create の初期値で出す（律速に使う。#168）
         rec.capacityPerMinute = machineCapacityPerMinute(machine, rpm, choice.duration.value, this.env.bulkPressing)
         rec.capacitySource = choice.duration.source
+        /* v8 ignore next -- Modpack がないとき、chooseRecipe は必ず「レシピが分からない」の仮定を返す */
         if (choice.assumption) this.env.log.add(choice.assumption, pos)
       }
       return null
@@ -1464,6 +1481,7 @@ class ItemTracer {
     rec.capacitySource = choice.duration.source
     const source = weakerSource(flow.source, choice.duration.source)
     // 処理できる数を超えた分は処理されない（機械の前で詰まる）。できる物は処理できた数から計算する
+    /* v8 ignore next -- 回っている表の機械なので、処理できる数は null にならない */
     const capacityPerSecond = rec.capacityPerMinute === null ? Infinity : rec.capacityPerMinute / 60
     const processed = Math.max(0, Math.min(flow.rate, capacityPerSecond - rec.processedRate))
     rec.processedRate += processed
@@ -1505,7 +1523,8 @@ class ItemTracer {
       fan.kind = kind
       fan.ticks = 0
     }
-    const speed = beltSpeed(this.env.rpmAt(seg) ?? 0)
+    const speed = beltSpeed(this.rpm(seg))
+    /* v8 ignore next -- 動いているベルトに入った物だけが進み、1本のベルトの区間はどれも同じ回転数 */
     if (speed <= 0) return null
     fan.ticks += TICKS_PER_SECOND / speed
     if (fan.ticks + EPSILON < FAN_PROCESSING_TICKS) {
@@ -1649,6 +1668,7 @@ class ItemTracer {
    * その場で止まる動きにする
    */
   private hold(pos: Vec3, from: Vec3 | null, flow: Flow, ticks: number | null): void {
+    /* v8 ignore next -- 止まる時間は、どれも回っている機械か決まった tick なので、正の数 */
     if (ticks === null || ticks <= 0) return
     const seconds = ticks / TICKS_PER_SECOND
     const start = from ?? pos
@@ -1725,6 +1745,7 @@ function findArms(bp: Blueprint): ArmInfo[] {
       const deposit: Vec3[] = []
       if (tag?.type === 'list') {
         for (const point of tag.value) {
+          /* v8 ignore next -- ゲームは InteractionPoints を compound のリストで保存する */
           if (point.type !== 'compound') continue
           const rel = nbtPos(point, 'Pos')
           if (!rel) continue
@@ -1760,6 +1781,7 @@ export function itemPathValues(record: ItemPathRecord): CalcSummaryItem[] {
         record.recipes
           .map((r) => {
             const outs = r.outputs.map((o) => `${o.item} ${formatRate(o.rate)} 個/秒`).join('、')
+            /* v8 ignore next -- 使ったレシピの記録は、どれもレシピを持つ */
             return `${r.choice.recipe?.id ?? ''}（${r.input} → ${outs || 'できる物なし'}）`
           })
           .join('、'),
@@ -1820,6 +1842,18 @@ function horizontalFacing(state: BlockState): Direction | null {
   return f && isDirection(f) && directionAxis(f) !== 'y' ? f : null
 }
 
+/** ベルトの坂（slope）。ない設計図では水平とする */
+function beltSlope(state: BlockState | null): string {
+  /* v8 ignore next -- ゲームはベルトの slope を必ず保存する */
+  return state?.properties.slope ?? 'horizontal'
+}
+
+/** 速さ speed（ブロック/秒）で distance を進む秒数。止まっていれば 0 */
+function travelSeconds(distance: number, speed: number): number {
+  /* v8 ignore next -- 動いているベルトに入った物だけが進み、1本のベルトの区間はどれも同じ回転数 */
+  return speed > 0 ? distance / speed : 0
+}
+
 function posKey(p: Vec3): string {
   return `${p[0]},${p[1]},${p[2]}`
 }
@@ -1855,9 +1889,11 @@ function tunnelDirections(be: NbtCompound | null, key: string): Direction[] | nu
   if (tag?.type !== 'list') return null
   const dirs: Direction[] = []
   for (const e of tag.value) {
+    /* v8 ignore start -- ゲームは Flaps・Sides を 0〜5 の int のリストで保存する */
     if (e.type !== 'int' && e.type !== 'byte' && e.type !== 'short') continue
     const d = DIRECTIONS[e.value]
     if (d) dirs.push(d)
+    /* v8 ignore stop */
   }
   return dirs
 }
@@ -1894,6 +1930,7 @@ function fallCarry(start: Vec3, target: Vec3, below: Vec3, carry: Carry): Carry 
       { t: carry.seconds, pos: blockCenter(target) },
     ],
   }
+  /* v8 ignore next -- 空気の先へ渡すのは、ベルトの端・シュート・取り出すファンネルなど dropVy を持つ受け渡しだけ（機械アームの置く点・ファンネルの後ろはゲームでは空気にならない） */
   const fall = throwPath(blockCenter(target), blockCenter(below), carry.dropVy ?? 0)
   const path = [...head.path, ...fall.path.slice(1).map((p) => ({ t: p.t + head.seconds, pos: p.pos }))]
   const seconds = head.seconds + fall.seconds

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { blueprintContents, blueprintFixture, type BlueprintFixture } from '../../../tests/fixtures/blueprintFixture'
-import type { Blueprint } from '../../domain/blueprint'
+import { BlockState } from '../../domain/blockState'
+import { Blueprint } from '../../domain/blueprint'
+import { BlockVolume } from '../../domain/blockVolume'
 import { nbt, type RawNbt } from '../../domain/nbt'
+import { ResourceLocation } from '../../domain/resourceLocation'
 import type { Vec3 } from '../../domain/vec3'
 import { replaceCells } from '../../edit/editCommand'
 import { EditHistory } from '../../edit/editHistory'
@@ -218,5 +221,24 @@ describe('つないだベルトを計算に通す（#248）', () => {
     expect(items.sort()).toEqual(['1,0,1→0,0,1', '2,0,1→1,0,1', '3,0,1→2,0,1', '4,0,1→3,0,1'])
     expect(result.itemMoves?.map((m) => `${m.from.join()}→${m.to.join()}`)).toEqual(['2,0,1→1,0,1', '1,0,1→0,0,1'])
     expect(result.issues).toEqual([])
+  })
+})
+
+describe('ベルトをつなぐときの抜け', () => {
+  it('間のマスがリージョンのすき間なら、設計図の外としてつなげない', () => {
+    const shaftZ = new BlockState(ResourceLocation.parse('create:shaft'), { axis: 'z' })
+    const a = new BlockVolume({ name: 'a', size: [1, 1, 1], palette: [shaftZ], cells: Int32Array.of(0) })
+    const b = new BlockVolume({ name: 'b', size: [1, 1, 1], offset: [3, 0, 0], palette: [shaftZ], cells: Int32Array.of(0) })
+    const bp = new Blueprint('two', 'litematic', 2975, [a, b], {})
+    expect(beltConnectionProblem(bp, [0, 0, 0], [3, 0, 0])).toBe('間の (1, 0, 0) が設計図の外です。')
+  })
+
+  it('[PL-BELT-WATER] 泡の柱のマスに置く区間も waterlogged=true', () => {
+    const bp = blueprintFixture({ size: [3, 1, 1] })
+      .place([0, 0, 0], 'create:shaft', { axis: 'z', waterlogged: 'false' })
+      .place([1, 0, 0], 'minecraft:bubble_column', { drag: 'true' })
+      .place([2, 0, 0], 'create:shaft', { axis: 'z', waterlogged: 'false' })
+      .toBlueprint()
+    expect(plan(bp, [0, 0, 0], [2, 0, 0]).segments.map((s) => s.after.state?.properties['waterlogged'])).toEqual(['false', 'true', 'false'])
   })
 })

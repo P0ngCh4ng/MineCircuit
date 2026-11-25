@@ -323,6 +323,28 @@ describe('動かしたとき：蒸気エンジンの軸と向き', () => {
     // 指す先にエンジンがなければ、位置の小さい方
     expect(build([5, 0, 0]).speed([4, 1, 1])).toBe(64)
   })
+
+  it('[ST-RUN-STEAM-ONE-PER-SHAFT] 位置の小さい方は x・y・z の順に比べる（x と y が同じなら z）', () => {
+    // 南北のボイラーのエンジンが、間の x 軸のシャフトに向く。北のエンジン（z = 2）を使う
+    const build = (enginePos?: Vec3) => {
+      const f = blueprintFixture({ size: [3, 6, 9] })
+      boiler(f, { at: [1, 1, 1] })
+      boiler(f, { at: [1, 1, 7] })
+      f.place([1, 1, 2], 'create:steam_engine', { face: 'wall', facing: 'south', waterlogged: 'false' })
+      f.place([1, 1, 6], 'create:steam_engine', { face: 'wall', facing: 'north', waterlogged: 'false' })
+      const be = enginePos
+        ? nbt.compound({ EnginePos: nbt.compound({ X: nbt.int(enginePos[0]), Y: nbt.int(enginePos[1]), Z: nbt.int(enginePos[2]) }) })
+        : undefined
+      f.place([1, 1, 4], 'create:powered_shaft', { axis: 'x', waterlogged: 'false' }, be)
+      return evaluate(f.toBlueprint())
+    }
+    const smaller = build()
+    expect(smaller.notes()).toContain('1本の軸に蒸気エンジンが2台以上向いているので、1台だけを使った')
+    // EnginePos で北のエンジン（4 − 2 = 2）を指したときと同じ、南のエンジン（4 − 6 = −2）とは逆
+    expect(smaller.speed([1, 1, 4])).toBe(build([0, 0, 2]).speed([1, 1, 4]))
+    expect(smaller.speed([1, 1, 4])).toBe(-build([0, 0, -2]).speed([1, 1, 4]))
+    expect(Math.abs(smaller.speed([1, 1, 4]))).toBe(64)
+  })
 })
 
 describe('動かしたとき：風車', () => {

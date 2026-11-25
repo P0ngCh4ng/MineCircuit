@@ -78,7 +78,11 @@ function fluidAt(bp: Blueprint, pos: Vec3): string | null {
   if (!s) return null
   const id = s.id.toString()
   const p = s.properties
-  if ((id === 'minecraft:water' || id === 'minecraft:lava') && (p.level ?? '0') === '0') return id
+  if (id === 'minecraft:water' || id === 'minecraft:lava') {
+    /* v8 ignore next -- ゲームは水・溶岩に必ず level を残す */
+    const level = p.level ?? '0'
+    if (level === '0') return id
+  }
   if (p.waterlogged === 'true') return 'minecraft:water'
   if (id === 'minecraft:water_cauldron') return 'minecraft:water'
   if (id === 'minecraft:lava_cauldron') return 'minecraft:lava'
@@ -108,7 +112,11 @@ function dripstoneFluid(bp: Blueprint, cauldron: Vec3): string | null {
   // y は根もとの1つ上（支えるブロック）。その上が液体の水源
   const source = bp.get([cauldron[0], y + 1, cauldron[2]])
   const id = source?.id.toString()
-  if ((id === 'minecraft:water' || id === 'minecraft:lava') && (source?.properties.level ?? '0') === '0') return id
+  if (id === 'minecraft:water' || id === 'minecraft:lava') {
+    /* v8 ignore next -- ゲームは水・溶岩に必ず level を残す */
+    const level = source?.properties.level ?? '0'
+    if (level === '0') return id
+  }
   return null
 }
 
