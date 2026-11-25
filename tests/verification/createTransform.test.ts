@@ -3,31 +3,14 @@
 import { describe, expect, it } from 'vitest'
 import type { BlockTransform, MirrorAxis, QuarterTurns } from '../../src/domain/blockTransform'
 import { BlockState } from '../../src/domain/blockState'
-import { ResourceLocation } from '../../src/domain/resourceLocation'
 import { transformCreateState } from '../../src/calc/create/createTransform'
-import { CATALOGS, type CatalogBlock } from './createBlockCatalog'
+import { CATALOGS, stateCombinations, type CatalogBlock } from './createBlockCatalog'
 
-/** 全組み合わせがこれより多いブロックは、プロパティを1つずつ変える（ほかは最初の値） */
-const MAX_COMBINATIONS = 4096
 const HORIZONTAL = ['north', 'east', 'south', 'west']
 
 const turn = (q: QuarterTurns): BlockTransform => ({ translate: [0, 0, 0], quarterTurns: q, mirror: 'none', pivot: [0, 0, 0] })
 const mirror = (m: MirrorAxis): BlockTransform => ({ translate: [0, 0, 0], quarterTurns: 0, mirror: m, pivot: [0, 0, 0] })
 const apply = (s: BlockState, t: BlockTransform) => transformCreateState(s, t) ?? s
-
-/** プロパティの値の組み合わせ */
-export function stateCombinations(id: string, block: CatalogBlock): BlockState[] {
-  const rl = ResourceLocation.parse(id)
-  const names = Object.keys(block.properties)
-  const total = names.reduce((n, p) => n * block.properties[p]!.length, 1)
-  if (total <= MAX_COMBINATIONS) {
-    let combos: Record<string, string>[] = [{}]
-    for (const p of names) combos = combos.flatMap((c) => block.properties[p]!.map((v) => ({ ...c, [p]: v })))
-    return combos.map((c) => new BlockState(rl, c))
-  }
-  const base = Object.fromEntries(names.map((p) => [p, block.properties[p]![0]!]))
-  return names.flatMap((p) => block.properties[p]!.map((v) => new BlockState(rl, { ...base, [p]: v })))
-}
 
 /** 分かっている抜け："id プロパティ" → 理由 */
 const KNOWN_TRANSFORM_GAPS: Readonly<Record<string, string>> = {}

@@ -2,6 +2,8 @@
 // 一覧は scripts/extractBlockIds.mjs と scripts/extractCreateSource.mjs で、利用者の jar と Create のソースから作る。
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { BlockState } from '../../src/domain/blockState'
+import { ResourceLocation } from '../../src/domain/resourceLocation'
 
 export interface CatalogBlockEntity {
   readonly type: string
@@ -54,4 +56,21 @@ export function blockEntityTypes(): Map<string, Set<string>> {
     }
   }
   return types
+}
+
+/** 全組み合わせがこれより多いブロックは、プロパティを1つずつ変える（ほかは最初の値） */
+const MAX_COMBINATIONS = 4096
+
+/** プロパティの値の組み合わせ */
+export function stateCombinations(id: string, block: CatalogBlock): BlockState[] {
+  const rl = ResourceLocation.parse(id)
+  const names = Object.keys(block.properties)
+  const total = names.reduce((n, p) => n * block.properties[p]!.length, 1)
+  if (total <= MAX_COMBINATIONS) {
+    let combos: Record<string, string>[] = [{}]
+    for (const p of names) combos = combos.flatMap((c) => block.properties[p]!.map((v) => ({ ...c, [p]: v })))
+    return combos.map((c) => new BlockState(rl, c))
+  }
+  const base = Object.fromEntries(names.map((p) => [p, block.properties[p]![0]!]))
+  return names.flatMap((p) => block.properties[p]!.map((v) => new BlockState(rl, { ...base, [p]: v })))
 }
