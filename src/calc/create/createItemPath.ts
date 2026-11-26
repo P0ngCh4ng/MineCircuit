@@ -444,12 +444,12 @@ class ItemTracer {
     const axis = directionAxis(facing)
     const [positive, negative] = axisDirections(axis)
     const move = rpm < 0 !== (axis === 'x') ? negative : positive
-    this.walkBelt(this.beltSegments(pos, state, move), 0, flow, move, from)
+    this.walkBelt(this.beltSegments(pos, state, move), 0, flow, move, carry.moveFrom ?? from)
   }
 
   /**
    * ベルトの区間 start から先を進む。ベルトのファンネル・2段上の機械・端の先。
-   * entryFrom は区間 start に物が来た元（2段上の機械で止まる時間を、その動きに付ける）
+   * entryFrom は区間 start への動きの元（2段上の機械で止まる時間を、その動きに付ける。機械アームが運んだ物は、アームが取った所）
    */
   private walkBelt(
     segments: readonly Vec3[],
@@ -963,7 +963,7 @@ class ItemTracer {
    */
   private hopper(pos: Vec3, state: BlockState, flow: Flow, from: Vec3 | null, carry: Carry): void {
     this.arrive(pos, flow, from, carry)
-    this.hold(pos, from, flow, HOPPER_TICKS)
+    this.hold(pos, carry.moveFrom ?? from, flow, HOPPER_TICKS)
     if (state.properties.enabled === 'false') {
       this.stop(pos, 'レッドストーンの信号で止まっているので、物はここに溜まる')
       this.sink(pos, flow)
@@ -1034,10 +1034,12 @@ class ItemTracer {
    */
   private depot(pos: Vec3, flow: Flow, from: Vec3 | null, carry: Carry): void {
     this.arrive(pos, flow, from, carry)
+    // 止まる時間は、記録した動き（機械アームが運んだ物は、アームが取った所から）に付ける
+    const moveFrom = carry.moveFrom ?? from
     const kind = fanKindOf(this.fans.handlersAt(pos))
-    const flows = kind ? (this.fanProcess(pos, kind, flow, { pos, from }) ?? [flow]) : [flow]
+    const flows = kind ? (this.fanProcess(pos, kind, flow, { pos, from: moveFrom }) ?? [flow]) : [flow]
     for (const f of flows) {
-      const result = this.processAbove(pos, f, from)
+      const result = this.processAbove(pos, f, moveFrom)
       if (result === null) continue
       for (const out of result === 'pass' ? [f] : result) this.emit(pos, out, { beltFunnelAbove: true })
     }
@@ -1678,6 +1680,7 @@ class ItemTracer {
       if (seconds > move.hold) this.moves.set(key, { ...move, hold: seconds })
       return
     }
+    /* v8 ignore else -- 別の所から来た物は、止まる前に arrive でその動きを記録している（機械アームが運んだ物も、アームが取った所からの動き） */
     if (equalsVec3(start, pos)) {
       this.moves.set(key, { from: [pos[0], pos[1], pos[2]], to: [pos[0], pos[1], pos[2]], item: flow.item, rate: flow.rate, seconds: 0, hold: seconds })
     }

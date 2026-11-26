@@ -222,6 +222,48 @@ describe('物の通り道', () => {
     expect(at(result, '2,0,0')?.arrivals[0]?.from).toEqual([1, 0, 0])
   })
 
+  it('[TP-MOTION-ARM][TP-MOTION-BELT-MACHINE] 物の動き：機械アームがプレスの下のデポやホッパーに置いた物は、アームが運ぶ動きの先で止まる', () => {
+    const points = (deposit: Vec3) =>
+      nbt.compound({
+        InteractionPoints: nbt.list('compound', [
+          nbt.compound({ Pos: nbt.intArray([-1, 0, 0]), Mode: nbt.string('TAKE') }),
+          nbt.compound({ Pos: nbt.intArray(deposit), Mode: nbt.string('DEPOSIT') }),
+        ]),
+      })
+    const press = blueprintFixture()
+      .place([1, 0, 0], 'create:mechanical_arm', points([1, 0, 0]))
+      .place([0, 0, 0], 'minecraft:chest', chest)
+      .place([2, 0, 0], 'create:depot')
+      .place([2, 2, 0], 'create:mechanical_press', { facing: 'north' })
+    const pressed = trace(press, [port([0, 0, 0], 'minecraft:iron_ingot')], { '1,0,0': 64, '2,2,0': 64 }).result
+    const ingot = pressed.moves.filter((m) => m.item === 'minecraft:iron_ingot')
+    expect(ingot.map((m) => [m.from.join(','), m.to.join(',')])).toEqual([['0,0,0', '2,0,0']])
+    expect(ingot[0]!.hold).toBe(pressCycleTicks(64)! / 20)
+
+    const hopper = blueprintFixture()
+      .place([1, 0, 0], 'create:mechanical_arm', points([1, 0, 0]))
+      .place([0, 0, 0], 'minecraft:chest', chest)
+      .place([2, 0, 0], 'minecraft:hopper', { facing: 'down', enabled: 'true' })
+    const held = trace(hopper, [port([0, 0, 0], 'minecraft:stone')], { '1,0,0': 64 }).result
+    expect(held.moves.map((m) => [m.from.join(','), m.to.join(','), m.hold])).toEqual([['0,0,0', '2,0,0', 8 / 20]])
+
+    // ベルトの上のプレス：アームが置いた区間で止まり、変わった物が先へ進む
+    const onBelt = belt(
+      blueprintFixture()
+        .place([1, 0, 0], 'create:mechanical_arm', points([1, 0, 0]))
+        .place([0, 0, 0], 'minecraft:chest', chest)
+        .place([2, 2, 0], 'create:mechanical_press', { facing: 'north' }),
+      0,
+      0,
+      [2, 3],
+      'east',
+    )
+    const belted = trace(onBelt, [port([0, 0, 0], 'minecraft:iron_ingot')], { '1,0,0': 64, '2,0,0': -24, '3,0,0': -24, '2,2,0': 64 }).result
+    const carried = belted.moves.find((m) => m.item === 'minecraft:iron_ingot')!
+    expect([carried.from, carried.to]).toEqual([[0, 0, 0], [2, 0, 0]])
+    expect(carried.hold).toBe(pressCycleTicks(64)! / 20)
+  })
+
   it('[TP-MOTION-FUNNEL-EXTRACT][TP-MOTION-THROWN] 物の動き：水平の取り出すファンネルの下が空気なら、ファンネルの下から放物線で落ちる（#233、#253）', () => {
     const fx = blueprintFixture({ size: [4, 4, 3] })
       .place([3, 3, 0], 'minecraft:chest', chest)
