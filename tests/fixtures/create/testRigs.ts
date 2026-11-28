@@ -76,21 +76,23 @@ function hasIssue(r: CalcResult, text: string): boolean {
  * 西の安山岩ケーシングの上の水源から、水車の上を東へ流れ、水車の東の側を落ちる。ガラスは水が南北へ広がらないための壁
  */
 function example1(): BlueprintFixture {
+  // 水源の西をガラスでふさぐ。設計図の端の外が空いていると、水は近い方の外へこぼれて水車に当たらない（#279）
   return rig()
-    .size([4, 4, 7])
-    .place([1, 1, 1], 'create:water_wheel', { facing: 'south' })
-    .place([1, 1, 2], 'create:large_cogwheel', { axis: 'z', ...W })
-    .place([2, 2, 2], 'create:cogwheel', { axis: 'z', ...W })
-    .place([2, 2, 3], 'create:mechanical_press', { facing: 'south' })
-    .place([2, 2, 4], 'create:mechanical_press', { facing: 'south' })
-    .place([2, 2, 5], 'create:stressometer', { facing: 'east', axis_along_first: 'false' })
-    .place([0, 1, 1], 'create:andesite_casing', {})
-    .place([0, 2, 1], 'minecraft:water', { level: '0' })
-    .place([0, 2, 0], 'minecraft:glass', {})
+    .size([5, 4, 7])
+    .place([2, 1, 1], 'create:water_wheel', { facing: 'south' })
+    .place([2, 1, 2], 'create:large_cogwheel', { axis: 'z', ...W })
+    .place([3, 2, 2], 'create:cogwheel', { axis: 'z', ...W })
+    .place([3, 2, 3], 'create:mechanical_press', { facing: 'south' })
+    .place([3, 2, 4], 'create:mechanical_press', { facing: 'south' })
+    .place([3, 2, 5], 'create:stressometer', { facing: 'east', axis_along_first: 'false' })
+    .place([1, 1, 1], 'create:andesite_casing', {})
+    .place([1, 2, 1], 'minecraft:water', { level: '0' })
+    .place([0, 2, 1], 'minecraft:glass', {})
     .place([1, 2, 0], 'minecraft:glass', {})
     .place([2, 2, 0], 'minecraft:glass', {})
-    .place([0, 2, 2], 'minecraft:glass', {})
+    .place([3, 2, 0], 'minecraft:glass', {})
     .place([1, 2, 2], 'minecraft:glass', {})
+    .place([2, 2, 2], 'minecraft:glass', {})
 }
 
 /** 例2（create-stress.md）。モーター・応力計・速度コントローラー・大歯車・粉砕ホイール */
@@ -128,17 +130,17 @@ const STRESS_RIGS: readonly TestRig[] = [
     rules: ['ST-SOURCE-WATER-WHEEL', 'ST-LINK-LARGE-SMALL', 'ST-STEP-STRESS', 'ST-STEP-OVERLOAD'],
     build: example1,
     steps: [
-      '水は設計図に入っている。西の安山岩ケーシングの上の水源から、水車の上を東へ流れ、水車の東の側を落ちているかを見る。水がなければ、ケーシングの上に水バケツで水源を置く',
-      '水車の回る向きは、水の流れる向きで決まる。アプリは向きを決められないので、回転数の符号は逆でもよい（大きさを比べる）',
+      '水は設計図に入っている。西のガラスと安山岩ケーシングの上の水源から、水車の上を東へ流れ、水車の東の側を落ち、一番下の段を西へ流れているかを見る。水がなければ、ケーシングの上に水バケツで水源を置く',
+      '水車の回る向きは、水の流れる向きで決まる。アプリは設計図の水を広げて向きを決める（#279）。水車が回るかと、回る向きがプレスと逆かを見る',
       ...STRESS_STEPS,
       '過負荷（回転が止まり、ゴーグルに過負荷と出る）かを見る',
     ],
     watch: [
-      { pos: [1, 1, 1], label: '水車' },
-      { pos: [2, 2, 3], label: 'プレス' },
-      { pos: [2, 2, 5], label: '応力計' },
+      { pos: [2, 1, 1], label: '水車' },
+      { pos: [3, 2, 3], label: 'プレス' },
+      { pos: [3, 2, 5], label: '応力計' },
     ],
-    check: (r) => [...expectRpm(r, [1, 1, 1], 8), ...expectRpm(r, [2, 2, 3], -16), ...expectRpm(r, [2, 2, 5], -16)],
+    check: (r) => [...expectRpm(r, [2, 1, 1], -8), ...expectRpm(r, [3, 2, 3], 16), ...expectRpm(r, [3, 2, 5], 16)],
   },
   {
     id: 'stress-2-speed-controller',

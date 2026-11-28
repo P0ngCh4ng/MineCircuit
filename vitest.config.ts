@@ -13,7 +13,8 @@ export default mergeConfig(
       coverage: {
         provider: 'v8',
         // Crafts & Additions の電力（docs/createaddition-power.md）と、Create から移した TOML の読み方も同じ扱い（#276）
-        include: ['src/calc/create/**/*.ts', 'src/calc/createaddition/**/*.ts', 'src/calc/tomlSubset.ts'],
+        // 水車が使う液体の広がり（src/calc/fluidFlow.ts、#279）も同じ扱い
+        include: ['src/calc/create/**/*.ts', 'src/calc/createaddition/**/*.ts', 'src/calc/tomlSubset.ts', 'src/calc/fluidFlow.ts'],
         exclude: ['src/calc/create/**/*.test.ts', 'src/calc/createaddition/**/*.test.ts'],
         reporter: ['text-summary', 'json-summary', 'html'],
         // 下限は 100%。通せない分岐は、その場所に理由付きの印を付ける（docs/create-verification.md「4. コードの分岐」）

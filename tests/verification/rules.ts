@@ -97,6 +97,9 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'ST-FACE-OWN-SPEED': stress('content/kinetics/RotationPropagator.java の getAxisModifier、content/kinetics/base/DirectionalShaftHalvesBlockEntity の getSourceFacing（GearboxBlockEntity・SplitShaftBlockEntity）', ABC),
   // 動力源
   'ST-SOURCE-CREATIVE-MOTOR': stress('content/kinetics/motor/CreativeMotorBlockEntity.java の getGeneratedSpeed', ABC),
+  'ST-WATER-WHEEL-FLOW': stress('content/kinetics/waterwheel/WaterWheelBlockEntity.java の determineAndApplyFlowScore・getFlowVectorAtPosition'),
+  'ST-FLUID-SPREAD': app('このアプリの計算（Minecraft の FlowingFluid の spread・getNewLiquid・getSlopeDistance を写したもの。Minecraft のソースとはまだ照らしていない）'),
+  'ST-FLUID-FLOW': app('このアプリの計算（Minecraft の FlowingFluid の getFlow を写したもの。Minecraft のソースとはまだ照らしていない）'),
   'ST-SOURCE-WATER-WHEEL': stress('content/kinetics/waterwheel/WaterWheelBlockEntity.java の getGeneratedSpeed', ABC),
   'ST-SOURCE-WINDMILL': stress('content/contraptions/bearing/WindmillBearingBlockEntity.java の getGeneratedSpeed'),
   'ST-SOURCE-CRANK': stress('content/kinetics/crank/HandCrankBlockEntity.java の getGeneratedSpeed'),
