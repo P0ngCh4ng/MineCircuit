@@ -10,7 +10,7 @@ import type { Vec3 } from '../domain/vec3'
 import type { BlockEntityTransform } from '../edit/regionTransform'
 import { transformVanillaState } from '../edit/stateTransform'
 import type { BlockSettings } from './blockSettings'
-import type { CalcMode, CalcModpack, CalcPlugin, CalcResult } from './calcPlugin'
+import type { CalcMode, CalcModpack, CalcPlugin, CalcResult, EarlierResult } from './calcPlugin'
 import type { ConnectToolDef } from './connectTool'
 import { portsFor, type VirtualPort } from './virtualPort'
 
@@ -135,6 +135,7 @@ export type PluginOutcome =
 
 /**
  * 計算できるプラグインを順に走らせる。各プラグインには自分宛ての仮の入出力だけを渡す。
+ * 後のプラグインには、先に走って成功したプラグインの結果を渡す（#276）。
  * プラグインの例外は、そのプラグインの 'error' にして続ける。
  */
 export async function runPlugins(
@@ -145,11 +146,13 @@ export async function runPlugins(
   mode: CalcMode = 'saved',
 ): Promise<PluginOutcome[]> {
   const outcomes: PluginOutcome[] = []
+  const earlier: EarlierResult[] = []
   for (const plugin of registry.available(bp, pack)) {
     const base = { pluginId: plugin.id, label: plugin.label }
     try {
-      const result = await plugin.run(bp, { pack, ports: portsFor(ports, plugin.id), mode })
+      const result = await plugin.run(bp, { pack, ports: portsFor(ports, plugin.id), mode, earlier: [...earlier] })
       outcomes.push({ ...base, status: 'ok', result })
+      earlier.push({ pluginId: plugin.id, result })
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e)
       outcomes.push({

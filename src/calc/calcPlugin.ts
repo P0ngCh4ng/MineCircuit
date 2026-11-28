@@ -56,6 +56,17 @@ export interface CalcContext {
   readonly ports: readonly VirtualPort[]
   /** 見方。省略は saved。プラグインは扱う範囲で使う */
   readonly mode?: CalcMode
+  /**
+   * 同じ計算で先に走ったプラグインの結果（#276。docs/design.md「プラグインの順番と、前の結果」）。登録した順。
+   * 失敗したもの・走らなかったものは入らない。読むのは共通の型（rotations など）だけにし、pluginId で選ばない
+   */
+  readonly earlier?: readonly EarlierResult[]
+}
+
+/** 先に走ったプラグインの結果1つ分 */
+export interface EarlierResult {
+  readonly pluginId: string
+  readonly result: CalcResult
 }
 
 /** 合計など、結果の上に出す値1つ分（「使用 2,048 SU / 供給 4,096 SU」） */

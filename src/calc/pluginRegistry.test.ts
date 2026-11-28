@@ -86,6 +86,21 @@ describe('runPlugins', () => {
     expect(seen).toEqual(['saved', 'running'])
   })
 
+  it('後のプラグインには、先に走って成功したプラグインの結果を渡す（#276）', async () => {
+    const seen: string[][] = []
+    const echo = (id: string): CalcPlugin => ({
+      ...noopCalcPlugin(),
+      id,
+      run: async (_bp, ctx) => {
+        seen.push((ctx.earlier ?? []).map((e) => `${e.pluginId}:${e.result.summary.length}`))
+        return { summary: [{ label: id, value: resolved(id, 'builtin') }], issues: [], assumptions: [] }
+      },
+    })
+    const r = new PluginRegistry([echo('first'), { ...noopCalcPlugin({ fail: true }), id: 'failing' }, echo('second'), echo('third')])
+    await runPlugins(r, bp, null, [])
+    expect(seen).toEqual([[], ['first:1'], ['first:1', 'second:1']])
+  })
+
   it('失敗したプラグインは error にし、ほかのプラグインは続ける', async () => {
     const r = new PluginRegistry([{ ...noopCalcPlugin({ fail: true }), id: 'failing' }, noopCalcPlugin()])
     const outcomes = await runPlugins(r, bp, null, [])
