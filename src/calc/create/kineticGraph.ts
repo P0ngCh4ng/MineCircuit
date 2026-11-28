@@ -9,8 +9,9 @@ import type { RawNbt } from '../../domain/nbt'
 import { addVec3, type Vec3 } from '../../domain/vec3'
 import type { AssumptionLog } from '../assumptionLog'
 import type { CalcIssue, CalcMode, IssueSeverity } from '../calcPlugin'
+import { FluidField } from '../fluidFlow'
 import { nbtBoolean, nbtNumber, nbtString } from '../nbtValues'
-import { PROVENANCES, candidate, resolved, type Provenance, type Resolved } from '../provenance'
+import { PROVENANCES, resolved, type Provenance, type Resolved } from '../provenance'
 import type { VirtualPort } from '../virtualPort'
 import {
   DEFAULT_SCROLL_SPEED,
@@ -28,6 +29,7 @@ import {
 } from './createRunning'
 import type { CreateAddonKineticTable, CreateAddonTables } from './createAddons'
 import type { CreateValueResolver } from './createValueResolver'
+import { waterWheelFlow } from './waterWheel'
 import {
   axisIndex,
   directionAxis,
@@ -54,6 +56,13 @@ export interface KineticSource {
   readonly capacity: Resolved<number>
   /** 動かしたときの蒸気エンジン。ほかの動力源と向きがぶつかるなら裏返す（ST-RUN-STEAM-FLIP） */
   readonly flippable?: boolean
+}
+
+/** 水車が周りの水の流れを調べるのに使うもの（#279）。液体の広がりは、水車があるときに1度だけ計算する */
+interface WheelContext {
+  readonly bp: Blueprint
+  readonly mode: CalcMode
+  readonly fluids: () => FluidField
 }
 
 /** 動かしたとき（#243）に動力源を決めるのに使うもの */
@@ -243,6 +252,8 @@ export class KineticGraph {
             windmill: { minimumSails: values.minimumWindmillSails().value, sailsPerRPM: values.windmillSailsPerRPM().value },
           }
         : null
+    let fluids: FluidField | null = null
+    const wheel: WheelContext = { bp, mode, fluids: () => (fluids ??= new FluidField(bp)) }
 
     // 1. ノードを作る（リージョンが重なる位置は先のリージョンを使う）
     for (const region of bp.regions) {
@@ -250,7 +261,7 @@ export class KineticGraph {
         const pos = addVec3([x, y, z], region.offset)
         const key = posKey(pos)
         if (byPos.has(key) || bp.locate(pos)?.region !== region) return
-        const node = makeNode(pos, state, be, values, log, mediumSpeed, issues, running, addons, mode)
+        const node = makeNode(pos, state, be, values, log, mediumSpeed, issues, running, addons, wheel)
         if (!node) return
         byPos.set(key, nodes.length)
         nodes.push(node)
@@ -826,6 +837,33 @@ function chainConveyorConnections(be: RawNbt | null): Vec3[] {
   return result
 }
 
+/**
+ * 水車の FlowScore（ST-WATER-WHEEL-FLOW）。保存された状態では生データの値を使い、ないときと動かしたときは
+ * 周りの水の流れから決める。流れる水が当たっていなければ問題に出す
+ */
+function waterWheelScore(
+  be: RawNbt | null,
+  pos: Vec3,
+  axis: Axis,
+  large: boolean,
+  wheel: WheelContext,
+  log: AssumptionLog,
+  issues: CalcIssue[],
+): Resolved<number> {
+  const saved = wheel.mode === 'saved' ? nbtNumber(be, 'FlowScore') : null
+  if (saved !== null) return resolved(saved, 'blueprint')
+  const field = wheel.fluids()
+  const flow = waterWheelFlow(wheel.bp, field, pos, axis, large)
+  if (flow.outside) log.add('水車の周りのマスが設計図の外にあるので、外は空気とみなした', pos)
+  if (flow.simulated) log.add('水車に当たる水の流れを、設計図の水を広げて計算した', pos)
+  if (!field.settled) log.add('水の広がりが計算の上限までに落ち着かなかったので、そこまでの状態を使った', pos)
+  if (flow.score === 0) {
+    issues.push({ pos, message: '水車に流れる水が当たっていません。羽の周りのマスに、羽を回す向きに流れる水を置いてください' })
+  }
+  const exact = !flow.outside && !flow.simulated && field.settled
+  return resolved(flow.score, exact ? 'blueprint' : 'assumed')
+}
+
 /** 設計図のブロック1つからノードを作る。回転に関わらなければ null */
 function makeNode(
   pos: Vec3,
@@ -837,8 +875,9 @@ function makeNode(
   issues: CalcIssue[],
   running: RunningContext | null,
   addons: CreateAddonTables,
-  mode: CalcMode,
+  wheel: WheelContext,
 ): KineticNode | null {
+  const mode = wheel.mode
   const ns = state.id.namespace
   const path = state.id.path
   if (ns !== 'create') {
@@ -866,7 +905,7 @@ function makeNode(
     shape,
     impact: values.impact(path),
     fixedStress: null,
-    source: makeSource(path, state, be, negativeFacing, values, log, pos, running, issues),
+    source: makeSource(path, state, be, negativeFacing, values, log, pos, running, issues, shape.axis, wheel),
     minSpeed: path === 'mechanical_mixer' || path === 'display_board' ? mediumSpeed : 0,
     portId: null,
   }
@@ -904,6 +943,8 @@ function makeSource(
   pos: Vec3,
   running: RunningContext | null,
   issues: CalcIssue[],
+  axis: Axis,
+  wheel: WheelContext,
 ): KineticSource | null {
   // 動かしたとき（#243）。生データで回っている風車と、エンジンの向いていない軸は保存された状態と同じ
   if (running && path === 'windmill_bearing') {
@@ -921,13 +962,9 @@ function makeSource(
     return { speed: resolved(speed === 0 ? 0 : speed, base.source), capacity: values.capacity(path) }
   }
   if (path === 'water_wheel' || path === 'large_water_wheel') {
-    const flow = log.resolve(
-      [candidate('blueprint', () => nbtNumber(be, 'FlowScore'))],
-      resolved(1, 'assumed', '水車の水の流れ（FlowScore）がないので、正の向きに流れているとみなした'),
-      pos,
-    )
-    const size = path === 'large_water_wheel' ? 2 : 1
-    const speed = (Math.max(-1, Math.min(1, flow.value)) * WATER_WHEEL_SPEED) / size
+    const large = path === 'large_water_wheel'
+    const flow = waterWheelScore(be, pos, axis, large, wheel, log, issues)
+    const speed = (Math.max(-1, Math.min(1, flow.value)) * WATER_WHEEL_SPEED) / (large ? 2 : 1)
     return { speed: resolved(speed === 0 ? 0 : speed, flow.source), capacity: values.capacity(path) }
   }
   if (path === 'windmill_bearing') {

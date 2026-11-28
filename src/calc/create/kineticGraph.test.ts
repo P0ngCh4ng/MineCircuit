@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { blueprintFixture, state, type BlueprintFixture } from '../../../tests/fixtures/blueprintFixture'
 import { BlockVolume } from '../../domain/blockVolume'
 import { Blueprint } from '../../domain/blueprint'
 import { nbt } from '../../domain/nbt'
 import type { Vec3 } from '../../domain/vec3'
 import { AssumptionLog } from '../assumptionLog'
+import { FluidField } from '../fluidFlow'
 import type { VirtualPort } from '../virtualPort'
 import { readCreateServerConfig, type CreateServerConfig } from './createConfig'
 import { CreateValueResolver } from './createValueResolver'
@@ -607,11 +608,11 @@ describe('KineticGraph：範囲外と仮の入出力', () => {
     expect(r.network([1, 0, 0]).capacity).toBe(1000)
   })
 
-  it('[ST-SOURCE-WATER-WHEEL] nbt のない水車は流れを仮定する', () => {
-    const bp = blueprintFixture().place([0, 0, 0], 'create:water_wheel', { facing: 'north' }).toBlueprint()
+  it('[ST-WATER-WHEEL-FLOW] nbt のない水車で、周りに水がなければ止まり、問題に出す', () => {
+    const bp = blueprintFixture().size([3, 3, 1]).place([1, 1, 0], 'create:water_wheel', { facing: 'north' }).toBlueprint()
     const r = evaluate(bp)
-    expect(r.speed([0, 0, 0])).toBe(8)
-    expect(r.log.list().some((a) => a.message.includes('FlowScore'))).toBe(true)
+    expect(r.speed([1, 1, 0])).toBe(0)
+    expect(r.issuesAt([1, 1, 0]).some((m) => m.startsWith('水車に流れる水が当たっていません'))).toBe(true)
   })
 })
 
@@ -860,6 +861,90 @@ describe('KineticGraph：規則の分かれ道（#237）', () => {
       .toBlueprint()
     const r = evaluate(bp)
     expect(r.log.list().some((a) => a.message.startsWith('速度コントローラーの出力が入力に戻っている'))).toBe(true)
+  })
+
+  describe('水車の水の流れ（#279）', () => {
+    const sourceOf = (r: Evaluated, pos: Vec3) => r.graph.nodes.find((n) => n.pos.join() === pos.join())?.source?.speed.source
+
+    /** 東西に流れる水路を、南北のガラスの壁ではさむ */
+    const walls = (fx: BlueprintFixture, y: number, from: number, to: number) => {
+      for (let x = from; x <= to; x++) fx = fx.place([x, y, 0], 'minecraft:glass', {}).place([x, y, 2], 'minecraft:glass', {})
+      return fx
+    }
+
+    /** 水源の西はガラス。水車は [2,1,1]（軸 z）。下の段は地面の上の空き */
+    const channel = (be?: ReturnType<typeof nbt.compound>) =>
+      walls(blueprintFixture().size([5, 4, 3]), 2, 1, 3)
+        .place([2, 1, 1], 'create:water_wheel', { facing: 'south' }, be)
+        .place([1, 1, 1], 'create:andesite_casing', {})
+        .place([1, 2, 1], 'minecraft:water', { level: '0' })
+        .place([0, 2, 1], 'minecraft:glass', {})
+
+    it('[ST-WATER-WHEEL-FLOW][ST-FLUID-SPREAD][ST-FLUID-FLOW] 上を東へ流れ、東を落ち、下を西へ流れる水で回る。広げた水は仮定に載せる', () => {
+      const r = evaluate(channel().toBlueprint())
+      expect(r.speed([2, 1, 1])).toBe(-8)
+      expect(sourceOf(r, [2, 1, 1])).toBe('assumed')
+      expect(r.log.list().some((a) => a.message.startsWith('水車に当たる水の流れを、設計図の水を広げて計算した'))).toBe(true)
+      expect(r.issuesAt([2, 1, 1])).toEqual([])
+    })
+
+    it('[ST-WATER-WHEEL-FLOW] 保存された状態では FlowScore を使い、動かしたときは水の流れから決める', () => {
+      const bp = channel(nbt.compound({ FlowScore: nbt.int(1) })).toBlueprint()
+      expect(evaluate(bp).speed([2, 1, 1])).toBe(8)
+      const values = new CreateValueResolver(null)
+      const log = new AssumptionLog()
+      const graph = KineticGraph.build(bp, [], values, log, 'running')
+      expect(graph.nodes.find((n) => n.pos.join() === '2,1,1')?.source?.speed.value).toBe(-8)
+    })
+
+    it('[ST-WATER-WHEEL-FLOW] 泡の柱は上向き（drag=true なら下向き）の流れ。設計図の水だけなら出どころは設計図', () => {
+      // 水車 [1,1,0]（軸 z）の東に泡の柱。ほかの見るマスはガラスでふさぐ
+      const wheel = (drag: string) =>
+        blueprintFixture()
+          .size([3, 3, 1])
+          .place([1, 1, 0], 'create:water_wheel', { facing: 'south' })
+          .place([2, 1, 0], 'minecraft:bubble_column', { drag })
+          .place([2, 0, 0], 'minecraft:soul_sand', {})
+          .place([0, 1, 0], 'minecraft:glass', {})
+          .place([1, 2, 0], 'minecraft:glass', {})
+          .place([1, 0, 0], 'minecraft:glass', {})
+          .place([2, 2, 0], 'minecraft:glass', {})
+          .toBlueprint()
+      const up = evaluate(wheel('false'))
+      expect(up.speed([1, 1, 0])).toBe(8)
+      expect(sourceOf(up, [1, 1, 0])).toBe('blueprint')
+      expect(evaluate(wheel('true')).speed([1, 1, 0])).toBe(-8)
+    })
+
+    it('[ST-WATER-WHEEL-FLOW] 水の広がりが上限までに落ち着かなければ、仮定に載せる', () => {
+      const spy = vi.spyOn(FluidField.prototype, 'settled', 'get').mockReturnValue(false)
+      try {
+        const r = evaluate(channel().toBlueprint())
+        expect(r.log.list().some((a) => a.message.startsWith('水の広がりが計算の上限までに落ち着かなかった'))).toBe(true)
+      } finally {
+        spy.mockRestore()
+      }
+    })
+
+    it('[ST-WATER-WHEEL-FLOW] 見るマスが設計図の外なら、外は空気とみなして仮定に載せる', () => {
+      const r = evaluate(blueprintFixture().place([0, 0, 0], 'create:water_wheel', { facing: 'north' }).toBlueprint())
+      expect(r.speed([0, 0, 0])).toBe(0)
+      expect(r.log.list().some((a) => a.message.startsWith('水車の周りのマスが設計図の外にある'))).toBe(true)
+    })
+
+    it('[ST-WATER-WHEEL-FLOW] 大きい水車は2つ先の12マスを見て、半分の回転数', () => {
+      // 大きい水車 [3,3,1]（軸 z）の上、2つ先の段 y=5 を東へ流れる水路
+      const fx = walls(blueprintFixture().size([8, 7, 3]), 5, 1, 5)
+        .place([3, 3, 1], 'create:large_water_wheel', { axis: 'z' })
+        .place([2, 4, 1], 'minecraft:glass', {})
+        .place([3, 4, 1], 'minecraft:glass', {})
+        .place([4, 4, 1], 'minecraft:glass', {})
+        .place([1, 4, 1], 'minecraft:glass', {})
+        .place([1, 5, 1], 'minecraft:water', { level: '0' })
+        .place([0, 5, 1], 'minecraft:glass', {})
+      const r = evaluate(fx.toBlueprint())
+      expect(r.speed([3, 3, 1])).toBe(-4)
+    })
   })
 
   it('[ST-SOURCE-WATER-WHEEL] 大きい水車は半分の回転数。FlowScore は −1〜1 に収める', () => {

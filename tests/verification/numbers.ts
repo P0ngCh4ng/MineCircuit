@@ -61,6 +61,8 @@ export const NUMBERS: Readonly<Record<string, readonly NumberGroup[]>> = {
   ],
   'kineticGraph.ts#chainConveyorConnections': [math([3], '位置は数が3つ')],
   'kineticGraph.ts#makeSource': [game([2], ['ST-SOURCE-WATER-WHEEL'], '大きい水車は1段で2倍の大きさ')],
+  'waterWheel.ts#waterWheelOffsets': [game([2, 2], ['ST-WATER-WHEEL-FLOW'], '大きい水車は中心から2つ先のマスを見る')],
+  'waterWheel.ts#waterWheelFlow': [game([0.5], ['ST-WATER-WHEEL-FLOW'], '流れと羽の進む向きの内積がこれより大きければ数える')],
   'kineticGraph.ts#steamSource': [game([4, 2, 4], ['ST-SOURCE-STEAM-ENGINE'], '効率から回転数の段階を決める式')],
   'kineticBlocks.ts#axisIndex': [math([2, 2], '軸の番号（x・y・z = 0・1・2）')],
   'createRunning.ts#heatOf': [game([2], ['ST-RUN-BOILER-HEAT'], '燃料ありのブレイズバーナーの熱')],
