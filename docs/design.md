@@ -376,6 +376,20 @@ class BlockSearch {
 }
 ```
 
+建築チェックリスト（#274。docs/ui.md「建築チェックリスト」）の集計は `analysis/buildChecklist.ts` に置く。`BlueprintStats.countLayer` を段ごとに並べ、進み具合を数えるだけで、Mod ごとの意味づけはしない。
+
+```ts
+interface ChecklistLayer {
+  y: number                                   // 段（0 始まり）
+  total: number                               // その段のブロック数
+  items: { id: string; count: number }[]      // ID ごとの数。countLayer と同じ並び
+}
+
+function buildChecklist(stats: BlueprintStats, height: number): ChecklistLayer[]   // 下の段から順。空の段も入れる
+function checklistProgress(layers: ChecklistLayer[], done: ReadonlySet<number>): ChecklistProgress
+// ブロックのある段の数・建て終えた段の数・それぞれのブロック数
+```
+
 ## analysis：計測
 
 ```ts
@@ -944,6 +958,8 @@ interface ProjectFile {
 
 最初の版で作るかは別として、置き場所だけ先に決めておく。
 
+今の作り（#274）：建築チェックリストの建て終えた段は、localStorage（キー `minecircuit.buildChecklist`）に設計図ごとに持つ。設計図はファイル名と大きさ（`mill.nbt|9x12x7`）で見分け、新しく使った順に 30 個まで覚える。`.mcircuit.json` の読み書きを作るときに、`checklist` へ移す。
+
 今の作り（#70）：仮の入出力は、開いている設計図1つ分をメモリ（`calcStore.ports`）に持つだけで、ファイルには保存しない。別の設計図を開くと消える。`.mcircuit.json` の読み書きを作るときに、ここへつなぐ。
 
 ## 見た目（モデルとテクスチャ）
@@ -1106,6 +1122,7 @@ flowchart LR
 
 - `ViewState`（Piniaのストア）：今の段、段の表示方法（上を消す・半透明・この段だけ）、段ごとの表示・非表示、3D/2D の切り替え、強調するブロック、今のツール
 - `BlueprintMeshBuilder`：パレットの種類ごとに Three.js の InstancedMesh を1つ作る。ブロック数が多くても描画が軽い
+- `BuildChecklistStore`（Pinia。#274）：開いている設計図の建て終えた段（y の集合）。保存は localStorage（上の「アプリ独自のファイル」）。読み書きの形と設計図の見分け方は画面に依存しない関数（`view/layers/buildChecklistModel.ts`）にする。設計図のデータは持たない
 - `LayerView2D`：選んだ段を canvas にマス目で描く。1つ下の段を薄く出す
 - `Picker`：マウス位置から対象を求める。3D は当たったブロックと面の向き、何もなければ今の段の床。2D はマス目
 - ツール：ツールごとにクラスを分け、同じ形でクリックと移動を受け取る

@@ -8,18 +8,22 @@ import { useBlueprintStats } from '../analysis/useBlueprintStats'
 import { useDocumentSession } from '../document/documentSession'
 import { useViewStore } from '../stores/viewStore'
 import { useKeyboardShortcuts } from '../tools/useKeyboardShortcuts'
+import { useBuildChecklist } from './useBuildChecklist'
 import { useLayerNavigation } from './useLayerNavigation'
 
 interface LayerRow {
   readonly y: number
   readonly count: number
   readonly hidden: boolean
+  /** 建築チェックリストで建て終えた段か（#274） */
+  readonly built: boolean
 }
 
 const session = useDocumentSession()
 const view = useViewStore()
 const nav = useLayerNavigation()
 const stats = useBlueprintStats()
+const checklist = useBuildChecklist()
 const list = ref<HTMLElement | null>(null)
 
 /** 段ごとのブロック数（y の順） */
@@ -37,7 +41,8 @@ const counts = computed<number[]>(() => {
 
 const rows = computed<LayerRow[]>(() => {
   const hidden = view.hiddenLayers
-  return counts.value.map((count, y) => ({ y, count, hidden: hidden.has(y) })).reverse()
+  const built = checklist.done.value
+  return counts.value.map((count, y) => ({ y, count, hidden: hidden.has(y), built: built.has(y) })).reverse()
 })
 
 const hasHidden = computed(() => view.hiddenLayers.size > 0)
@@ -92,7 +97,7 @@ useKeyboardShortcuts({
           @click="toggle(row.y)"
         />
         <button type="button" class="pick" :title="`段 ${row.y + 1}（Y=${row.y}）を今の段にする`" @click="nav.select(row.y)">
-          <b>{{ row.y + 1 }}</b>
+          <b>{{ row.y + 1 }}<i v-if="row.built" class="built" title="建て終えた段" aria-label="建て終えた">✓</i></b>
           <span>{{ row.count.toLocaleString() }}</span>
         </button>
       </li>
@@ -188,6 +193,13 @@ li[aria-current='true'] {
 .pick span {
   font-size: 10.5px;
   opacity: 0.7;
+}
+
+.pick .built {
+  margin-left: 2px;
+  font-style: normal;
+  font-size: 10px;
+  color: color-mix(in srgb, green 70%, CanvasText);
 }
 
 li.off .pick b {
