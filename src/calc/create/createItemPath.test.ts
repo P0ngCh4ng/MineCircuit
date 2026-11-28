@@ -1613,6 +1613,17 @@ describe('スパウトとアイテムドレイン（#235）', () => {
     ])
   })
 
+  it('[TP-SPOUT-VALVE] 管の途中のバルブは、回転の計算で回転数が正のときだけ液体を通す（#284）', () => {
+    // スパウト (0,2,0) → バルブ (1,2,0)（facing=north、axis_along_first=false で x 軸の管）→ 溶岩の水源 (2,2,0)
+    const fx = spoutOnDepot()
+      .place([1, 2, 0], 'create:fluid_valve', { facing: 'north', axis_along_first: 'false', enabled: 'false', waterlogged: 'false' })
+      .place([2, 2, 0], 'minecraft:lava', { level: '0' })
+    const open = trace(fx, [port([0, 0, 0], 'minecraft:bucket')], { '1,2,0': 32 }, FLUID_BOOK)
+    expect(sinkOf(open.result, '0,0,0', 'minecraft:lava_bucket')).toBe(1)
+    const closed = trace(fx, [port([0, 0, 0], 'minecraft:bucket')], { '1,2,0': -32 }, FLUID_BOOK)
+    expect(sinkOf(closed.result, '0,0,0', 'minecraft:bucket')).toBe(1)
+  })
+
   it('[TP-SPOUT-FLUID] 液体が分からなければ、物は変わらず、止まらずに通る', () => {
     const { result, log } = trace(spoutOnDepot(), [port([0, 0, 0], 'minecraft:bucket')], {}, FLUID_BOOK)
     expect(sinkOf(result, '0,0,0', 'minecraft:bucket')).toBe(1)
