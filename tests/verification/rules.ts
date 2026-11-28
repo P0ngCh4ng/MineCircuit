@@ -252,6 +252,7 @@ export const RULES: Readonly<Record<string, Rule>> = {
   'TP-FAN-ON-BELT': tp('kinetics/fan/AirCurrent.java の findAffectedHandlers、processing/FanProcessing.java の applyProcessing(TransportedItemStack)'),
   'TP-FAN-DROPPED': tp('kinetics/fan/AirCurrent.java の tickAffectedEntities、processing/FanProcessing.java の applyProcessing(ItemEntity)'),
   'TP-SPOUT': tp('fluids/spout/SpoutBlockEntity.java・FillingBySpout.java、fluids/transfer/GenericItemFilling.java、kinetics/belt/behaviour/BeltProcessingBehaviour.java'),
+  'TP-SPOUT-VALVE': tp('content/fluids/pipes/valve/FluidValveBlock.java（getPipeAxis）・FluidValveBlockEntity.java（onSpeedChanged・ValvePipeBehaviour）'),
   'TP-SPOUT-FLUID': tpApp('このアプリの決めごと（スパウトの生データのタンクと、液体の管をたどって液体を決める）'),
   'TP-ITEM-DRAIN': tp('fluids/drain/ItemDrainBlockEntity.java の itemMovementPerTick・FILLING_TIME、fluids/transfer/GenericItemEmptying.java'),
   'TP-CRAFTER': tp('kinetics/crafter/MechanicalCrafterBlockEntity.java の Phase・getCountDownSpeed・tryInsert・eject'),

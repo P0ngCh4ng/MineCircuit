@@ -54,7 +54,7 @@ describe('スパウトの液体（#235）', () => {
     ] as const) {
       const f = blueprintFixture({ size: [1, 5, 1] })
         .place([0, 0, 0], 'create:spout')
-        .place([0, 1, 0], 'create:fluid_valve', { facing: 'up', enabled: 'false', waterlogged: 'false' })
+        .place([0, 1, 0], 'create:fluid_valve', { facing: 'north', axis_along_first: 'true', enabled: 'true', waterlogged: 'false' })
         .place([0, 2, 0], id, id === 'create:shaft' ? { axis: 'y', waterlogged: 'false' } : {})
       if (above) f.place([0, 3, 0], above, { vertical_direction: 'down', thickness: 'tip', waterlogged: 'false' })
       expect(spoutFluid(f.toBlueprint(), [0, 0, 0]).fluid).toBeNull()
@@ -104,6 +104,49 @@ describe('スパウトの液体（#235）', () => {
   })
 })
 
+describe('液体のバルブ（#284）', () => {
+  it('[TP-SPOUT-VALVE] 管の軸は facing の軸を除いた2つのうち、axis_along_first=false なら1つ目、true なら2つ目', () => {
+    /** スパウト (1,1,1) の隣の valve にバルブ、その先の water に水の水源 */
+    const line = (valve: [number, number, number], water: [number, number, number], props: Record<string, string>) =>
+      spoutFluid(
+        blueprintFixture({ size: [4, 4, 4] })
+          .place([1, 1, 1], 'create:spout')
+          .place(valve, 'create:fluid_valve', { waterlogged: 'false', enabled: 'true', ...props })
+          .place(water, 'minecraft:water', { level: '0' })
+          .toBlueprint(),
+        [1, 1, 1],
+      ).fluid
+    // 東へ：facing=north は false で x 軸の管
+    expect(line([2, 1, 1], [3, 1, 1], { facing: 'north', axis_along_first: 'false' })).toBe('minecraft:water')
+    expect(line([2, 1, 1], [3, 1, 1], { facing: 'north', axis_along_first: 'true' })).toBeNull()
+    // 上へ：facing=north は true で y 軸の管
+    expect(line([1, 2, 1], [1, 3, 1], { facing: 'north', axis_along_first: 'true' })).toBe('minecraft:water')
+    expect(line([1, 2, 1], [1, 3, 1], { facing: 'north', axis_along_first: 'false' })).toBeNull()
+    // facing=up（y）：false で x、true で z。facing の軸（y）は管にならない
+    expect(line([2, 1, 1], [3, 1, 1], { facing: 'up', axis_along_first: 'false' })).toBe('minecraft:water')
+    expect(line([1, 1, 2], [1, 1, 3], { facing: 'up', axis_along_first: 'true' })).toBe('minecraft:water')
+    expect(line([1, 2, 1], [1, 3, 1], { facing: 'up', axis_along_first: 'false' })).toBeNull()
+    expect(line([1, 2, 1], [1, 3, 1], { facing: 'up', axis_along_first: 'true' })).toBeNull()
+    // 向きのないバルブはつながらない
+    expect(line([2, 1, 1], [3, 1, 1], { axis_along_first: 'false' })).toBeNull()
+  })
+
+  it('[TP-SPOUT-VALVE] 回転数が正のときだけ開く。回転数が分からなければ、保存された enabled を使う', () => {
+    const bp = (enabled: string) =>
+      blueprintFixture({ size: [4, 2, 2] })
+        .place([1, 1, 1], 'create:spout')
+        .place([2, 1, 1], 'create:fluid_valve', { facing: 'north', axis_along_first: 'false', enabled, waterlogged: 'false' })
+        .place([3, 1, 1], 'minecraft:water', { level: '0' })
+        .toBlueprint()
+    expect(spoutFluid(bp('true'), [1, 1, 1]).fluid).toBe('minecraft:water')
+    expect(spoutFluid(bp('false'), [1, 1, 1]).fluid).toBeNull()
+    expect(spoutFluid(bp('false'), [1, 1, 1], () => 16).fluid).toBe('minecraft:water')
+    expect(spoutFluid(bp('true'), [1, 1, 1], () => 0).fluid).toBeNull()
+    expect(spoutFluid(bp('true'), [1, 1, 1], () => -16).fluid).toBeNull()
+    expect(spoutFluid(bp('false'), [1, 1, 1], () => null).fluid).toBeNull()
+  })
+})
+
 describe('スパウトの液体の抜け', () => {
   it('管の口の先が、液体を持たないふつうのブロックなら、液体は分からない', () => {
     const bp = blueprintFixture({ size: [2, 2, 1] })
@@ -123,7 +166,7 @@ describe('スパウトの液体の抜け', () => {
     const drip = (level: string) =>
       blueprintFixture({ size: [1, 7, 1] })
         .place([0, 0, 0], 'create:spout')
-        .place([0, 1, 0], 'create:fluid_valve', { facing: 'up', enabled: 'false', waterlogged: 'false' })
+        .place([0, 1, 0], 'create:fluid_valve', { facing: 'north', axis_along_first: 'true', enabled: 'true', waterlogged: 'false' })
         .place([0, 2, 0], 'minecraft:cauldron')
         .place([0, 3, 0], 'minecraft:pointed_dripstone', { vertical_direction: 'down', thickness: 'tip', waterlogged: 'false' })
         .place([0, 4, 0], 'minecraft:stone')

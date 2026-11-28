@@ -947,7 +947,7 @@ class ItemTracer {
 
   /** スパウトの液体（TP-SPOUT-FLUID）。分からなければ null。管からたどったときと分からないときは仮定に載せる */
   private spoutFluidAt(pos: Vec3): string | null {
-    const f = spoutFluid(this.env.bp, pos)
+    const f = spoutFluid(this.env.bp, pos, (p) => this.env.rpmAt(p))
     if (f.from === 'pipe') {
       const more = f.candidates.length > 1 ? `（見つかった液体は ${f.candidates.join('・')}。名前順で最初のものを使った）` : ''
       this.env.log.add(`スパウトのタンクが空なので、つながった管の先の ${f.fluid} が入るとした${more}`, pos)

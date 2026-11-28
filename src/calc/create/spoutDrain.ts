@@ -11,7 +11,7 @@ import { recipeTypeId, recipesOfKind, type CreateRecipeKind } from './createReci
 import { nbtCompound, nbtPos, nbtString } from '../nbtValues'
 import { resolved } from '../provenance'
 import { recipeAccepts, type RecipeChoice } from './createThroughput'
-import { directionAxis } from './kineticBlocks'
+import { AXES, directionAxis } from './kineticBlocks'
 
 /** スパウトが液体を入れる時間、ドレインが液体を抜く時間（tick。`FILLING_TIME`） */
 export const FILLING_TICKS = 20
@@ -53,8 +53,19 @@ export function tankFluid(be: RawNbt | null): string | null {
   return null
 }
 
+/** バルブの回転数（回転の計算の結果）。分からなければ null */
+export type ValveSpeed = (pos: Vec3) => number | null
+
+/**
+ * 液体のバルブが開いているか（TP-SPOUT-VALVE）。回転数が正なら開く。回転数が分からなければ、保存された `enabled`
+ */
+function valveOpen(state: BlockState, pos: Vec3, speed: ValveSpeed | undefined): boolean {
+  const rpm = speed ? speed(pos) : null
+  return rpm === null ? state.properties.enabled === 'true' : rpm > 0
+}
+
 /** 管が、その面でつながるか。管でなければ null */
-function pipeOpenFaces(state: BlockState): Direction[] | null {
+function pipeOpenFaces(state: BlockState, pos: Vec3, speed: ValveSpeed | undefined): Direction[] | null {
   const id = state.id.toString()
   const p = state.properties
   if (id === 'create:fluid_pipe' || id === 'create:encased_fluid_pipe') {
@@ -64,10 +75,17 @@ function pipeOpenFaces(state: BlockState): Direction[] | null {
     const axis = p.axis
     return DIRECTIONS.filter((d) => directionAxis(d) === axis)
   }
-  if (id === 'create:mechanical_pump' || id === 'create:fluid_valve') {
+  if (id === 'create:mechanical_pump') {
     const facing = p.facing
     if (!facing || !isDirection(facing)) return []
     return [facing, oppositeDirection(facing)]
+  }
+  if (id === 'create:fluid_valve') {
+    // 管の軸は facing の軸を除いた2つのうち、axis_along_first=false なら1つ目、true なら2つ目（FluidValveBlock.getPipeAxis）
+    const facing = p.facing
+    if (!facing || !isDirection(facing) || !valveOpen(state, pos, speed)) return []
+    const pipeAxis = AXES.filter((a) => a !== directionAxis(facing))[p.axis_along_first === 'true' ? 1 : 0]
+    return DIRECTIONS.filter((d) => directionAxis(d) === pipeAxis)
   }
   return null
 }
@@ -121,9 +139,10 @@ function dripstoneFluid(bp: Blueprint, cauldron: Vec3): string | null {
 }
 
 /**
- * スパウトの液体を決める（TP-SPOUT-FLUID）。生データのタンクの液体、なければ上と横につながった管をたどった先の液体
+ * スパウトの液体を決める（TP-SPOUT-FLUID）。生データのタンクの液体、なければ上と横につながった管をたどった先の液体。
+ * speed はバルブの回転数（閉じたバルブはたどらない。TP-SPOUT-VALVE）
  */
-export function spoutFluid(bp: Blueprint, pos: Vec3): SpoutFluid {
+export function spoutFluid(bp: Blueprint, pos: Vec3, speed?: ValveSpeed): SpoutFluid {
   const own = tankFluid(bp.blockEntityAt(pos))
   if (own) return { fluid: own, from: 'tank', candidates: [] }
   const found = new Set<string>()
@@ -135,7 +154,7 @@ export function spoutFluid(bp: Blueprint, pos: Vec3): SpoutFluid {
     const k = key(next)
     if (seen.has(k)) return
     const s = bp.get(next)
-    const faces = s ? pipeOpenFaces(s) : null
+    const faces = s ? pipeOpenFaces(s, next, speed) : null
     if (faces) {
       if (!faces.includes(oppositeDirection(dir))) return
       seen.add(k)

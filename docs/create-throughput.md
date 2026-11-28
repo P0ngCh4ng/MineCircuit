@@ -471,8 +471,12 @@ Create の物を運ぶブロックが1秒に何個運べるか（輸送量）と
 - 液体のタグは、`minecraft:water`・`minecraft:lava` は水・溶岩（流れるものも）。ほかのタグは、タグの名前の最後（`c:honey` の `honey`）が液体の名前と同じなら合うとする（液体のタグのファイルは読まない）。
 - `TP-SPOUT-FLUID` スパウトの液体（計算では）：
   1. 生データのタンク（1.18 は `Tanks[0].TankContent.FluidName`、1.21 は `Tanks[0].TankContent.id`）が空でなければ、その液体。
-  2. 空なら、スパウトの上と横につながった液体の管（`create:fluid_pipe`・`encased_fluid_pipe` はつながる面のプロパティ、`glass_fluid_pipe` は `axis`、`mechanical_pump`・`fluid_valve` は `facing` の軸）をたどり、管の口の先にある液体の出どころを集める。出どころは、液体の水源（`level=0` の水・溶岩、`waterlogged=true` のブロックは水）、水・溶岩の入った大釜、空の大釜で上の鍾乳石（`pointed_dripstone`、下向き）の根もとの1つ上のブロックの、さらに上が水・溶岩の水源のもの（鍾乳石が大釜に垂らす液体）、生データのタンクに液体のある Create のブロック（液体タンク・スパウト・ドレイン・ベイスン）。ポンプの向きは見ない。
+  2. 空なら、スパウトの上と横につながった液体の管（`create:fluid_pipe`・`encased_fluid_pipe` はつながる面のプロパティ、`glass_fluid_pipe` は `axis`、`mechanical_pump` は `facing` の軸、`fluid_valve` は下の `TP-SPOUT-VALVE`）をたどり、管の口の先にある液体の出どころを集める。出どころは、液体の水源（`level=0` の水・溶岩、`waterlogged=true` のブロックは水）、水・溶岩の入った大釜、空の大釜で上の鍾乳石（`pointed_dripstone`、下向き）の根もとの1つ上のブロックの、さらに上が水・溶岩の水源のもの（鍾乳石が大釜に垂らす液体）、生データのタンクに液体のある Create のブロック（液体タンク・スパウト・ドレイン・ベイスン）。ポンプの向きは見ない。
   3. 見つかった液体が1つならそれを使い、2つ以上なら名前順で最初のものを使う。どちらも、管からたどったことを仮定に載せる。見つからなければ、液体が分からないので物は変わらずに通るとして仮定に載せる。
+- `TP-SPOUT-VALVE` 液体のバルブ（`create:fluid_valve`）：
+  - 管の軸は、`facing` の軸ではない。x・y・z の順で `facing` の軸を除いた2つのうち、`axis_along_first=false` なら1つ目、`true` なら2つ目（`FluidValveBlock.getPipeAxis`）。例：`facing=north` なら、`false` で x、`true` で y。回転の軸（`ST-AXIS-DIRECTIONAL`）とも違う。
+  - 開くのは、バルブの回転数が正のときだけ（`FluidValveBlockEntity.onSpeedChanged` が、正なら開く向きに、0 か負なら閉じる向きに針を動かし、針に合わせて `enabled` を付け直す。閉じたバルブは液体を通さない）。計算では回転の計算の結果を使い、結果がないときは保存された `enabled` を使う。
+  - 出典：`fluids/pipes/valve/FluidValveBlock.java`（`getPipeAxis`）、`fluids/pipes/valve/FluidValveBlockEntity.java`（`onSpeedChanged`・`tick`・`ValvePipeBehaviour`）。Create 6.0 のソースで確かめた。0.5.1（Fabric）のソースはまだ見ていない。
 - 出典：`fluids/spout/SpoutBlockEntity.java`（`below(2)`、`onItemReceived`・`whenItemHeld`）、`fluids/spout/FillingBySpout.java`、`fluids/transfer/GenericItemFilling.java`、`kinetics/belt/behaviour/BeltProcessingBehaviour.java`。液体の管のたどり方は、このアプリの決めごと。
 
 #### アイテムドレイン（`create:item_drain`）
