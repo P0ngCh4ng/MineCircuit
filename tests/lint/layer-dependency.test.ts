@@ -49,6 +49,9 @@ ruleTester.run('layer-dependency', rule, {
     { filename: file('calc/create/createStressPlugin.ts'), code: "import { a } from '../../io/assets/create/createPartialModels'", options },
     { filename: file('calc/builtinPlugins.ts'), code: "import { a } from './create/createStressPlugin'", options },
     { filename: file('io/assets/builtinPartialModels.ts'), code: "import { a } from './create/createPartialModels'", options },
+    // 登録の場所は、ほかの Mod の場所（Crafts & Additions）も使ってよい（#276）
+    { filename: file('calc/builtinPlugins.ts'), code: "import { a } from './createaddition/createAdditionBlocks'", options },
+    { filename: file('calc/createaddition/a.ts'), code: "import { a } from './powerNetwork'", options },
     // Mod の場所から共通の層を使うのはよい
     { filename: file('calc/create/a.ts'), code: "import { a } from '../calcPlugin'", options },
     // テストは対象外
@@ -58,6 +61,25 @@ ruleTester.run('layer-dependency', rule, {
   ],
   invalid: [
     // Mod の場所を共通の層から直接使う（#266）
+    // Mod の場所どうしも互いに使わない。アドオンの表は登録の場所でつなぐ（#276）
+    {
+      filename: file('calc/createaddition/createAdditionBlocks.ts'),
+      code: "import { a } from '../create/createAddons'",
+      options,
+      errors: [{ messageId: 'modDir' }],
+    },
+    {
+      filename: file('calc/create/kineticGraph.ts'),
+      code: "import { a } from '../createaddition/createAdditionBlocks'",
+      options,
+      errors: [{ messageId: 'modDir' }],
+    },
+    {
+      filename: file('calc/pluginRegistry.ts'),
+      code: "import { a } from './createaddition/createAdditionPowerPlugin'",
+      options,
+      errors: [{ messageId: 'modDir' }],
+    },
     {
       filename: file('view/tools/beltTool.ts'),
       code: "import { a } from '../../calc/create/createBeltConnector'",

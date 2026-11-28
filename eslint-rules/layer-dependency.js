@@ -31,7 +31,7 @@ const TAURI_DIRS = ['io/tauri', 'view/platform']
 const TAURI_IMPL_DIR = 'io/tauri'
 
 // Mod ごとの場所のフォルダ名（Mod の namespace）。どの層の中にあっても、このフォルダは Mod の場所とみなす
-const MOD_DIRS = ['create']
+const MOD_DIRS = ['create', 'createaddition']
 
 // Mod の場所を import してよい登録の場所（src からの相対パス）
 const MOD_REGISTRATION_FILES = ['calc/builtinPlugins.ts', 'io/assets/builtinPartialModels.ts']

@@ -18,6 +18,7 @@ import type {
   SpeedLevel,
 } from '../calcPlugin'
 import { resolved, type Provenance } from '../provenance'
+import { loadAddonTables, type CreateKineticAddon } from './createAddons'
 import { loadCreateConfig } from './createConfig'
 import { CREATE_BASIC_BLOCKS } from './createBasicBlocks'
 import { CREATE_BELT_TOOL } from './createBeltTool'
@@ -38,7 +39,8 @@ import {
   type KineticEvaluation,
 } from './kineticGraph'
 
-export function createStressPlugin(): CalcPlugin {
+/** addons は Create のアドオンの回るブロックの表（#276。createAddons.ts）。登録の場所（calc/builtinPlugins.ts）が渡す */
+export function createStressPlugin(addons: readonly CreateKineticAddon[] = []): CalcPlugin {
   return {
     id: CREATE_STRESS_PLUGIN_ID,
     label: 'Create の応力と処理',
@@ -71,7 +73,7 @@ export function createStressPlugin(): CalcPlugin {
       },
     ],
     supports: (bp: Blueprint, _pack: CalcModpack | null) => bp.namespaces.has('create'),
-    run: (bp: Blueprint, ctx: CalcContext) => runCreateStress(bp, ctx),
+    run: (bp: Blueprint, ctx: CalcContext) => runCreateStress(bp, ctx, addons),
     orientForPlacement,
     placementProblem,
     placementHelper,
@@ -84,7 +86,7 @@ export function createStressPlugin(): CalcPlugin {
   }
 }
 
-export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<CalcResult> {
+export async function runCreateStress(bp: Blueprint, ctx: CalcContext, addons: readonly CreateKineticAddon[] = []): Promise<CalcResult> {
   const log = new AssumptionLog()
   const lookup = await loadCreateConfig(ctx.pack)
   if (!lookup.config) {
@@ -97,7 +99,9 @@ export async function runCreateStress(bp: Blueprint, ctx: CalcContext): Promise<
     log.add(`create-server.toml が ${lookup.candidates.length} つあるので、${lookup.config.path} を使った`)
   }
   const values = new CreateValueResolver(lookup.config)
-  const graph = KineticGraph.build(bp, ctx.ports, values, log, ctx.mode ?? 'saved')
+  const addonTables = await loadAddonTables(addons, bp, ctx.pack)
+  for (const table of addonTables.values()) for (const note of table.notes) log.add(note)
+  const graph = KineticGraph.build(bp, ctx.ports, values, log, ctx.mode ?? 'saved', addonTables)
   const maxRotationSpeed = values.maxRotationSpeed()
   const disableStress = values.disableStress()
   const evaluation = graph.evaluate({ maxRotationSpeed: maxRotationSpeed.value, disableStress: disableStress.value })

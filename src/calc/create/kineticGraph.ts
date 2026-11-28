@@ -26,6 +26,7 @@ import {
   type RunningEngine,
   type WindmillSettings,
 } from './createRunning'
+import type { CreateAddonKineticTable, CreateAddonTables } from './createAddons'
 import type { CreateValueResolver } from './createValueResolver'
 import {
   axisIndex,
@@ -218,6 +219,7 @@ export class KineticGraph {
   /**
    * 設計図からノードと辺を作る。仮定（範囲外、nbt がない動力源など）は log に足す。
    * ports は 'create-stress' 宛ての仮の入出力。mode は見方（#243。docs/create-stress.md「動かしたとき」）。
+   * addons はアドオンの回るブロックの表（#276。createAddons.ts）。
    */
   static build(
     bp: Blueprint,
@@ -225,6 +227,7 @@ export class KineticGraph {
     values: CreateValueResolver,
     log: AssumptionLog,
     mode: CalcMode = 'saved',
+    addons: CreateAddonTables = new Map(),
   ): KineticGraph {
     const nodes: KineticNode[] = []
     const byPos = new Map<string, number>()
@@ -247,7 +250,7 @@ export class KineticGraph {
         const pos = addVec3([x, y, z], region.offset)
         const key = posKey(pos)
         if (byPos.has(key) || bp.locate(pos)?.region !== region) return
-        const node = makeNode(pos, state, be, values, log, mediumSpeed, issues, running)
+        const node = makeNode(pos, state, be, values, log, mediumSpeed, issues, running, addons, mode)
         if (!node) return
         byPos.set(key, nodes.length)
         nodes.push(node)
@@ -833,11 +836,16 @@ function makeNode(
   mediumSpeed: number,
   issues: CalcIssue[],
   running: RunningContext | null,
+  addons: CreateAddonTables,
+  mode: CalcMode,
 ): KineticNode | null {
   const ns = state.id.namespace
   const path = state.id.path
   if (ns !== 'create') {
-    // Create の追加 Mod（createaddition、create_enchantment_industry など）は自分の設定で値を持つ。対象外
+    // アドオンの表があれば、その表で回るブロックを作る（#276）。表が答えないブロックは回らない
+    const table = addons.get(ns)
+    if (table) return addonNode(pos, state, be, table, mode, log)
+    // 表のない Create の追加 Mod（create_enchantment_industry など）は自分の設定で値を持つ。対象外
     if (ns.startsWith('create')) log.add(`${state.id.toString()} は Create の追加 Mod のブロックなので、計算に入れていない`, pos)
     return null
   }
@@ -860,6 +868,27 @@ function makeNode(
     fixedStress: null,
     source: makeSource(path, state, be, negativeFacing, values, log, pos, running, issues),
     minSpeed: path === 'mechanical_mixer' || path === 'display_board' ? mediumSpeed : 0,
+    portId: null,
+  }
+}
+
+/** アドオンの表のブロックからノードを作る（#276）。歯車・面の係数は持たない */
+function addonNode(pos: Vec3, state: BlockState, be: RawNbt | null, table: CreateAddonKineticTable, mode: CalcMode, log: AssumptionLog): KineticNode | null {
+  const block = table.block(state, be, mode)
+  if (!block) return null
+  for (const note of block.notes) log.add(note, pos)
+  const shape: KineticShape = { axis: block.axis, shaftFaces: block.shaftFaces, cog: 'none', faceFactors: null, chain: null }
+  return {
+    pos,
+    id: state.id.toString(),
+    axis: block.axis,
+    shaftFaces: block.shaftFaces,
+    cog: 'none',
+    shape,
+    impact: block.impact,
+    fixedStress: null,
+    source: block.source,
+    minSpeed: 0,
     portId: null,
   }
 }

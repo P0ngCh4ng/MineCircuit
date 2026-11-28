@@ -783,6 +783,7 @@ interface CalcContext {
   pack: Modpack | null            // なければ内蔵の初期値で計算
   ports: VirtualPort[]            // このプラグイン宛ての仮の入出力
   mode?: 'saved' | 'running'      // 保存された状態か、動かしたときか（#243）。省略は saved（画面は初めに running を渡す）。プラグインは扱う範囲で使う。create-stress.md「動かしたとき」
+  earlier?: { pluginId: string; result: CalcResult }[]   // 同じ計算で先に走ったプラグインの結果（#276）。下の「プラグインの順番と、前の結果」
 }
 
 interface CalcResult {
@@ -823,7 +824,7 @@ class PluginRegistry {
 
 ### Mod ごとのものを足す口（#266）
 
-このアプリは工業Mod全般を扱う。Create は最初の対象であって前提ではない。Mod ごとの知識は、その Mod の場所（`calc/create/`、`io/assets/create/` のような Mod の namespace の名前のフォルダ）に閉じ、共通の層（domain・io・edit・analysis・calc の共通部分・view・workers）からは直接 import しない。共通の層は「口」（決まった形の関数や表）だけを知り、Mod ごとの中身はその口から足す。2つ目の計算プラグイン（spec.md「開発の順番」7）を、共通の層に手を入れずに足せるようにするため。
+このアプリは工業Mod全般を扱う。Create は最初の対象であって前提ではない。Mod ごとの知識は、その Mod の場所（`calc/create/`、`io/assets/create/`、`calc/createaddition/` のような Mod の namespace の名前のフォルダ）に閉じ、共通の層（domain・io・edit・analysis・calc の共通部分・view・workers）からは直接 import しない。共通の層は「口」（決まった形の関数や表）だけを知り、Mod ごとの中身はその口から足す。2つ目の計算プラグイン（spec.md「開発の順番」7）を、共通の層に手を入れずに足せるようにするため。
 
 Mod の場所を import してよいのは、Mod の場所の中と、次の登録の場所だけ。`npm run lint`（`eslint-rules/layer-dependency.js`）で調べる。テスト（`*.test.ts`、`tests/`）は調べない。
 
@@ -841,6 +842,8 @@ Mod の場所を import してよいのは、Mod の場所の中と、次の登�
 | つなぐツール | `CalcPlugin.connectTools`（`ConnectToolDef[]`） | ツールバー。`view/tools/connectTool.ts` が共通の動きを持つ |
 | 部品のモデルの表 | `PartialModelTable`（ブロックの ID → 選び方） | `io/assets/partialModels.ts` が登録した表を引く（下の「部品のモデルの表」） |
 | 回転の色分け・力の流れ・物の流れ | `CalcResult` の `rotations`・`links`・`itemMoves` | 表示部分。Mod によらない形で渡す（`CalcRotation` の符号と段階は上） |
+| 前の計算の結果 | `CalcContext.earlier`（先に走ったプラグインの `CalcResult`） | 別の Mod の計算の値を使うプラグイン（電力の計算が発電機の回転数を `rotations` から引く。#276） |
+| アドオンの表 | Mod の場所が自分で決める形（Create は `calc/create/createAddons.ts` の `CreateKineticAddon`） | アドオンの Mod のブロックを、元の Mod の計算に入れる（Crafts & Additions のモーター・発電機を Create の回転のネットワークに入れる。#276） |
 
 **つなぐツール。** 2つのブロックを順にクリックして、その間を埋めるツール（Create のベルト）。Mod の規則（どこから始められるか、つなげるか、何を置くか）と文言はプラグインが持ち、クリックの受け取り・見本・書き込み（`replaceCells`）は画面の共通のツールが持つ。
 
@@ -861,6 +864,10 @@ interface ConnectToolDef {
 
 - ツールバーには内蔵のツールのあとに、登録したプラグインのつなぐツールを足す。プラグインがなければ出ない。Modpack に Mod がないとき（`hasNamespace` が false）に隠すことは、まだしない（基本の部品の棚と同じく、Modpack がなくても Create のブロックを置けるため）。
 - `speedAt` は最後の計算の回転数。画面が計算の結果（`rotations`）から引いて渡す。
+
+**プラグインの順番と、前の結果（#276）。** プラグインは登録した順（`BUILTIN_PLUGINS` の並び）に1つずつ走り、後のプラグインには、それより前に走ったプラグインの結果が `CalcContext.earlier` で渡る。失敗したプラグインと、`supports` が false で走らなかったプラグインの結果は入らない。結果の読み方は共通の型（`CalcRotation` など）だけにし、どの Mod のプラグインの結果かは見ない（`pluginId` で選ばない）。たとえば電力の計算は、どのプラグインのものでも `rotations` の中の発電機の位置の回転数を使う。値の出どころは、前の結果を使ったことが分かるように仮定に載せる。前の結果を受け取ったプラグインが、前のプラグインに結果を返すこと（2つの計算を行き来して釣り合わせること）はしない。
+
+**アドオンの表（#276）。** 別の Mod の上に作られた Mod（アドオン）のブロックを、元の Mod の計算に入れたいことがある（Crafts & Additions の電気モーターは Create の回転の動力源）。元の Mod の場所が、受け付ける表の形（Create は `CreateKineticAddon`：namespace と、ブロック状態・生データ・見方から回転軸・軸の口・応力・動力源を返す関数）を決め、プラグインを作る関数の引数で受け取る（`createStressPlugin(addons)`）。アドオンの Mod の場所は同じ形の表を自分で書き（元の Mod の場所は import しない。TypeScript の型は形が同じなら合う）、登録の場所（`calc/builtinPlugins.ts`）が2つをつなぐ。こうすると、Mod の場所どうしは互いに import しない。設定ファイルの読み方のように Mod によらない部品（TOML の一部を読む `calc/tomlSubset.ts`）は共通の calc に置く。
 
 **画面から変えられる設定。** 形（`BlockSettings`・`BlockSettingField`）と、入力の確かめ方・値の出どころ（`parseSettingInput`・`settingValue`）は共通（`calc/blockSettings.ts`）。どのブロックに何があるかだけを、プラグインが `blockSettings` で答える。
 
